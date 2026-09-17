@@ -221,6 +221,9 @@ const CLOSE_ANIMATION_MS = 200;
 
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     const requestIdRef = React.useRef(0);
+    const closeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(
+        null
+    );
     const [queue, setQueue] = React.useState<ConfirmRequest[]>([]);
     const [displayed, setDisplayed] = React.useState<ConfirmRequest | null>(
         null
@@ -247,7 +250,10 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
             // Hold the settled request mounted through the closing
             // animation; a chained confirm arriving meanwhile replaces it.
             setDisplayed(request);
-            setTimeout(() => {
+            const pending = closeTimerRef.current;
+            if (pending !== null) clearTimeout(pending);
+            closeTimerRef.current = setTimeout(() => {
+                closeTimerRef.current = null;
                 setDisplayed((current) =>
                     current?.id === request.id ? null : current
                 );
@@ -256,6 +262,14 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
         },
         []
     );
+
+    React.useEffect(() => {
+        return () => {
+            const pending = closeTimerRef.current;
+            if (pending !== null) clearTimeout(pending);
+            closeTimerRef.current = null;
+        };
+    }, []);
 
     const value = React.useMemo(() => ({ confirm }), [confirm]);
 
