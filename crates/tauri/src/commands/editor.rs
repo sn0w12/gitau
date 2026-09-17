@@ -179,10 +179,8 @@ fn resolve_via_login_shell(program: &str) -> Option<PathBuf> {
     if !output.status.success() {
         return None;
     }
-    let first = String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .next()?
-        .trim();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let first = stdout.lines().next().unwrap_or_default().trim();
     if first.is_empty() {
         return None;
     }

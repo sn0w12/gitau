@@ -4,7 +4,7 @@
 pub fn spawn_detached(mut command: std::process::Command) -> std::io::Result<()> {
     #[cfg(not(windows))]
     {
-        let child = command.spawn()?;
+        let mut child = command.spawn()?;
         std::thread::spawn(move || {
             let _ = child.wait();
         });
