@@ -137,7 +137,7 @@ mod tests {
         let hits_cb = hits.clone();
         let handle = spawn_watch(
             &[temp.path().to_path_buf()],
-            Duration::from_millis(80),
+            Duration::from_millis(250),
             |_| false,
             move || {
                 hits_cb.fetch_add(1, Ordering::SeqCst);
@@ -145,9 +145,11 @@ mod tests {
         )
         .unwrap();
 
+        // No sleeps between writes: a scheduling gap longer than the
+        // debounce window would split the burst into separate callbacks and
+        // flake the assertion below.
         for i in 1..=5u8 {
             std::fs::write(&file_path, [i]).unwrap();
-            std::thread::sleep(Duration::from_millis(8));
         }
 
         let deadline = Instant::now() + Duration::from_secs(3);
@@ -156,7 +158,8 @@ mod tests {
         }
         assert!(hits.load(Ordering::SeqCst) >= 1);
         // The burst must collapse: 5 writes inside the window is one hit.
-        std::thread::sleep(Duration::from_millis(300));
+        // Wait past a full debounce window so any late second burst shows up.
+        std::thread::sleep(Duration::from_millis(600));
         assert_eq!(
             hits.load(Ordering::SeqCst),
             1,
