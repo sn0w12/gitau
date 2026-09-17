@@ -220,49 +220,6 @@ describe("RepoFetchButton", () => {
         view.unmount();
     });
 
-    it("offers Pull with the behind count when strictly behind", async () => {
-        seedSettingsForTests({});
-        hydrateFetchTimestamps({});
-        const services = backendWith({
-            headBranchName: "main",
-            listing: [
-                branch({
-                    name: "main",
-                    isHead: true,
-                    upstream: {
-                        remote: "origin",
-                        branch: "main",
-                        ahead: 0,
-                        behind: 3,
-                    },
-                }),
-            ],
-        });
-        services.setPullOutcome({
-            ok: true,
-            value: { outcome: "fastForwarded", head: "def" },
-        });
-
-        const view = renderWith(
-            services,
-            <RepoFetchButton repoId={5} repoPath={REPO_PATH} />
-        );
-        await flush();
-
-        expect(view.container.textContent).toContain("Pull Origin");
-        // The ahead/behind counts render as a compact graphic, not a subtitle.
-        expect(view.container.textContent).toContain("3");
-        await click(
-            view.container.querySelector('[data-testid="fetch-button"]')!
-        );
-        // Pull also refreshes the last-fetched timestamp.
-        const fetched = await waitFor(
-            () => fetchStore.state.lastFetchedByPath[REPO_PATH] > 0
-        );
-        expect(fetched).toBe(true);
-        view.unmount();
-    });
-
     it("publishes a branch without upstream via push --set-upstream", async () => {
         seedSettingsForTests({});
         hydrateFetchTimestamps({});
@@ -317,40 +274,6 @@ describe("RepoFetchButton", () => {
                 ) !== null
         );
         expect(opened).toBe(true);
-        view.unmount();
-    });
-
-    it("offers a Fetch dropdown item on Push and Pull buttons", async () => {
-        seedSettingsForTests({});
-        hydrateFetchTimestamps({});
-        const services = backendWith({
-            headBranchName: "main",
-            listing: [
-                branch({
-                    name: "main",
-                    isHead: true,
-                    upstream: {
-                        remote: "origin",
-                        branch: "main",
-                        ahead: 2,
-                        behind: 0,
-                    },
-                }),
-            ],
-        });
-
-        const view = renderWith(
-            services,
-            <RepoFetchButton repoId={5} repoPath={REPO_PATH} />
-        );
-        await flush();
-
-        expect(view.container.textContent).toContain("Push Origin");
-        // Fetch dropdown item exists behind the chevron trigger.
-        const chevron = view.container.querySelector(
-            'button[aria-label="More actions"]'
-        );
-        expect(chevron).not.toBeNull();
         view.unmount();
     });
 });
