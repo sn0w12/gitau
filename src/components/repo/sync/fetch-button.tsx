@@ -26,7 +26,6 @@ import {
 } from "@/hooks/repositories/use-repository-queries";
 import { useSyncActions } from "@/hooks/repositories/use-sync-actions";
 import { BORDER_GRADIENT, REPO_TOOLBAR_TRIGGER_CLASS } from "@/lib/constants";
-import { findCurrentBranch } from "@/lib/repositories/fetch-action";
 import { deriveFetchAction } from "@/lib/repositories/fetch-action";
 import { cn, formatRelativeDate } from "@/lib/utils";
 import { fetchStore } from "@/stores/fetch-store";
@@ -92,14 +91,6 @@ export function RepoFetchButton({
             remotes.data ?? []
         );
     }, [head, listing.data?.branches, remotes.data]);
-
-    const currentBranch = useMemo(
-        () =>
-            head
-                ? findCurrentBranch(head, listing.data?.branches ?? [])
-                : undefined,
-        [head, listing.data?.branches]
-    );
 
     const target = remoteName
         ? `${remoteName.charAt(0).toUpperCase()}${remoteName.slice(1)}`
@@ -206,89 +197,39 @@ export function RepoFetchButton({
         );
     } else if (action.kind === "pull") {
         body = (
-            <SplitDropdownButton
-                busy={busy}
-                onPrimary={() => void handleActivate(action)}
-                target={target}
-                onFetch={() => void sync.fetch()}
-                onForcePush={
-                    action.ahead > 0 && currentBranch
-                        ? () =>
-                              setForcePushTarget({
-                                  branchName: currentBranch.name,
-                                  upstreamTarget:
-                                      currentBranch.upstream?.target,
-                                  ahead: action.ahead,
-                                  behind: action.behind,
-                              })
-                        : undefined
+            <ButtonContent
+                icon={
+                    <SpinnerIcon
+                        busy={busy}
+                        idleIcon={
+                            <ArrowDown className="size-7" strokeWidth="1.5px" />
+                        }
+                    />
                 }
-            >
-                <ButtonContent
-                    icon={
-                        <SpinnerIcon
-                            busy={busy}
-                            idleIcon={
-                                <ArrowDown
-                                    className="size-7"
-                                    strokeWidth="1.5px"
-                                />
-                            }
-                        />
-                    }
-                    label={`Pull ${target}`}
-                    subtitle={fetchedLine}
-                    trailing={
-                        <AheadBehind
-                            ahead={action.ahead}
-                            behind={action.behind}
-                        />
-                    }
-                />
-            </SplitDropdownButton>
+                label={`Pull ${target}`}
+                subtitle={fetchedLine}
+                trailing={
+                    <AheadBehind ahead={action.ahead} behind={action.behind} />
+                }
+            />
         );
     } else {
         body = (
-            <SplitDropdownButton
-                busy={busy}
-                onPrimary={() => void handleActivate(action)}
-                target={target}
-                onFetch={() => void sync.fetch()}
-                onForcePush={
-                    currentBranch && action.kind === "push"
-                        ? () =>
-                              setForcePushTarget({
-                                  branchName: currentBranch.name,
-                                  upstreamTarget:
-                                      currentBranch.upstream?.target,
-                                  ahead: action.ahead,
-                                  behind: action.behind,
-                              })
-                        : undefined
+            <ButtonContent
+                icon={
+                    <SpinnerIcon
+                        busy={busy}
+                        idleIcon={
+                            <ArrowUp className="size-7" strokeWidth="1.5px" />
+                        }
+                    />
                 }
-            >
-                <ButtonContent
-                    icon={
-                        <SpinnerIcon
-                            busy={busy}
-                            idleIcon={
-                                <ArrowUp
-                                    className="size-7"
-                                    strokeWidth="1.5px"
-                                />
-                            }
-                        />
-                    }
-                    label={`Push ${target}`}
-                    subtitle={fetchedLine}
-                    trailing={
-                        <AheadBehind
-                            ahead={action.ahead}
-                            behind={action.behind}
-                        />
-                    }
-                />
-            </SplitDropdownButton>
+                label={`Push ${target}`}
+                subtitle={fetchedLine}
+                trailing={
+                    <AheadBehind ahead={action.ahead} behind={action.behind} />
+                }
+            />
         );
     }
 
