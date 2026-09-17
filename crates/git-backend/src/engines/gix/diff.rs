@@ -226,16 +226,19 @@ pub fn materialize(
     {
         let image = if plan.meta.image {
             Some(crate::streaming::store::DiffImage {
-                old: Some(crate::streaming::store::DiffImageSide {
-                    data: old_bytes.to_vec(),
-                    mime_type: mime_type(plan.meta.path.as_str()),
-                })
-                .filter(|_| plan.old_id.is_some()),
-                new: Some(crate::streaming::store::DiffImageSide {
-                    data: new_bytes.to_vec(),
-                    mime_type: mime_type(plan.meta.path.as_str()),
-                })
-                .filter(|_| plan.new_id.is_some() || plan.worktree),
+                old: plan
+                    .old_id
+                    .is_some()
+                    .then_some(crate::streaming::store::DiffImageSide {
+                        data: old_bytes.to_vec(),
+                        mime_type: mime_type(plan.meta.path.as_str()),
+                    }),
+                new: (plan.new_id.is_some() || plan.worktree).then_some(
+                    crate::streaming::store::DiffImageSide {
+                        data: new_bytes.to_vec(),
+                        mime_type: mime_type(plan.meta.path.as_str()),
+                    },
+                ),
             })
         } else {
             None
