@@ -35,7 +35,7 @@ jobs:
                       args: "--bundles nsis"
                     - platform: "macos-latest"
                       args: "--target universal-apple-darwin --bundles dmg"
-                      targets: "universal-apple-darwin"
+                      targets: "aarch64-apple-darwin,x86_64-apple-darwin"
                     - platform: "ubuntu-24.04"
                       args: "--bundles appimage"
 
