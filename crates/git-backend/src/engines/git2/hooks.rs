@@ -262,11 +262,22 @@ fn launch(repo: &Repository, path: &Path) -> std::io::Result<std::process::Outpu
 
 #[cfg(not(windows))]
 fn launch(repo: &Repository, path: &Path) -> std::io::Result<std::process::Output> {
-    let mut command = Command::new(path);
-    command
-        .current_dir(repo.workdir().unwrap_or(Path::new(".")))
-        .env("GIT_DIR", repo.path());
-    command.output()
+    let attempt = |program: &Path, args: &[&Path]| {
+        let mut command = Command::new(program);
+        command
+            .args(args)
+            .current_dir(repo.workdir().unwrap_or(Path::new(".")))
+            .env("GIT_DIR", repo.path());
+        command.output()
+    };
+
+    match attempt(path, &[]) {
+        // ENOEXEC: the script has no shebang. Git re-runs the file through
+        // /bin/sh in that case, so mirror it instead of surfacing
+        // "Exec format error" for a script git would happily execute.
+        Err(error) if error.raw_os_error() == Some(8) => attempt(Path::new("/bin/sh"), &[path]),
+        outcome => outcome,
+    }
 }
 
 /// First line interpreter for `#!` scripts: `/bin/sh` becomes "sh",
