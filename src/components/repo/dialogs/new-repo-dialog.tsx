@@ -165,7 +165,10 @@ export function NewRepoDialog({
                     <Tabs
                         value={mode}
                         onValueChange={(value) => {
-                            if (value === NEW_FOLDER || value === EXISTING_FOLDER)
+                            if (
+                                value === NEW_FOLDER ||
+                                value === EXISTING_FOLDER
+                            )
                                 setMode(value);
                         }}
                     >
