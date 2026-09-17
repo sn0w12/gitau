@@ -1,0 +1,34 @@
+{
+    "$schema": "./node_modules/oxlint/configuration_schema.json",
+    "plugins": ["react", "react-perf", "typescript", "unicorn", "oxc"],
+    "categories": {
+        "correctness": "error"
+    },
+    "rules": {
+        "react-hooks/exhaustive-deps": "warn",
+        "react/error-boundaries": "warn",
+        "react/globals": "warn",
+        "react/immutability": "warn",
+        "react/incompatible-library": "warn",
+        "react/preserve-manual-memoization": "warn",
+        "react/purity": "warn",
+        "react/refs": "warn",
+        "react/set-state-in-effect": "warn",
+        "react/set-state-in-render": "warn",
+        "react/static-components": "warn",
+        "react/use-memo": "warn",
+        "react/void-use-memo": "warn",
+        "eslint/complexity": "warn"
+    },
+    "env": {
+        "builtin": true,
+        "browser": true
+    },
+    "ignorePatterns": [
+        "package-lock.json",
+        "pnpm-lock.yaml",
+        "yarn.lock",
+        "routeTree.gen.ts",
+        "src/lib/settings/settings.generated.ts"
+    ]
+}

@@ -1,0 +1,19 @@
+{
+    "$schema": "./node_modules/oxfmt/configuration_schema.json",
+    "ignorePatterns": [
+        "package-lock.json",
+        "pnpm-lock.yaml",
+        "yarn.lock",
+        "routeTree.gen.ts",
+        "src/lib/settings/settings.generated.ts"
+    ],
+    "printWidth": 80,
+    "trailingComma": "es5",
+    "tabWidth": 4,
+    "sortImports": true,
+    "sortTailwindcss": {
+        "stylesheet": "src/styles.css",
+        "functions": ["cn", "cva"]
+    },
+    "sortPackageJson": true
+}

@@ -1,0 +1,75 @@
+[workspace]
+resolver = "2"
+members = ["crates/git-backend", "crates/tauri"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.85"
+
+[workspace.dependencies]
+base64 = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["alloc"] }
+criterion = "0.7"
+fuzzy-matcher = "0.3.7"
+git-backend = { path = "crates/git-backend" }
+git2 = { version = "0.21.0", features = ["vendored-libgit2", "https", "ssh"] }
+gix = { version = "0.87.0", features = ["status", "excludes"] }
+gix-status = { version = "0.34", features = ["parallel"] }
+keyring = { version = "3", features = [
+    "windows-native",
+    "apple-native",
+    "sync-secret-service",
+] }
+log = "0.4"
+notify = "8"
+pico-args = "0.5"
+rayon = "1"
+reqwest = { version = "0.12", default-features = false, features = [
+    "rustls-tls",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+syntect = { version = "5", default-features = false, features = [
+    "parsing",
+    "default-syntaxes",
+    "regex-onig",
+] }
+tauri = "2"
+tauri-build = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-log = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-os = "2"
+tauri-plugin-prevent-default = "5"
+tauri-plugin-process = "2"
+tauri-plugin-updater = "2"
+tempfile = "3"
+thiserror = "2"
+tokio = { version = "1", features = [
+    "rt-multi-thread",
+    "sync",
+    "time",
+    "macros",
+] }
+trash = "5"
+two-face = { version = "0.5", features = ["syntect-default-onig"] }
+
+[profile.dev]
+incremental = true
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+[profile.release.package.git-backend]
+opt-level = 3
+
+[profile.bench]
+opt-level = 3
+lto = "thin"
+codegen-units = 16
+debug = false

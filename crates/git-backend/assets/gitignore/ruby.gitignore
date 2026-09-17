@@ -1,0 +1,13 @@
+*.gem
+*.rbc
+.bundle
+vendor/bundle
+Gemfile.lock
+coverage/
+pkg/
+tmp/
+log/
+*.log
+.rvmrc
+.ruby-version
+.ruby-gemset

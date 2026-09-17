@@ -1,0 +1,9 @@
+*.class
+build/
+out/
+.gradle/
+local.properties
+.idea/
+*.iml
+*.apk
+*.apk.idsig

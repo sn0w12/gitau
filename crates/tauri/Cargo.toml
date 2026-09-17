@@ -1,0 +1,38 @@
+[package]
+name = "gitau"
+version.workspace = true
+description = "A git desktop client"
+authors = ["sn0w12"]
+edition.workspace = true
+rust-version.workspace = true
+default-run = "gitau"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "gitau_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+git-backend.workspace = true
+log.workspace = true
+pico-args.workspace = true
+tauri-plugin-dialog.workspace = true
+tauri-plugin-log.workspace = true
+tauri-plugin-prevent-default.workspace = true
+tauri-plugin-process.workspace = true
+tauri-plugin-updater.workspace = true
+tauri.workspace = true
+tauri-plugin-opener.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tauri-plugin-os.workspace = true

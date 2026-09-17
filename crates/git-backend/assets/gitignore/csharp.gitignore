@@ -1,0 +1,14 @@
+bin/
+obj/
+out/
+*.user
+*.suo
+.vs/
+.idea/
+*.pidb
+*.booproj
+*.swp
+*.tmp
+TestResults/
+*.nupkg
+packages/
