@@ -1,6 +1,5 @@
 import { useState } from "react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -217,9 +216,6 @@ function PublishToGitHubDialogBody({
                                 />
                                 <Label htmlFor="publish-private">Private</Label>
                             </div>
-                            <Badge variant="secondary">
-                                {isPrivate ? "private" : "public"}
-                            </Badge>
                         </div>
                     </>
                 )}
