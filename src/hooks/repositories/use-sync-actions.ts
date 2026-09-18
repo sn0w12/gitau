@@ -67,6 +67,7 @@ export function useSyncActions(repoId: number, repoPath: string) {
                 remote: remoteName,
                 ...options,
             });
+            markFetched();
             reportPushOutcome(
                 outcomes,
                 remoteName,
