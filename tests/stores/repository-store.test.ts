@@ -5,8 +5,12 @@ import {
     moveRepo,
     registerOpen,
     removeRepo,
+    reorderPinnedRepos,
     repositoryStore,
+    selectOrderedRepoEntries,
+    selectPinnedRepoEntries,
     selectRepoEntries,
+    selectUnpinnedRepoEntries,
 } from "@/stores/repository-store";
 
 function reset() {
@@ -109,5 +113,91 @@ describe("repository store removal", () => {
 
         removeRepo("/a");
         expect(repositoryStore.state.entries.size).toBe(0);
+    });
+});
+
+describe("repository store grouped ordering", () => {
+    beforeEach(reset);
+
+    function ordered(pinned: readonly string[]) {
+        return selectOrderedRepoEntries(repositoryStore.state, pinned).map(
+            (entry) => entry.path
+        );
+    }
+
+    it("lists pinned first in setting order, then unpinned in manual order", () => {
+        ensureRepo("/a");
+        ensureRepo("/b");
+        ensureRepo("/c");
+
+        expect(ordered(["/c", "/a"])).toEqual(["/c", "/a", "/b"]);
+        expect(
+            selectPinnedRepoEntries(repositoryStore.state, ["/c", "/a"]).map(
+                (entry) => entry.path
+            )
+        ).toEqual(["/c", "/a"]);
+        expect(
+            selectUnpinnedRepoEntries(repositoryStore.state, ["/c", "/a"]).map(
+                (entry) => entry.path
+            )
+        ).toEqual(["/b"]);
+    });
+
+    it("ignores stale pinned paths and matches case-insensitively", () => {
+        ensureRepo("/Repo");
+
+        expect(ordered(["/missing", "/repo"])).toEqual(["/Repo"]);
+        expect(ordered([])).toEqual(["/Repo"]);
+    });
+
+    it("moves unpinned repos within their group using group-local indexes", () => {
+        ensureRepo("/a");
+        ensureRepo("/b");
+        ensureRepo("/c");
+        const pinned = ["/a"];
+
+        moveRepo("/c", 0, pinned);
+        expect(ordered(pinned)).toEqual(["/a", "/c", "/b"]);
+
+        moveRepo("/c", 1, pinned);
+        expect(ordered(pinned)).toEqual(["/a", "/b", "/c"]);
+    });
+
+    it("no-ops unpinned moves for pinned paths, unknown paths, and out-of-group indexes", () => {
+        ensureRepo("/a");
+        ensureRepo("/b");
+        const pinned = ["/a"];
+        const before = repositoryStore.state;
+
+        moveRepo("/a", 0, pinned);
+        moveRepo("/missing", 0, pinned);
+        moveRepo("/b", 5, pinned);
+        moveRepo("/b", -1, pinned);
+        expect(repositoryStore.state).toBe(before);
+    });
+
+    it("reorders pinned repos within their group and keeps stale entries", () => {
+        ensureRepo("/a");
+        ensureRepo("/b");
+        ensureRepo("/c");
+
+        expect(
+            reorderPinnedRepos(
+                ["/a", "/b", "/stale"],
+                repositoryStore.state,
+                "/b",
+                0
+            )
+        ).toEqual(["/b", "/a", "/stale"]);
+
+        expect(
+            reorderPinnedRepos(["/a", "/b"], repositoryStore.state, "/c", 0)
+        ).toBeNull();
+        expect(
+            reorderPinnedRepos(["/a", "/b"], repositoryStore.state, "/a", 0)
+        ).toBeNull();
+        expect(
+            reorderPinnedRepos(["/a", "/b"], repositoryStore.state, "/a", 2)
+        ).toBeNull();
     });
 });

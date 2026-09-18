@@ -30,9 +30,12 @@ import { addExistingRepositoryFromDisk } from "@/lib/repositories/add-repository
 import { toastError } from "@/lib/toast-error";
 import {
     moveRepo,
+    reorderPinnedRepos,
     repositoryStore,
-    selectOrderedRepoEntries,
+    selectPinnedRepoEntries,
+    selectUnpinnedRepoEntries,
 } from "@/stores/repository-store";
+import { setSetting } from "@/stores/settings-store";
 
 import { RestrictToList } from "./dnd/restrict-to-list";
 import { RepoLabel } from "./repo/repo-label";
@@ -59,11 +62,11 @@ import {
 
 const handle = TooltipCreateHandle<ComponentType>();
 // Built at drag time: reads live bounds so resize/scroll stay correct.
-const restrictToRepoList = () =>
+const restrictToRepoList = (slot: string) =>
     RestrictToList.configure({
         getBounds: () =>
             document
-                .querySelector('[data-slot="repo-list"]')
+                .querySelector(`[data-slot="${slot}"]`)
                 ?.getBoundingClientRect() ?? null,
         axis: "y",
     });
@@ -217,36 +220,83 @@ function RepoButton({
 
 function RegisteredRepoButtons() {
     const pinnedRepos = useSettingValue("pinnedRepos");
-    const entries = useSelector(repositoryStore, (state) =>
-        selectOrderedRepoEntries(state, pinnedRepos)
+    const pinned = useSelector(repositoryStore, (state) =>
+        selectPinnedRepoEntries(state, pinnedRepos)
     );
-    const restrictToList = useMemo(() => restrictToRepoList(), []);
+    const unpinned = useSelector(repositoryStore, (state) =>
+        selectUnpinnedRepoEntries(state, pinnedRepos)
+    );
+    const restrictPinnedToList = useMemo(
+        () => restrictToRepoList("pinned-repo-list"),
+        []
+    );
+    const restrictToList = useMemo(() => restrictToRepoList("repo-list"), []);
 
     return (
-        <DragDropProvider
-            onDragEnd={(event) => {
-                if (event.canceled) return;
-                const { source } = event.operation;
-                if (
-                    isSortable(source) &&
-                    source.initialIndex !== source.index
-                ) {
-                    moveRepo(String(source.id), source.index);
-                }
-            }}
-        >
-            <div className="flex flex-col gap-1" data-slot="repo-list">
-                {entries.map((entry, index) => (
-                    <RepoButton
-                        key={entry.path}
-                        repoId={entry.repoId}
-                        repoPath={entry.path}
-                        index={index}
-                        modifiers={[restrictToList]}
-                    />
-                ))}
-            </div>
-        </DragDropProvider>
+        <div className="flex flex-col gap-1">
+            {pinned.length > 0 ? (
+                <DragDropProvider
+                    onDragEnd={(event) => {
+                        if (event.canceled) return;
+                        const { source } = event.operation;
+                        if (
+                            isSortable(source) &&
+                            source.initialIndex !== source.index
+                        ) {
+                            const next = reorderPinnedRepos(
+                                pinnedRepos,
+                                repositoryStore.state,
+                                String(source.id),
+                                source.index
+                            );
+                            if (next) setSetting("pinnedRepos", next);
+                        }
+                    }}
+                >
+                    <div
+                        className="flex flex-col gap-1"
+                        data-slot="pinned-repo-list"
+                    >
+                        {pinned.map((entry, index) => (
+                            <RepoButton
+                                key={entry.path}
+                                repoId={entry.repoId}
+                                repoPath={entry.path}
+                                index={index}
+                                modifiers={[restrictPinnedToList]}
+                            />
+                        ))}
+                    </div>
+                </DragDropProvider>
+            ) : null}
+            {pinned.length > 0 && unpinned.length > 0 ? (
+                <SidebarSeparator className="data-[orientation=horizontal]:w-auto" />
+            ) : null}
+            <DragDropProvider
+                onDragEnd={(event) => {
+                    if (event.canceled) return;
+                    const { source } = event.operation;
+                    if (
+                        isSortable(source) &&
+                        source.initialIndex !== source.index
+                    ) {
+                        moveRepo(String(source.id), source.index, pinnedRepos);
+                    }
+                }}
+            >
+                <div className="flex flex-col gap-1" data-slot="repo-list">
+                    {unpinned.map((entry, index) => (
+                        <RepoButton
+                            key={entry.path}
+                            repoId={entry.repoId}
+                            repoPath={entry.path}
+                            index={index}
+                            modifiers={[restrictToList]}
+                        />
+                    ))}
+                </div>
+            </DragDropProvider>
+        </div>
     );
 }
 

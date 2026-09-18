@@ -23,48 +23,87 @@ import type { LanguageShare } from "@/lib/backend/protocol";
 import type { RepositoryEntry } from "@/stores/repository-store";
 import {
     moveRepo,
+    reorderPinnedRepos,
     repositoryStore,
-    selectOrderedRepoEntries,
+    selectPinnedRepoEntries,
+    selectUnpinnedRepoEntries,
 } from "@/stores/repository-store";
+import { setSetting } from "@/stores/settings-store";
 
 export function HomePage() {
     const pinnedRepos = useSettingValue("pinnedRepos");
-    const entries = useSelector(repositoryStore, (state) =>
-        selectOrderedRepoEntries(state, pinnedRepos)
+    const pinned = useSelector(repositoryStore, (state) =>
+        selectPinnedRepoEntries(state, pinnedRepos)
+    );
+    const unpinned = useSelector(repositoryStore, (state) =>
+        selectUnpinnedRepoEntries(state, pinnedRepos)
     );
 
     return (
-        <DragDropProvider
-            onDragEnd={(event) => {
-                if (event.canceled) return;
-                const { source } = event.operation;
-                if (
-                    isSortable(source) &&
-                    source.initialIndex !== source.index
-                ) {
-                    moveRepo(String(source.id), source.index);
-                }
-            }}
-        >
-            <ScrollArea className="size-full">
-                <div className="flex size-full p-2">
-                    <div className="w-full space-y-2">
-                        <h1 className="ui-selectable w-full pt-6 pb-2 text-center font-heading text-8xl font-semibold tracking-tight">
-                            GITAU
-                        </h1>
-                        <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                            {entries.map((entry, index) => (
+        <ScrollArea className="size-full">
+            <div className="flex size-full p-2">
+                <div className="w-full space-y-2">
+                    <h1 className="ui-selectable w-full pt-6 pb-2 text-center font-heading text-8xl font-semibold tracking-tight">
+                        GITAU
+                    </h1>
+                    <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                        {pinned.length > 0 ? (
+                            <DragDropProvider
+                                onDragEnd={(event) => {
+                                    if (event.canceled) return;
+                                    const { source } = event.operation;
+                                    if (
+                                        isSortable(source) &&
+                                        source.initialIndex !== source.index
+                                    ) {
+                                        const next = reorderPinnedRepos(
+                                            pinnedRepos,
+                                            repositoryStore.state,
+                                            String(source.id),
+                                            source.index
+                                        );
+                                        if (next)
+                                            setSetting("pinnedRepos", next);
+                                    }
+                                }}
+                            >
+                                {pinned.map((entry, index) => (
+                                    <RepoCard
+                                        key={entry.path}
+                                        repo={entry}
+                                        index={index}
+                                    />
+                                ))}
+                            </DragDropProvider>
+                        ) : null}
+                        <DragDropProvider
+                            onDragEnd={(event) => {
+                                if (event.canceled) return;
+                                const { source } = event.operation;
+                                if (
+                                    isSortable(source) &&
+                                    source.initialIndex !== source.index
+                                ) {
+                                    moveRepo(
+                                        String(source.id),
+                                        source.index,
+                                        pinnedRepos
+                                    );
+                                }
+                            }}
+                        >
+                            {unpinned.map((entry, index) => (
                                 <RepoCard
                                     key={entry.path}
                                     repo={entry}
                                     index={index}
                                 />
                             ))}
-                        </div>
+                        </DragDropProvider>
                     </div>
                 </div>
-            </ScrollArea>
-        </DragDropProvider>
+            </div>
+        </ScrollArea>
     );
 }
 

@@ -110,25 +110,71 @@ export function selectOrderedRepoEntries(
     state: RepositoryState,
     pinnedPaths: readonly string[]
 ): RepositoryEntry[] {
+    return [
+        ...selectPinnedRepoEntries(state, pinnedPaths),
+        ...selectUnpinnedRepoEntries(state, pinnedPaths),
+    ];
+}
+
+/** Pinned entries in pinned setting order; stale paths ignored. */
+export function selectPinnedRepoEntries(
+    state: RepositoryState,
+    pinnedPaths: readonly string[]
+): RepositoryEntry[] {
+    if (pinnedPaths.length === 0) return [];
     const entries = [...state.entries.values()];
-    if (pinnedPaths.length === 0) return entries;
-
     const rank = new Map<string, number>();
-    pinnedPaths.forEach((path, index) => rank.set(path.toLowerCase(), index));
-    const pinnedRank = (entry: RepositoryEntry): number =>
-        rank.get(entry.path.toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
+    pinnedPaths.forEach((path, index) => {
+        const lowered = path.toLowerCase();
+        if (!rank.has(lowered)) rank.set(lowered, index);
+    });
+    return entries
+        .filter((entry) => rank.has(entry.path.toLowerCase()))
+        .sort(
+            (a, b) =>
+                rank.get(a.path.toLowerCase())! -
+                    rank.get(b.path.toLowerCase())! ||
+                entries.indexOf(a) - entries.indexOf(b)
+        );
+}
 
-    return entries.sort(
-        (a, b) =>
-            pinnedRank(a) - pinnedRank(b) ||
-            entries.indexOf(a) - entries.indexOf(b)
+/** Unpinned entries in manual (Map insertion) order. */
+export function selectUnpinnedRepoEntries(
+    state: RepositoryState,
+    pinnedPaths: readonly string[]
+): RepositoryEntry[] {
+    if (pinnedPaths.length === 0) return [...state.entries.values()];
+    const pinned = new Set(pinnedPaths.map((path) => path.toLowerCase()));
+    return [...state.entries.values()].filter(
+        (entry) => !pinned.has(entry.path.toLowerCase())
     );
 }
 
-/** Moves a repo to a new position in the shared sidebar/homepage order. */
-export function moveRepo(path: string, toIndex: number) {
+/** Case-insensitive membership check against the pinned setting. */
+export function isPinnedPath(
+    path: string,
+    pinnedPaths: readonly string[]
+): boolean {
+    const lowered = path.toLowerCase();
+    return pinnedPaths.some((pinned) => pinned.toLowerCase() === lowered);
+}
+
+/** Moves a repo to a new position in the shared sidebar/homepage order.
+ * Without pinned paths this reorders the raw manual order. With pinned
+ * paths, `toIndex` is the position inside the unpinned group: pinned drags
+ * and out-of-group drops are a no-op. Pinned order lives in the pinned
+ * setting, see reorderPinnedRepos. Each sortable section reports its own
+ * group-local index, so callers pass `source.index` straight through. */
+export function moveRepo(
+    path: string,
+    toIndex: number,
+    pinnedPaths?: readonly string[]
+) {
     const lowered = path.toLowerCase();
     repositoryStore.setState((state) => {
+        if (pinnedPaths && pinnedPaths.length > 0) {
+            return moveUnpinnedInState(state, lowered, toIndex, pinnedPaths);
+        }
         const keys = [...state.entries.keys()];
         const from = keys.findIndex((key) => key.toLowerCase() === lowered);
         if (from === -1) return state;
@@ -143,6 +189,76 @@ export function moveRepo(path: string, toIndex: number) {
         );
         return { entries: next };
     });
+}
+
+function moveUnpinnedInState(
+    state: RepositoryState,
+    lowered: string,
+    toUnpinnedIndex: number,
+    pinnedPaths: readonly string[]
+): RepositoryState {
+    const unpinned = selectUnpinnedRepoEntries(state, pinnedPaths);
+    const fromUnpinned = unpinned.findIndex(
+        (entry) => entry.path.toLowerCase() === lowered
+    );
+    if (fromUnpinned === -1) return state;
+    if (toUnpinnedIndex < 0 || toUnpinnedIndex >= unpinned.length) {
+        return state;
+    }
+    if (toUnpinnedIndex === fromUnpinned) return state;
+
+    const reordered = [...unpinned];
+    const [moved] = reordered.splice(fromUnpinned, 1);
+    reordered.splice(toUnpinnedIndex, 0, moved);
+
+    const pinned = selectPinnedRepoEntries(state, pinnedPaths);
+    const keyByLower = new Map(
+        [...state.entries.keys()].map((key) => [key.toLowerCase(), key])
+    );
+    const next = new Map(
+        [...pinned, ...reordered].map((entry) => {
+            const key = keyByLower.get(entry.path.toLowerCase())!;
+            return [key, state.entries.get(key)!] as const;
+        })
+    );
+    return { entries: next };
+}
+
+/** New pinned setting order for a drag inside the pinned group.
+ * `toPinnedIndex` is the position inside the pinned group. Returns null
+ * for unknown paths and no-ops. */
+export function reorderPinnedRepos(
+    pinnedPaths: readonly string[],
+    state: RepositoryState,
+    path: string,
+    toPinnedIndex: number
+): string[] | null {
+    const pinned = selectPinnedRepoEntries(state, pinnedPaths);
+    const lowered = path.toLowerCase();
+    const fromPinned = pinned.findIndex(
+        (entry) => entry.path.toLowerCase() === lowered
+    );
+    if (fromPinned === -1) return null;
+    if (toPinnedIndex < 0 || toPinnedIndex >= pinned.length) return null;
+    if (toPinnedIndex === fromPinned) return null;
+
+    const spellingByLower = new Map(
+        pinnedPaths.map((pinnedPath) => [pinnedPath.toLowerCase(), pinnedPath])
+    );
+    const reordered = [...pinned];
+    const [moved] = reordered.splice(fromPinned, 1);
+    reordered.splice(toPinnedIndex, 0, moved);
+
+    const visible = reordered.map(
+        (entry) => spellingByLower.get(entry.path.toLowerCase()) ?? entry.path
+    );
+    const entryLowers = new Set(
+        [...state.entries.values()].map((entry) => entry.path.toLowerCase())
+    );
+    const stale = pinnedPaths.filter(
+        (pinnedPath) => !entryLowers.has(pinnedPath.toLowerCase())
+    );
+    return [...visible, ...stale];
 }
 
 export function getEntryByPath(path: string): RepositoryEntry | undefined {
