@@ -2,6 +2,9 @@
 //! `src/lib/settings/settings.generated.ts` from the builtin schema.
 //!
 //! Usage: `cargo run -p gitau --bin export_settings`
+//!
+//! Lives in `dev-bin/` instead of `src/bin/` so the tauri bundler never
+//! treats this dev tool as an app binary (tauri-apps/tauri#15325).
 
 fn main() {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");

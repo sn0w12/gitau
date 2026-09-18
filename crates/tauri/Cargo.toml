@@ -16,6 +16,13 @@ default-run = "gitau"
 name = "gitau_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+# The settings exporter is a developer tool, not an app binary. It lives
+# outside src/bin so the tauri bundler's disk scan never tries to bundle it
+# (https://github.com/tauri-apps/tauri/issues/15325).
+[[bin]]
+name = "export_settings"
+path = "dev-bin/export_settings.rs"
+
 [build-dependencies]
 tauri-build.workspace = true
 
