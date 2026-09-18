@@ -102,7 +102,7 @@ export function TitlebarHistory() {
     );
 
     return (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1" data-slot="titlebar-history">
             <TooltipProvider>
                 <TooltipTrigger
                     handle={handle}

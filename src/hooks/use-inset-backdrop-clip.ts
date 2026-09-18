@@ -13,6 +13,10 @@ import { appStore } from "@/stores/app-store";
 // piece. Titlebar and sidebar chrome around them stay unblurred.
 const INSET_SELECTOR = '[data-slot="sidebar-inset"]';
 const STRIP_SELECTOR = '[data-slot="tabs-strip"]';
+// The history cluster changes width without a window resize when the update
+// install button appears or disappears, shifting the tab bump; watching it
+// keeps the clip path honest at that moment.
+const TITLEBAR_HISTORY_SELECTOR = '[data-slot="titlebar-history"]';
 const CORNER_SELECTOR = "[data-corner]";
 
 const VAR_NAME = "--inset-backdrop-clip";
@@ -143,6 +147,8 @@ export function useInsetBackdropClip(): void {
         observer.observe(inset);
         const strip = document.querySelector(STRIP_SELECTOR);
         if (strip) observer.observe(strip);
+        const history = document.querySelector(TITLEBAR_HISTORY_SELECTOR);
+        if (history) observer.observe(history);
         window.addEventListener("resize", scheduleUpdate);
         let prevActiveTabId = appStore.state.activeTabId;
         const unsubscribe = appStore.subscribe((state) => {

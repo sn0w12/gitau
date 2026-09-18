@@ -34,7 +34,6 @@ export function UpdateChecker() {
     const state = useSelector(updaterController.store, (value) => value);
 
     useEffect(() => {
-        if (!import.meta.env.PROD) return;
         void updaterController.start();
     }, []);
 
@@ -110,6 +109,7 @@ function UpdateDialogBody({
         <AnimatePresence mode="wait" initial={false}>
             <motion.div
                 key={state.status}
+                className="flex min-h-0 w-full flex-col"
                 initial={{
                     opacity: 0,
                     transform: reducedMotion
