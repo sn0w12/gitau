@@ -13,7 +13,12 @@ chrono = { version = "0.4", default-features = false, features = ["alloc"] }
 criterion = "0.7"
 fuzzy-matcher = "0.3.7"
 git-backend = { path = "crates/git-backend" }
-git2 = { version = "0.21.0", features = ["vendored-libgit2", "https", "ssh"] }
+git2 = { version = "0.21.0", features = [
+    "vendored-libgit2",
+    "vendored-openssl",
+    "https",
+    "ssh",
+] }
 gix = { version = "0.87.0", features = ["status", "excludes"] }
 gix-status = { version = "0.34", features = ["parallel"] }
 keyring = { version = "3", features = [
