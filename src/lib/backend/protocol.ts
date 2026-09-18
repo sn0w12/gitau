@@ -703,6 +703,28 @@ export interface GithubOrg {
     avatarUrl?: string;
 }
 
+/** One GitHub notification thread as projected by the backend. */
+export interface GithubNotification {
+    id: string;
+    unread: boolean;
+    reason: string;
+    subjectTitle: string;
+    subjectType: string;
+    repoFullName: string;
+    htmlUrl?: string | null;
+    /** Subject API URL, for resolving types without a static web mapping. */
+    subjectUrl?: string | null;
+    updatedAt: string;
+}
+
+/** One 1-based page of the inbox; `hasMore` derives from the response
+ * `Link` header. */
+export interface NotificationPage {
+    notifications: GithubNotification[];
+    page: number;
+    hasMore: boolean;
+}
+
 export interface PublishResult {
     fullName: string;
     htmlUrl: string;

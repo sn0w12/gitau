@@ -1,7 +1,8 @@
 use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
 use git_backend::api::github::{
-    AccountProfile, DeviceFlowStart, GithubOrg, PublishRepositoryRequest, PublishResult,
+    AccountProfile, DeviceFlowStart, GithubOrg, NotificationPage, PublishRepositoryRequest,
+    PublishResult,
 };
 
 /// The connected account, `None` while signed out.
@@ -78,6 +79,58 @@ pub async fn github_publish_repository(
             },
             expected_generation.map(git_backend::domain::Generation),
         )
+        .await
+        .map_err(to_serialized)
+}
+
+/// One page of notification threads (read + unread), newest first. The
+/// frontend derives unread counts and filters from these pages. Pages are
+/// 1-based, 100 threads each.
+#[tauri::command]
+pub async fn github_list_notifications(
+    state: SharedState<'_>,
+    page: Option<u32>,
+) -> CommandResult<NotificationPage> {
+    state
+        .backend
+        .github_list_notifications(page.unwrap_or(1).max(1))
+        .await
+        .map_err(to_serialized)
+}
+
+/// Marks one thread read.
+#[tauri::command]
+pub async fn github_mark_notification_read(
+    state: SharedState<'_>,
+    thread_id: String,
+) -> CommandResult<()> {
+    state
+        .backend
+        .github_mark_notification_read(thread_id)
+        .await
+        .map_err(to_serialized)
+}
+
+/// Marks every thread read.
+#[tauri::command]
+pub async fn github_mark_all_notifications_read(state: SharedState<'_>) -> CommandResult<()> {
+    state
+        .backend
+        .github_mark_all_notifications_read()
+        .await
+        .map_err(to_serialized)
+}
+
+/// Resolves a notification subject API URL to its web URL, for types
+/// without a static mapping. `None` when the subject is gone.
+#[tauri::command]
+pub async fn github_resolve_subject_url(
+    state: SharedState<'_>,
+    subject_url: String,
+) -> CommandResult<Option<String>> {
+    state
+        .backend
+        .github_resolve_subject_url(subject_url)
         .await
         .map_err(to_serialized)
 }
