@@ -13,9 +13,11 @@ use crate::error::Result;
 /// rewritten, an editor saving many files) map to one `on_change`.
 ///
 /// Events under the `is_ignored` predicate are dropped entirely. The
-/// repository registers a predicate covering its git dir and gitignored
-/// paths, so the app's own writes and build-tool churn (`target/`,
-/// `node_modules/`) never re-bump the generation.
+/// repository registers a predicate covering gitignored paths and most of
+/// its git dir, so the app's own writes and build-tool churn (`target/`,
+/// `node_modules/`) never re-bump the generation. Ref tips are exempt: the
+/// `is_ref_tip` predicate reports whether a burst touched one, so external
+/// commits, tags, and checkouts surface even though only `.git` changed.
 pub struct WatcherHandle {
     stop: Arc<AtomicBool>,
     thread: Option<std::thread::JoinHandle<()>>,
@@ -44,7 +46,8 @@ pub fn spawn_watch(
     paths: &[PathBuf],
     debounce: Duration,
     is_ignored: impl Fn(&PathBuf) -> bool + Send + Sync + 'static,
-    on_change: impl Fn() + Send + 'static,
+    is_ref_tip: impl Fn(&PathBuf) -> bool + Send + Sync + 'static,
+    on_change: impl Fn(bool) + Send + 'static,
 ) -> Result<WatcherHandle> {
     let (tx, rx) = mpsc::channel::<PathBuf>();
     let tx_events = tx.clone();
@@ -106,9 +109,10 @@ pub fn spawn_watch(
                     }
                 }
                 let relevant = !burst.iter().all(&is_ignored);
+                let refs_changed = relevant && burst.iter().any(&is_ref_tip);
                 burst.clear();
                 if relevant {
-                    on_change();
+                    on_change(refs_changed);
                 }
             }
         })
@@ -139,7 +143,8 @@ mod tests {
             &[temp.path().to_path_buf()],
             Duration::from_millis(250),
             |_| false,
-            move || {
+            |_| false,
+            move |_| {
                 hits_cb.fetch_add(1, Ordering::SeqCst);
             },
         )
@@ -185,7 +190,8 @@ mod tests {
             &[temp.path().to_path_buf()],
             Duration::from_millis(60),
             move |path| path.starts_with(&ignored_dir),
-            move || {
+            |_| false,
+            move |_| {
                 hits_cb.fetch_add(1, Ordering::SeqCst);
             },
         )
@@ -203,6 +209,54 @@ mod tests {
             std::thread::sleep(Duration::from_millis(25));
         }
         assert!(hits.load(Ordering::SeqCst) >= 1);
+
+        handle.stop();
+    }
+
+    #[test]
+    fn reports_whether_a_burst_touched_a_ref_tip() {
+        let temp = tempfile::tempdir().unwrap();
+        let refs_dir = temp.path().join("refs").join("tags");
+        std::fs::create_dir_all(&refs_dir).unwrap();
+        let ref_file = refs_dir.join("v0.1.0");
+        let tracked_file = temp.path().join("tracked.txt");
+        std::fs::write(&ref_file, b"0").unwrap();
+        std::fs::write(&tracked_file, b"0").unwrap();
+
+        let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen_cb = seen.clone();
+        let handle = spawn_watch(
+            &[temp.path().to_path_buf()],
+            Duration::from_millis(60),
+            |_| false,
+            move |path| path.starts_with(&refs_dir),
+            move |refs_changed| {
+                seen_cb.lock().unwrap().push(refs_changed);
+            },
+        )
+        .unwrap();
+
+        std::fs::write(&tracked_file, b"1").unwrap();
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while seen.lock().unwrap().is_empty() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        {
+            let seen = seen.lock().unwrap();
+            assert!(!seen.is_empty());
+            assert!(seen.iter().all(|hit| !hit));
+        }
+
+        std::fs::write(&ref_file, b"1").unwrap();
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while seen.lock().unwrap().len() < 2 && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        {
+            let seen = seen.lock().unwrap();
+            assert!(seen.len() >= 2);
+            assert!(*seen.last().unwrap());
+        }
 
         handle.stop();
     }

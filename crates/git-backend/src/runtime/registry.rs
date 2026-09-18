@@ -13,6 +13,24 @@ use crate::runtime::cache::{Lru, params_hash};
 use crate::runtime::invalidation::InvalidationHub;
 use crate::runtime::watcher::WatcherHandle;
 
+/// Ref tips plus the files git rewrites alongside them. Everything else
+/// under `.git` (objects, logs, lock files) stays invisible to the watcher.
+fn is_ref_tip(path: &Path, git_dir: &Path) -> bool {
+    let Ok(relative) = path.strip_prefix(git_dir) else {
+        return false;
+    };
+    if relative == Path::new("HEAD") || relative == Path::new("packed-refs") {
+        return true;
+    }
+    if path
+        .extension()
+        .is_some_and(|ext| ext == std::ffi::OsStr::new("lock"))
+    {
+        return false;
+    }
+    relative.starts_with("refs")
+}
+
 #[derive(Debug, Clone)]
 pub enum CachedValue {
     Status(Arc<StatusReport>),
@@ -161,10 +179,14 @@ impl Registry {
             // generation again and race the frontend's snapshot. Worktree
             // changes that git ignores carry the same risk when a build
             // tool or IDE is running, so drop every event the repo itself
-            // would ignore. Exclusion runs through the same gix stack as
-            // status (including the global excludes override), so the two
-            // cannot disagree about what counts as ignored.
+            // would ignore. Ref tips are the exception: external commits,
+            // tags, checkouts, and fetches only touch `.git`, so ignoring
+            // all of it would leave branches and tags stale until reload.
+            // Exclusion runs through the same gix stack as status (including
+            // the global excludes override), so the two cannot disagree
+            // about what counts as ignored.
             let git_dir = session.git_dir().to_path_buf();
+            let git_dir_for_tips = git_dir.clone();
             let workdir = session.workdir().map(Path::to_path_buf);
             let check = session.clone();
             let is_ignored = move |path: &PathBuf| {
@@ -174,20 +196,25 @@ impl Registry {
                     return false;
                 };
                 if path.starts_with(&git_dir) {
-                    return true;
+                    return !is_ref_tip(path, &git_dir);
                 }
                 let Ok(relative) = path.strip_prefix(workdir) else {
                     return false;
                 };
                 check.is_excluded(relative, path.is_dir())
             };
+            let is_tip = move |path: &PathBuf| is_ref_tip(path, &git_dir_for_tips);
             let watcher = crate::runtime::watcher::spawn_watch(
                 &watch_paths,
                 std::time::Duration::from_millis(150),
                 is_ignored,
-                move || {
+                is_tip,
+                move |refs_changed| {
                     if let Some(entry) = weak.upgrade() {
                         let generation = entry.bump_generation();
+                        if refs_changed {
+                            entry.history_cache().lock().unwrap().clear_ref_dependent();
+                        }
                         hub.publish(id.0, generation.0, "watcher");
                     }
                 },
@@ -366,5 +393,54 @@ mod tests {
         let bumped = entry.bump_generation();
         assert!(bumped.0 >= 2);
         assert!(entry.cached("status", &serde_json::json!({})).is_none());
+    }
+
+    #[test]
+    fn ref_tips_cover_heads_tags_head_and_packed_refs() {
+        let git_dir = Path::new("/repo/.git");
+        for tip in [
+            "refs/heads/master",
+            "refs/tags/v0.1.3",
+            "refs/remotes/origin/master",
+            "refs/stash",
+            "HEAD",
+            "packed-refs",
+        ] {
+            assert!(
+                is_ref_tip(&git_dir.join(tip), git_dir),
+                "{tip} must count as a ref tip"
+            );
+        }
+    }
+
+    #[test]
+    fn ref_tips_exclude_objects_logs_locks_and_worktree() {
+        let git_dir = Path::new("/repo/.git");
+        for other in [
+            "/repo/.git/objects/ab/cdef",
+            "/repo/.git/logs/HEAD",
+            "/repo/.git/logs/refs/heads/master",
+            "/repo/.git/index",
+            "/repo/.git/index.lock",
+            "/repo/package.json",
+            "/other/.git/refs/tags/v0.1.3",
+        ] {
+            assert!(
+                !is_ref_tip(Path::new(other), git_dir),
+                "{other} must not count as a ref tip"
+            );
+        }
+    }
+
+    #[test]
+    fn ref_tip_lock_files_stay_ignored() {
+        // Lock files appear and vanish around every ref write; the debounce
+        // window already coalesces them, but they must never mark a burst
+        // as a ref change on their own.
+        let git_dir = Path::new("/repo/.git");
+        assert!(!is_ref_tip(
+            &git_dir.join("refs/heads/master.lock"),
+            git_dir
+        ));
     }
 }

@@ -90,4 +90,89 @@ impl HistoryCache {
         self.stats.clear();
         self.tags = None;
     }
+
+    /// Drops everything derived from ref tips: the tag map plus the
+    /// summaries that bake tag names in. Walks re-key on the tip OID and
+    /// per-commit stats are immutable, so both survive. The watcher calls
+    /// this when a burst touches `.git` ref tips, covering tags, branches,
+    /// and checkouts created outside the app.
+    pub fn clear_ref_dependent(&mut self) {
+        self.summaries.clear();
+        self.tags = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::commits::{CommitSummary, Signature};
+    use crate::domain::ids::ObjectId;
+
+    fn summary(id_byte: u8) -> Arc<CommitSummary> {
+        let id = ObjectId::from_bytes(&[id_byte; 20]).unwrap();
+        Arc::new(CommitSummary {
+            id,
+            tree_id: id,
+            parent_ids: vec![],
+            summary_line: "subject".into(),
+            message: "subject".into(),
+            author: Signature {
+                name: "author".into(),
+                email: String::new(),
+                time_seconds: 0,
+                time_offset_minutes: 0,
+            },
+            committer: Signature {
+                name: "author".into(),
+                email: String::new(),
+                time_seconds: 0,
+                time_offset_minutes: 0,
+            },
+            files_changed: 0,
+            additions: 0,
+            deletions: 0,
+            tags: vec!["v0.1.0".into()],
+            match_ranges: None,
+        })
+    }
+
+    #[test]
+    fn ref_clear_drops_tags_and_summaries_but_keeps_walks_and_stats() {
+        let mut cache = HistoryCache::default();
+        let oid = [7u8; 20];
+        cache.store_walk(
+            WalkKey {
+                tip: Some(oid),
+                exclusions: vec![],
+            },
+            Arc::new(vec![Oid::from_bytes(&oid).unwrap()]),
+        );
+        cache.store_summary(oid, summary(7));
+        cache.store_stat(
+            oid,
+            CommitStatPoint {
+                time_seconds: 0,
+                additions: 1,
+                deletions: 2,
+                is_merge: false,
+            },
+        );
+        let mut tags = HashMap::new();
+        tags.insert(oid, vec!["v0.1.0".to_owned()]);
+        cache.store_tags(Arc::new(tags));
+
+        cache.clear_ref_dependent();
+
+        assert!(cache.tags().is_none());
+        assert!(cache.summary(&oid).is_none());
+        assert!(
+            cache
+                .walk(&WalkKey {
+                    tip: Some(oid),
+                    exclusions: vec![]
+                })
+                .is_some()
+        );
+        assert!(cache.stat(&oid).is_some());
+    }
 }
