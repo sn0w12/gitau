@@ -154,7 +154,7 @@ function replacementFor(file, version) {
             return [/^version = "[^"]+"/m, `version = "${version}"`];
         case "Cargo.lock":
             return [
-                /name = "(?:git-backend|gitau)"\nversion = "[^"]+"/g,
+                /name = "(?:git-backend|gitau)"\r?\nversion = "[^"]+"/g,
                 (match) =>
                     match.replace(
                         /version = "[^"]+"/,
