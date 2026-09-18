@@ -115,7 +115,6 @@ export function RepoFetchButton({
     } else if (action.kind === "noRemote") {
         body = (
             <button
-                type="button"
                 data-testid="publish-repository-button"
                 onClick={() => setPublishOpen(true)}
                 className={cn(
@@ -134,7 +133,6 @@ export function RepoFetchButton({
     } else if (action.kind === "detachedHead") {
         body = (
             <button
-                type="button"
                 disabled
                 data-testid="detached-head-button"
                 className={cn(
@@ -153,7 +151,6 @@ export function RepoFetchButton({
     } else if (action.kind === "fetch") {
         body = (
             <button
-                type="button"
                 disabled={busy}
                 data-testid="fetch-button"
                 onClick={() => void handleActivate(action)}
@@ -197,39 +194,71 @@ export function RepoFetchButton({
         );
     } else if (action.kind === "pull") {
         body = (
-            <ButtonContent
-                icon={
-                    <SpinnerIcon
-                        busy={busy}
-                        idleIcon={
-                            <ArrowDown className="size-7" strokeWidth="1.5px" />
-                        }
-                    />
-                }
-                label={`Pull ${target}`}
-                subtitle={fetchedLine}
-                trailing={
-                    <AheadBehind ahead={action.ahead} behind={action.behind} />
-                }
-            />
+            <button
+                disabled={busy}
+                onClick={() => void handleActivate(action)}
+                className={cn(
+                    REPO_TOOLBAR_TRIGGER_CLASS,
+                    TRIGGER_EXTRAS,
+                    BORDER_GRADIENT
+                )}
+            >
+                <ButtonContent
+                    icon={
+                        <SpinnerIcon
+                            busy={busy}
+                            idleIcon={
+                                <ArrowDown
+                                    className="size-7"
+                                    strokeWidth="1.5px"
+                                />
+                            }
+                        />
+                    }
+                    label={`Pull ${target}`}
+                    subtitle={fetchedLine}
+                    trailing={
+                        <AheadBehind
+                            ahead={action.ahead}
+                            behind={action.behind}
+                        />
+                    }
+                />
+            </button>
         );
     } else {
         body = (
-            <ButtonContent
-                icon={
-                    <SpinnerIcon
-                        busy={busy}
-                        idleIcon={
-                            <ArrowUp className="size-7" strokeWidth="1.5px" />
-                        }
-                    />
-                }
-                label={`Push ${target}`}
-                subtitle={fetchedLine}
-                trailing={
-                    <AheadBehind ahead={action.ahead} behind={action.behind} />
-                }
-            />
+            <button
+                disabled={busy}
+                onClick={() => void handleActivate(action)}
+                className={cn(
+                    REPO_TOOLBAR_TRIGGER_CLASS,
+                    TRIGGER_EXTRAS,
+                    BORDER_GRADIENT
+                )}
+            >
+                <ButtonContent
+                    icon={
+                        <SpinnerIcon
+                            busy={busy}
+                            idleIcon={
+                                <ArrowUp
+                                    className="size-7"
+                                    strokeWidth="1.5px"
+                                />
+                            }
+                        />
+                    }
+                    label={`Push ${target}`}
+                    subtitle={fetchedLine}
+                    trailing={
+                        <AheadBehind
+                            ahead={action.ahead}
+                            behind={action.behind}
+                        />
+                    }
+                />
+            </button>
         );
     }
 
