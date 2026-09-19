@@ -5,10 +5,7 @@ import {
 } from "@tanstack/react-query";
 
 import { useAppServices } from "@/contexts/services-context";
-import type {
-    AccountProfile,
-    NotificationPage,
-} from "@/lib/backend/protocol";
+import type { AccountProfile, NotificationPage } from "@/lib/backend/protocol";
 import { infiniteNotificationsQuery } from "@/lib/backend/queries/github-queries";
 import { githubKeys } from "@/lib/backend/queries/query-keys";
 import { expectOk } from "@/lib/backend/transport/result";
