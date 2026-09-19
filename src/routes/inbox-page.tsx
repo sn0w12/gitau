@@ -408,9 +408,8 @@ function InboxRow({
             type="button"
             disabled={resolving || !thread.subjectUrl}
             onClick={() => void openResolved()}
-            className="flex min-w-0 cursor-pointer items-center gap-1 truncate text-left font-medium hover:underline disabled:pointer-events-none disabled:opacity-64"
+            className="flex min-w-0 cursor-pointer items-center gap-1 truncate text-left font-medium hover:underline disabled:pointer-events-none disabled:opacity-100"
         >
-            {resolving ? <Spinner className="size-3.5 shrink-0" /> : null}
             <span className="truncate">
                 {thread.subjectTitle || "(no title)"}
             </span>
