@@ -176,6 +176,20 @@ export function InboxPage() {
         }
     };
 
+    const loadMore = inbox.hasNextPage ? (
+        <div className="flex justify-center py-3">
+            <Button
+                variant="outline"
+                size="sm"
+                disabled={inbox.isFetchingNextPage}
+                loading={inbox.isFetchingNextPage}
+                onClick={() => void inbox.fetchNextPage()}
+            >
+                Load more
+            </Button>
+        </div>
+    ) : null;
+
     return (
         <div className="container h-full min-h-0 p-2">
             <Frame className="mx-auto flex h-full max-w-2xl flex-col gap-1 p-1">
@@ -314,19 +328,22 @@ export function InboxPage() {
                                 </div>
                             </div>
                         ) : threads.length === 0 ? (
-                            <Empty>
-                                <EmptyMedia variant="icon">
-                                    <Check />
-                                </EmptyMedia>
-                                <EmptyHeader>
-                                    <EmptyTitle>All caught up</EmptyTitle>
-                                    <EmptyDescription>
-                                        {filter === "all"
-                                            ? "No notifications on the loaded pages."
-                                            : "Nothing matches this filter on the loaded pages."}
-                                    </EmptyDescription>
-                                </EmptyHeader>
-                            </Empty>
+                            <div className="flex flex-col">
+                                <Empty>
+                                    <EmptyMedia variant="icon">
+                                        <Check />
+                                    </EmptyMedia>
+                                    <EmptyHeader>
+                                        <EmptyTitle>All caught up</EmptyTitle>
+                                        <EmptyDescription>
+                                            {filter === "all"
+                                                ? "No notifications on the loaded pages."
+                                                : "Nothing matches this filter on the loaded pages."}
+                                        </EmptyDescription>
+                                    </EmptyHeader>
+                                </Empty>
+                                {loadMore}
+                            </div>
                         ) : (
                             <div className="flex flex-col">
                                 {groups.map(([repo, repoThreads]) => (
@@ -354,21 +371,7 @@ export function InboxPage() {
                                         ))}
                                     </section>
                                 ))}
-                                {inbox.hasNextPage ? (
-                                    <div className="flex justify-center py-3">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            disabled={inbox.isFetchingNextPage}
-                                            loading={inbox.isFetchingNextPage}
-                                            onClick={() =>
-                                                void inbox.fetchNextPage()
-                                            }
-                                        >
-                                            Load more
-                                        </Button>
-                                    </div>
-                                ) : null}
+                                {loadMore}
                             </div>
                         )}
                     </ScrollArea>
