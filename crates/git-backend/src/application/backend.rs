@@ -9,7 +9,8 @@ use tokio::sync::mpsc;
 
 use crate::api::changes::{DiscardRequest, StageRequest, StatusOptions};
 use crate::api::github::{
-    AccountProfile, DeviceFlowStart, GithubOrg, PublishRepositoryRequest, PublishResult,
+    AccountProfile, DeviceFlowStart, GithubOrg, NotificationPage, PublishRepositoryRequest,
+    PublishResult,
 };
 use crate::api::graph::GraphQuery;
 use crate::api::history::{
@@ -1821,6 +1822,26 @@ impl Backend {
     /// Organizations of the signed-in user, for publish-target selection.
     pub async fn github_list_orgs(&self) -> Result<Vec<GithubOrg>> {
         self.github.list_orgs().await
+    }
+
+    /// One page of all GitHub notification threads (read + unread),
+    /// newest first. Pages are 1-based.
+    pub async fn github_list_notifications(&self, page: u32) -> Result<NotificationPage> {
+        self.github.list_notifications(page).await
+    }
+
+    pub async fn github_mark_notification_read(&self, thread_id: String) -> Result<()> {
+        self.github.mark_notification_read(&thread_id).await
+    }
+
+    pub async fn github_mark_all_notifications_read(&self) -> Result<()> {
+        self.github.mark_all_notifications_read().await
+    }
+
+    /// Resolves a notification subject API URL to its web URL. Returns
+    /// `None` when the subject is gone; the UI falls back to the repo.
+    pub async fn github_resolve_subject_url(&self, subject_url: String) -> Result<Option<String>> {
+        self.github.resolve_subject_url(&subject_url).await
     }
 
     /// Publishes this repository: creates the GitHub repo under `owner`

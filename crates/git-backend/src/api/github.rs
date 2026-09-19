@@ -64,3 +64,32 @@ pub struct PublishResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_branch: Option<String>,
 }
+
+/// One GitHub notification thread. The token never crosses IPC; only this
+/// non-secret projection reaches the UI.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubNotification {
+    pub id: String,
+    pub unread: bool,
+    pub reason: String,
+    pub subject_title: String,
+    pub subject_type: String,
+    pub repo_full_name: String,
+    /// Best-effort web URL derived from the API subject URL.
+    pub html_url: Option<String>,
+    /// The subject's API URL, for on-click resolution of types without a
+    /// static web mapping (releases, check suites).
+    pub subject_url: Option<String>,
+    pub updated_at: String,
+}
+
+/// One page of the inbox. `has_more` comes from the response `Link`
+/// header, so the UI stops exactly when GitHub has no next page.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotificationPage {
+    pub notifications: Vec<GithubNotification>,
+    pub page: u32,
+    pub has_more: bool,
+}

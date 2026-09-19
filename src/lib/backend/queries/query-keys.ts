@@ -69,6 +69,7 @@ export const githubKeys = {
     all: ["github"] as const,
     account: () => ["github", "account"] as const,
     orgs: () => ["github", "orgs"] as const,
+    notifications: () => ["github", "notifications"] as const,
 };
 
 export const templateKeys = {

@@ -25,6 +25,7 @@ import { getAppRuntime } from "@/lib/bootstrap/app-runtime";
 import { openRepositoryByPath } from "@/lib/repositories/open-repository";
 import { AccountPage } from "@/routes/account-page";
 import { DevPage } from "@/routes/dev-page";
+import { InboxPage } from "@/routes/inbox-page";
 import { RepoPage } from "@/routes/repo-page";
 import { SettingsPage } from "@/routes/settings-page";
 import { setTabTitle } from "@/stores/app-store";
@@ -90,6 +91,13 @@ export function createTabRouteTree(options: { tabId?: string } = {}) {
         loader: () => applyTitle("Account"),
     });
 
+    const inboxRoute = createRoute({
+        getParentRoute: () => rootRoute,
+        path: "/inbox",
+        component: InboxPage,
+        loader: () => applyTitle("Inbox"),
+    });
+
     // Playground for mocking features; never shipped to release builds.
     const devRoute = import.meta.env.DEV
         ? createRoute({
@@ -147,6 +155,7 @@ export function createTabRouteTree(options: { tabId?: string } = {}) {
         homeRoute,
         settingsRoute,
         accountRoute,
+        inboxRoute,
         ...(devRoute ? [devRoute] : []),
         repoRoute,
     ]);

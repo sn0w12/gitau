@@ -30,6 +30,7 @@ import type {
     HookContent,
     HookRunResult,
     LicenseTemplateInfo,
+    NotificationPage,
     Oid,
     OpenedRepository,
     OperationState,
@@ -611,6 +612,20 @@ function createRawBackendClient() {
             cancelSignIn: () => invokeCommand<void>("github_cancel_sign_in"),
             signOut: () => invokeCommand<void>("github_sign_out"),
             listOrgs: () => invokeCommand<GithubOrg[]>("github_list_orgs"),
+            listNotifications: (page?: number) =>
+                invokeCommand<NotificationPage>("github_list_notifications", {
+                    args: { page },
+                }),
+            markNotificationRead: (threadId: string) =>
+                invokeCommand<void>("github_mark_notification_read", {
+                    args: { threadId },
+                }),
+            markAllNotificationsRead: () =>
+                invokeCommand<void>("github_mark_all_notifications_read"),
+            resolveSubjectUrl: (subjectUrl: string) =>
+                invokeCommand<string | null>("github_resolve_subject_url", {
+                    args: { subjectUrl },
+                }),
             publishRepository: (
                 repoId: number,
                 options: {

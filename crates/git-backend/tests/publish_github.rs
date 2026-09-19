@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use git_backend::Backend;
-use git_backend::api::github::{AccountProfile, DeviceFlowStart, GithubOrg};
+use git_backend::api::github::{AccountProfile, DeviceFlowStart, GithubOrg, NotificationPage};
 use git_backend::github::api::{GithubApi, GithubFuture};
 use git_backend::github::device_flow::{DeviceCodeResponse, TokenPoll};
 use git_backend::github::{CreateRepoBody, CreatedRepository, GitHubAuth, MemoryTokenStore};
@@ -100,6 +100,32 @@ impl GithubApi for FakeApi {
         };
         *self.created.lock().unwrap() = Some(created.clone());
         Box::pin(async move { Ok(created) })
+    }
+
+    fn list_notifications(&self, _token: &str, page: u32) -> GithubFuture<NotificationPage> {
+        Box::pin(async move {
+            Ok(NotificationPage {
+                notifications: vec![],
+                page,
+                has_more: false,
+            })
+        })
+    }
+
+    fn mark_notification_read(&self, _token: &str, _thread_id: &str) -> GithubFuture<()> {
+        Box::pin(async { Ok(()) })
+    }
+
+    fn mark_all_notifications_read(&self, _token: &str) -> GithubFuture<()> {
+        Box::pin(async { Ok(()) })
+    }
+
+    fn fetch_subject_html_url(
+        &self,
+        _token: &str,
+        _subject_url: &str,
+    ) -> GithubFuture<Option<String>> {
+        Box::pin(async { Ok(None) })
     }
 }
 
