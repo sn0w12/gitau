@@ -451,10 +451,7 @@ impl GithubApi for HttpGithubApi {
                 .map(|d| d.as_secs())
                 .unwrap_or(0);
             let body = serde_json::json!({
-                "last_read_at": format!(
-                    "{}",
-                    chrono_lite_rfc3339(now)
-                )
+                "last_read_at": chrono_lite_rfc3339(now).to_string()
             });
             send(
                 client
