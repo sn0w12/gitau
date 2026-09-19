@@ -59,14 +59,15 @@ export function useGithubNotifications() {
 }
 
 /**
- * Unread count across loaded pages. Unread threads sort newest first,
- * so page one holds the count in the common case; `hasMoreUnread` is
- * true while later pages are still unfetched.
+ * Unread count across loaded pages. While later pages are still unfetched
+ * the count is a lower bound, so `exact` is false; once all pages are
+ * fetched the count is exact.
  */
 export function useGithubUnreadCount() {
     const { threads, hasNextPage, isLoading } = useGithubNotifications();
     const unread = threads.filter((thread) => thread.unread).length;
-    return { unread, hasMore: hasNextPage === true, isLoading };
+    const hasMore = hasNextPage === true;
+    return { unread, hasMore, isLoading, exact: !hasMore };
 }
 
 export function useMarkNotificationRead() {

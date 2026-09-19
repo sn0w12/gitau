@@ -164,7 +164,7 @@ function SidebarAction({
  */
 function InboxSidebarItem() {
     const router = useActiveTabRouter();
-    const { unread } = useGithubUnreadCount();
+    const { unread, exact } = useGithubUnreadCount();
     return (
         <SidebarMenuItem>
             <TooltipTrigger
@@ -186,7 +186,7 @@ function InboxSidebarItem() {
                     variant="infoFull"
                     className="pointer-events-none absolute top-0 right-0"
                 >
-                    {unread > 99 ? "99+" : unread}
+                    {unread > 99 ? "99+" : exact ? unread : `${unread}+`}
                 </Badge>
             ) : null}
         </SidebarMenuItem>
