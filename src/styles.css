@@ -153,6 +153,8 @@
 
 :root,
 .light {
+    interpolate-size: allow-keywords;
+
     --radius: 0.5rem;
     --radius-sm: calc(var(--radius) * 0.5);
     --radius-md: calc(var(--radius) * 0.75);
