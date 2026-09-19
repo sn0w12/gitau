@@ -175,11 +175,6 @@ export function InboxPage() {
                         <FrameTitle className="text-base font-semibold">
                             Inbox
                         </FrameTitle>
-                        {unreadCount > 0 ? (
-                            <Badge size="sm" variant="infoFull">
-                                {unreadCount > 99 ? "99+" : unreadCount}
-                            </Badge>
-                        ) : null}
                         <div className="ml-auto flex items-center gap-2">
                             <Button
                                 variant="ghost"
