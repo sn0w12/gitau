@@ -172,3 +172,33 @@ fn local_remote_push_clone_and_pull_round_trip() {
     ));
     assert!(std::path::Path::new(&stale_root).join("third.txt").exists());
 }
+
+#[test]
+fn added_remote_defaults_to_name_scoped_fetch_refspec() {
+    let repo = TestRepo::init("add-remote-refspec");
+    repo.initial_commit(&[("a.txt", "one\n")]);
+
+    let backend = Backend::new(BackendConfig::default());
+    let opened = futures_block(backend.open_repository(&repo.root)).unwrap();
+    futures_block(backend.add_remote(
+        opened.id,
+        RemoteAddRequest {
+            name: "upstream".into(),
+            url: "https://example.com/upstream.git".into(),
+            fetch_refspec: None,
+        },
+        None,
+    ))
+    .unwrap();
+
+    let specs: Vec<String> = repo
+        .repo
+        .find_remote("upstream")
+        .unwrap()
+        .fetch_refspecs()
+        .unwrap()
+        .iter()
+        .map(|spec| spec.unwrap().unwrap().to_owned())
+        .collect();
+    assert_eq!(specs, ["+refs/heads/*:refs/remotes/upstream/*"]);
+}

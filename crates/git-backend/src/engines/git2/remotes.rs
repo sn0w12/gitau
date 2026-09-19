@@ -89,13 +89,11 @@ pub fn list(repo: &Repository) -> Result<Vec<RemoteInfo>> {
 
 pub fn add(repo: &Repository, request: &RemoteAddRequest) -> Result<()> {
     let name = crate::domain::RemoteName::parse(&request.name, "remote")?;
+    let default_refspec = format!("+refs/heads/*:refs/remotes/{}/*", name.as_str());
     repo.remote_with_fetch(
         name.as_str(),
         &request.url,
-        request
-            .fetch_refspec
-            .as_deref()
-            .unwrap_or("+refs/heads/*:refs/remotes/{name}/*"),
+        request.fetch_refspec.as_deref().unwrap_or(&default_refspec),
     )?;
     Ok(())
 }
