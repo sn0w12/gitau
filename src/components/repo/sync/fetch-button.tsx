@@ -169,6 +169,7 @@ export function RepoFetchButton({
         body = (
             <button
                 disabled={busy}
+                data-testid="fetch-button"
                 onClick={() => void handleActivate(action)}
                 className={cn(
                     REPO_TOOLBAR_TRIGGER_CLASS,
@@ -197,6 +198,7 @@ export function RepoFetchButton({
         body = (
             <button
                 disabled={busy}
+                data-testid="fetch-button"
                 onClick={() => void handleActivate(action)}
                 className={cn(
                     REPO_TOOLBAR_TRIGGER_CLASS,
@@ -231,6 +233,7 @@ export function RepoFetchButton({
         body = (
             <button
                 disabled={busy}
+                data-testid="fetch-button"
                 onClick={() => void handleActivate(action)}
                 className={cn(
                     REPO_TOOLBAR_TRIGGER_CLASS,
