@@ -33,14 +33,16 @@ export function orgsQuery(deps: GithubQueryDeps, enabled: boolean) {
  * Accumulating inbox pages, newest first. Page params are 1-based to
  * match the backend; the next page comes from the `Link` header via
  * `hasMore`. Polls so the badge and list stay live without a push
- * channel.
+ * channel. Scoped by account login so one account never reads another
+ * account's cached pages.
  */
 export function infiniteNotificationsQuery(
     deps: GithubQueryDeps,
+    login: string | null,
     enabled: boolean
 ) {
     return infiniteQueryOptions({
-        queryKey: githubKeys.notifications(),
+        queryKey: githubKeys.notifications(login ?? ""),
         queryFn: async ({ pageParam }) =>
             expectOk(await deps.backend.github.listNotifications(pageParam)),
         initialPageParam: 1,
@@ -50,6 +52,6 @@ export function infiniteNotificationsQuery(
         gcTime: 5 * 60_000,
         refetchInterval: 60_000,
         retry: false,
-        enabled,
+        enabled: enabled && login != null,
     });
 }

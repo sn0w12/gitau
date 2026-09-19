@@ -5,7 +5,10 @@ import {
 } from "@tanstack/react-query";
 
 import { useAppServices } from "@/contexts/services-context";
-import type { NotificationPage } from "@/lib/backend/protocol";
+import type {
+    AccountProfile,
+    NotificationPage,
+} from "@/lib/backend/protocol";
 import { infiniteNotificationsQuery } from "@/lib/backend/queries/github-queries";
 import { githubKeys } from "@/lib/backend/queries/query-keys";
 import { expectOk } from "@/lib/backend/transport/result";
@@ -49,8 +52,9 @@ function updateAllRead(
 export function useGithubNotifications() {
     const { backend } = useAppServices();
     const account = useGithubAccount();
+    const login = account.data?.login ?? null;
     const query = useInfiniteQuery(
-        infiniteNotificationsQuery({ backend }, account.data != null)
+        infiniteNotificationsQuery({ backend }, login, account.data != null)
     );
     const threads = (query.data?.pages ?? []).flatMap(
         (page) => page.notifications
@@ -76,8 +80,12 @@ export function useMarkNotificationRead() {
         mutationFn: async (threadId: string) =>
             expectOk(await backend.github.markNotificationRead(threadId)),
         onSuccess: (_, threadId) => {
+            const account = queryClient.getQueryData<AccountProfile | null>(
+                githubKeys.account()
+            );
+            if (!account) return;
             queryClient.setQueryData<InfiniteData<NotificationPage>>(
-                githubKeys.notifications(),
+                githubKeys.notifications(account.login),
                 (data) => (data ? updateThread(data, threadId) : data)
             );
         },
@@ -94,8 +102,12 @@ export function useMarkAllNotificationsRead() {
         mutationFn: async () =>
             expectOk(await backend.github.markAllNotificationsRead()),
         onSuccess: () => {
+            const account = queryClient.getQueryData<AccountProfile | null>(
+                githubKeys.account()
+            );
+            if (!account) return;
             queryClient.setQueryData<InfiniteData<NotificationPage>>(
-                githubKeys.notifications(),
+                githubKeys.notifications(account.login),
                 (data) => (data ? updateAllRead(data) : data)
             );
         },
