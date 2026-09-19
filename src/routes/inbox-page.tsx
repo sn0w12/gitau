@@ -13,7 +13,6 @@ import {
 import { useMemo, useState } from "react";
 
 import { ExternalLink } from "@/components/external-link";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     Empty,
@@ -121,6 +120,9 @@ export function InboxPage() {
     const inbox = useGithubNotifications();
     const markRead = useMarkNotificationRead();
     const markAll = useMarkAllNotificationsRead();
+    const [markingIds, setMarkingIds] = useState<ReadonlySet<string>>(
+        () => new Set()
+    );
     const { confirm } = useConfirm();
 
     const threads = useMemo(
@@ -160,10 +162,17 @@ export function InboxPage() {
     };
 
     const handleMarkRead = async (threadId: string) => {
+        setMarkingIds((prev) => new Set(prev).add(threadId));
         try {
             await markRead.markRead(threadId);
         } catch (error) {
             toastError("Could not mark thread read", error);
+        } finally {
+            setMarkingIds((prev) => {
+                const next = new Set(prev);
+                next.delete(threadId);
+                return next;
+            });
         }
     };
 
@@ -332,6 +341,9 @@ export function InboxPage() {
                                                 ) : null}
                                                 <InboxRow
                                                     thread={thread}
+                                                    marking={markingIds.has(
+                                                        thread.id
+                                                    )}
                                                     onMarkRead={() =>
                                                         void handleMarkRead(
                                                             thread.id
@@ -368,9 +380,11 @@ export function InboxPage() {
 
 function InboxRow({
     thread,
+    marking,
     onMarkRead,
 }: {
     thread: GithubNotification;
+    marking: boolean;
     onMarkRead: () => void;
 }) {
     const resolve = useResolveSubjectUrl();
@@ -438,6 +452,7 @@ function InboxRow({
                         variant="ghost"
                         size="icon-sm"
                         aria-label={`Mark ${thread.subjectTitle} read`}
+                        loading={marking}
                         onClick={onMarkRead}
                     >
                         <Check />
