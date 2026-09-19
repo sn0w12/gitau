@@ -183,7 +183,7 @@ function InboxSidebarItem() {
             {unread > 0 ? (
                 <Badge
                     size="sm"
-                    variant="destructive"
+                    variant="infoFull"
                     className="pointer-events-none absolute top-0 right-0"
                 >
                     {unread > 99 ? "99+" : unread}

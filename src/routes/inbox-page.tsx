@@ -176,7 +176,7 @@ export function InboxPage() {
                             Inbox
                         </FrameTitle>
                         {unreadCount > 0 ? (
-                            <Badge size="sm" variant="destructive">
+                            <Badge size="sm" variant="infoFull">
                                 {unreadCount > 99 ? "99+" : unreadCount}
                             </Badge>
                         ) : null}
