@@ -19,12 +19,13 @@ pub mod device_flow;
 pub mod token_store;
 
 pub use crate::api::github::{
-    AccountProfile, DeviceFlowStart, GithubOrg, PublishRepositoryRequest, PublishResult,
+    AccountProfile, DeviceFlowStart, GithubNotification, GithubOrg, NotificationPage,
+    PublishRepositoryRequest, PublishResult,
 };
 pub use api::{CreateRepoBody, CreatedRepository, GithubApi, HttpGithubApi};
 pub use token_store::{KeyringTokenStore, MemoryTokenStore, TokenStore};
 
-pub const OAUTH_SCOPES: &str = "repo read:user workflow";
+pub const OAUTH_SCOPES: &str = "repo read:user workflow notifications";
 const TOKEN_USERNAME: &str = "x-access-token";
 const BUILTIN_CLIENT_ID: &str = "Ov23liIkWKR8TopkqSKP";
 
@@ -360,6 +361,38 @@ impl GitHubAuth {
         Ok(self.api.create_repository(&token, owner, body).await?)
     }
 
+    /// One page of all notifications (read + unread), newest first.
+    /// Unread counts and filtering happen on the frontend from these pages.
+    pub async fn list_notifications(&self, page: u32) -> Result<NotificationPage> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self.api.list_notifications(&token, page).await?)
+    }
+
+    pub async fn mark_notification_read(&self, thread_id: &str) -> Result<()> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self.api.mark_notification_read(&token, thread_id).await?)
+    }
+
+    pub async fn mark_all_notifications_read(&self) -> Result<()> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self.api.mark_all_notifications_read(&token).await?)
+    }
+
+    /// Resolves a subject API URL to its web URL, for notification types
+    /// without a static mapping. Returns `None` when the subject is gone.
+    pub async fn resolve_subject_url(&self, subject_url: &str) -> Result<Option<String>> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self.api.fetch_subject_html_url(&token, subject_url).await?)
+    }
+
     /// Token credentials for a configured remote, but only when the remote
     /// is an https github.com URL and a token exists. Everything else falls
     /// back to whatever the request already carries.
@@ -603,6 +636,34 @@ mod tests {
                 _owner: Option<&str>,
                 _body: &CreateRepoBody,
             ) -> api::GithubFuture<CreatedRepository> {
+                unreachable!()
+            }
+
+            fn list_notifications(
+                &self,
+                _token: &str,
+                _page: u32,
+            ) -> api::GithubFuture<NotificationPage> {
+                unreachable!()
+            }
+
+            fn mark_notification_read(
+                &self,
+                _token: &str,
+                _thread_id: &str,
+            ) -> api::GithubFuture<()> {
+                unreachable!()
+            }
+
+            fn mark_all_notifications_read(&self, _token: &str) -> api::GithubFuture<()> {
+                unreachable!()
+            }
+
+            fn fetch_subject_html_url(
+                &self,
+                _token: &str,
+                _subject_url: &str,
+            ) -> api::GithubFuture<Option<String>> {
                 unreachable!()
             }
         }

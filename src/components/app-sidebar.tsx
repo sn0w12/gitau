@@ -21,6 +21,7 @@ import { NewRepoDialog } from "@/components/repo/dialogs/new-repo-dialog";
 import { RepoContextMenu } from "@/components/repo/repo-context-menu";
 import { useAppCommands } from "@/contexts/app-command-context";
 import { useGithubAccount } from "@/hooks/github/use-github-account";
+import { useGithubUnreadCount } from "@/hooks/github/use-github-inbox";
 import { useOpenRepository } from "@/hooks/repositories/use-open-repository";
 import { useRepoAvatarByPath } from "@/hooks/repositories/use-repo-avatar";
 import { useRemoteIcon } from "@/hooks/repositories/use-repository-queries";
@@ -40,6 +41,7 @@ import { setSetting } from "@/stores/settings-store";
 import { RestrictToList } from "./dnd/restrict-to-list";
 import { RepoLabel } from "./repo/repo-label";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+import { Badge } from "./ui/badge";
 import type { ButtonProps } from "./ui/button";
 import { ContextMenuShortcut } from "./ui/context-menu";
 import { Menu, MenuGroup, MenuItem, MenuPopup, MenuTrigger } from "./ui/menu";
@@ -92,11 +94,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <TooltipProvider>
                 <SidebarContent className="gap-1">
                     <SidebarGroup className="gap-1">
-                        <SidebarAction
-                            icon={<Inbox />}
-                            title="Inbox"
-                            payload={inboxPayload}
-                        />
+                        <InboxSidebarItem />
                         <SidebarAction
                             icon={<GitPullRequestArrow />}
                             title="Pull Requests"
@@ -154,6 +152,43 @@ function SidebarAction({
                     </SidebarMenuButton>
                 }
             />
+        </SidebarMenuItem>
+    );
+}
+
+/**
+ * Sidebar entry for the inbox: navigates to the page and overlays the
+ * unread count from the shared notifications cache. The badge lives
+ * outside the menu button so the button keeps exactly its icon and
+ * label children; it stays hidden while signed out or fully read.
+ */
+function InboxSidebarItem() {
+    const router = useActiveTabRouter();
+    const { unread, exact } = useGithubUnreadCount();
+    return (
+        <SidebarMenuItem>
+            <TooltipTrigger
+                handle={handle}
+                payload={inboxPayload}
+                render={
+                    <SidebarMenuButton
+                        variant="ghost"
+                        onClick={() => void router?.navigate({ to: "/inbox" })}
+                    >
+                        <Inbox />
+                        <span>Inbox</span>
+                    </SidebarMenuButton>
+                }
+            />
+            {unread > 0 ? (
+                <Badge
+                    size="sm"
+                    variant="infoFull"
+                    className="pointer-events-none absolute top-0 right-0"
+                >
+                    {unread > 99 ? "99+" : exact ? unread : `${unread}+`}
+                </Badge>
+            ) : null}
         </SidebarMenuItem>
     );
 }

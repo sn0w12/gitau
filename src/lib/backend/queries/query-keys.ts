@@ -69,6 +69,12 @@ export const githubKeys = {
     all: ["github"] as const,
     account: () => ["github", "account"] as const,
     orgs: () => ["github", "orgs"] as const,
+    /**
+     * Scoped by account login so threads cached for one account are never
+     * reused after sign-out or a different sign-in.
+     */
+    notifications: (login: string) =>
+        ["github", "notifications", login] as const,
 };
 
 export const templateKeys = {

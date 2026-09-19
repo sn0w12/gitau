@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import type { BackendClient } from "@/lib/backend/transport/client";
 import { expectOk } from "@/lib/backend/transport/result";
@@ -26,5 +26,32 @@ export function orgsQuery(deps: GithubQueryDeps, enabled: boolean) {
         staleTime: 5 * 60_000,
         retry: false,
         enabled,
+    });
+}
+
+/**
+ * Accumulating inbox pages, newest first. Page params are 1-based to
+ * match the backend; the next page comes from the `Link` header via
+ * `hasMore`. Polls so the badge and list stay live without a push
+ * channel. Scoped by account login so one account never reads another
+ * account's cached pages.
+ */
+export function infiniteNotificationsQuery(
+    deps: GithubQueryDeps,
+    login: string | null,
+    enabled: boolean
+) {
+    return infiniteQueryOptions({
+        queryKey: githubKeys.notifications(login ?? ""),
+        queryFn: async ({ pageParam }) =>
+            expectOk(await deps.backend.github.listNotifications(pageParam)),
+        initialPageParam: 1,
+        getNextPageParam: (lastPage) =>
+            lastPage.hasMore ? lastPage.page + 1 : undefined,
+        staleTime: 30_000,
+        gcTime: 5 * 60_000,
+        refetchInterval: 60_000,
+        retry: false,
+        enabled: enabled && login != null,
     });
 }

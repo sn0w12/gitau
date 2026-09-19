@@ -30,7 +30,7 @@ export function ExternalLink({
                         target="_blank"
                         rel="noreferrer"
                         className={cn(
-                            "underline underline-offset-2 hover:text-foreground",
+                            "underline-offset-2 hover:text-foreground hover:underline",
                             className
                         )}
                     >

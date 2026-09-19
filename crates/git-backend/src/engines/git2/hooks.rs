@@ -271,12 +271,28 @@ fn launch(repo: &Repository, path: &Path) -> std::io::Result<std::process::Outpu
         command.output()
     };
 
-    match attempt(path, &[]) {
-        // ENOEXEC: the script has no shebang. Git re-runs the file through
-        // /bin/sh in that case, so mirror it instead of surfacing
-        // "Exec format error" for a script git would happily execute.
-        Err(error) if error.raw_os_error() == Some(8) => attempt(Path::new("/bin/sh"), &[path]),
-        outcome => outcome,
+    // ETXTBSY: the script is open for writing (an editor save, a sync tool,
+    // or a racing install landing between write and exec). The writer closes
+    // imminently, so retry briefly instead of failing the hook run.
+    const TXT_BUSY: i32 = 26;
+    const BUSY_ATTEMPTS: u32 = 10;
+    let mut busy_retries = 0;
+    loop {
+        match attempt(path, &[]) {
+            Err(error)
+                if error.raw_os_error() == Some(TXT_BUSY) && busy_retries + 1 < BUSY_ATTEMPTS =>
+            {
+                busy_retries += 1;
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            // ENOEXEC: the script has no shebang. Git re-runs the file through
+            // /bin/sh in that case, so mirror it instead of surfacing
+            // "Exec format error" for a script git would happily execute.
+            Err(error) if error.raw_os_error() == Some(8) => {
+                return attempt(Path::new("/bin/sh"), &[path]);
+            }
+            outcome => return outcome,
+        }
     }
 }
 
