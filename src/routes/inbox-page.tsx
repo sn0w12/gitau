@@ -150,7 +150,7 @@ export function InboxPage() {
         const result = await confirm({
             title: "Mark all notifications read?",
             description:
-                "Every loaded thread is marked read on GitHub. Threads on pages you have not loaded yet stay unread.",
+                "Every GitHub notification is marked read, including threads on pages you have not loaded yet.",
             confirmText: "Mark all read",
         });
         if (!result.confirmed) return;
