@@ -10,7 +10,45 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
+    changes:
+        runs-on: ubuntu-latest
+        permissions:
+            pull-requests: read
+        outputs:
+            frontend: ${{ steps.filter.outputs.frontend }}
+            backend: ${{ steps.filter.outputs.backend }}
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  fetch-depth: 0
+
+            - uses: dorny/paths-filter@v3
+              id: filter
+              with:
+                  filters: |
+                      frontend:
+                        - 'src/**'
+                        - 'tests/**'
+                        - 'package.json'
+                        - 'package-lock.json'
+                        - 'vite.config.ts'
+                        - 'tsconfig.json'
+                        - 'index.html'
+                        - 'components.json'
+                        - '.oxfmtrc.json'
+                        - '.oxlintrc.json'
+                        - '.github/workflows/ci.yml'
+                      backend:
+                        - 'crates/**'
+                        - 'Cargo.toml'
+                        - 'Cargo.lock'
+                        - 'rust-toolchain*'
+                        - '.cargo/**'
+                        - '.github/workflows/ci.yml'
+
     rust:
+        needs: changes
+        if: needs.changes.outputs.backend == 'true'
         runs-on: ubuntu-24.04
         steps:
             - uses: actions/checkout@v7
@@ -41,6 +79,8 @@ jobs:
               run: cargo test --workspace
 
     frontend:
+        needs: changes
+        if: needs.changes.outputs.frontend == 'true'
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v7
