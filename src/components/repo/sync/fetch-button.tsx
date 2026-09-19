@@ -2,7 +2,6 @@ import { useSelector } from "@tanstack/react-store";
 import {
     ArrowDown,
     ArrowUp,
-    ChevronDown,
     CloudUpload,
     RefreshCw,
     Upload,
@@ -18,7 +17,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { PublishToGitHubDialog } from "@/components/repo/dialogs/publish-dialog";
 import { ForcePushDialog } from "@/components/repo/sync/force-push-dialog";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@/components/ui/menu";
 import {
     useRemotes,
     useRepoListing,
@@ -169,11 +167,14 @@ export function RepoFetchButton({
         );
     } else if (action.kind === "publishBranch") {
         body = (
-            <SplitDropdownButton
-                busy={busy}
-                onPrimary={() => void handleActivate(action)}
-                target={target}
-                onFetch={() => void sync.fetch()}
+            <button
+                disabled={busy}
+                onClick={() => void handleActivate(action)}
+                className={cn(
+                    REPO_TOOLBAR_TRIGGER_CLASS,
+                    TRIGGER_EXTRAS,
+                    BORDER_GRADIENT
+                )}
             >
                 <ButtonContent
                     icon={
@@ -190,7 +191,7 @@ export function RepoFetchButton({
                     label="Publish branch"
                     subtitle="Publish this branch to GitHub"
                 />
-            </SplitDropdownButton>
+            </button>
         );
     } else if (action.kind === "pull") {
         body = (
@@ -307,75 +308,6 @@ export function RepoFetchButton({
                 return;
         }
     }
-}
-
-/**
- * GitHub Desktop's ToolbarDropdown split: a primary action button plus a
- * chevron that opens the "Fetch" dropdown.
- */
-function SplitDropdownButton({
-    busy,
-    target,
-    onPrimary,
-    onFetch,
-    onForcePush,
-    children,
-}: {
-    busy: boolean;
-    target: string;
-    onPrimary: () => void;
-    onFetch: () => void;
-    onForcePush?: () => void;
-    children: React.ReactNode;
-}) {
-    return (
-        <div
-            className={cn(
-                "flex h-full min-w-64 items-stretch border-b hover:bg-accent",
-                BORDER_GRADIENT
-            )}
-        >
-            <button
-                type="button"
-                disabled={busy}
-                data-testid="fetch-button"
-                onClick={onPrimary}
-                className={cn(
-                    "flex h-full min-w-0 flex-1 items-center px-4 py-2",
-                    TRIGGER_EXTRAS
-                )}
-            >
-                {children}
-            </button>
-            <Menu>
-                <MenuTrigger
-                    disabled={busy}
-                    aria-label="More actions"
-                    className="flex h-full w-9 cursor-pointer items-center justify-center text-muted-foreground data-disabled:pointer-events-none data-disabled:opacity-64"
-                >
-                    <ChevronDown className="size-4 text-foreground" />
-                </MenuTrigger>
-                <MenuPopup align="end">
-                    <MenuItem
-                        onClick={onFetch}
-                        data-testid="dropdown-fetch-item"
-                    >
-                        <RefreshCw />
-                        <span>Fetch {target}</span>
-                    </MenuItem>
-                    {onForcePush && (
-                        <MenuItem
-                            onClick={onForcePush}
-                            data-testid="dropdown-force-push-item"
-                        >
-                            <CloudUpload />
-                            <span>Force push…</span>
-                        </MenuItem>
-                    )}
-                </MenuPopup>
-            </Menu>
-        </div>
-    );
 }
 
 /** The compact `N↑ M↓` counts graphic GitHub Desktop renders on pull/push. */
