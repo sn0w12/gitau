@@ -5,7 +5,11 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 use super::device_flow::{DeviceCodeResponse, TokenPoll, parse_device_code, parse_token_poll};
-use super::{AccountProfile, GitHubError, GithubNotification, GithubOrg, NotificationPage};
+use super::{
+    AccountProfile, GitHubError, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
+    GithubIssueListItem, GithubNotification, GithubOrg, GithubRepoPermissions, NotificationPage,
+    UpdateIssueBody,
+};
 
 /// Object-safe async surface: boxed futures let tests inject fakes without
 /// a network.
@@ -40,6 +44,86 @@ pub trait GithubApi: Send + Sync {
         token: &str,
         subject_url: &str,
     ) -> GithubFuture<Option<String>>;
+    /// Issues of a repository, open/closed/all. Pull requests are filtered
+    /// out; `labels` matches issues carrying every named label.
+    fn list_issues(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        state: &str,
+        labels: &[String],
+    ) -> GithubFuture<Vec<GithubIssueListItem>>;
+    fn get_issue(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> GithubFuture<GithubIssueDetail>;
+    fn list_issue_comments(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> GithubFuture<Vec<GithubIssueComment>>;
+    fn list_issue_events(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> GithubFuture<Vec<GithubIssueEvent>>;
+    fn create_issue_comment(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        body: &str,
+    ) -> GithubFuture<GithubIssueComment>;
+    /// Partial update: state (open/closed), labels, assignees.
+    fn update_issue(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        body: &UpdateIssueBody,
+    ) -> GithubFuture<GithubIssueDetail>;
+    fn create_issue(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        title: &str,
+        body: Option<&str>,
+        labels: &[String],
+    ) -> GithubFuture<GithubIssueDetail>;
+    fn update_issue_comment(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        comment_id: u64,
+        body: &str,
+    ) -> GithubFuture<GithubIssueComment>;
+    fn delete_issue_comment(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        comment_id: u64,
+    ) -> GithubFuture<()>;
+    /// The signed-in user's access on the repository, for gating
+    /// comment moderation in the UI.
+    fn repo_permissions(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+    ) -> GithubFuture<GithubRepoPermissions>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -128,6 +212,216 @@ struct RawSubject {
     html_url: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct RawIssueUser {
+    #[serde(default)]
+    login: String,
+    #[serde(default)]
+    avatar_url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawIssueLabel {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    color: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawIssue {
+    #[serde(default)]
+    number: u64,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    state: String,
+    #[serde(default)]
+    body: Option<String>,
+    #[serde(default)]
+    user: Option<RawIssueUser>,
+    #[serde(default)]
+    labels: Vec<RawIssueLabel>,
+    #[serde(default)]
+    assignees: Vec<RawIssueUser>,
+    #[serde(default)]
+    comments: u64,
+    #[serde(default)]
+    created_at: Option<String>,
+    #[serde(default)]
+    updated_at: Option<String>,
+    #[serde(default)]
+    html_url: Option<String>,
+    /// Present on pull requests returned by the issues endpoint; used to
+    /// filter them out. The value shape is irrelevant.
+    #[serde(default)]
+    pull_request: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawIssueComment {
+    #[serde(default)]
+    id: u64,
+    #[serde(default)]
+    user: Option<RawIssueUser>,
+    #[serde(default)]
+    body: Option<String>,
+    #[serde(default)]
+    created_at: Option<String>,
+    #[serde(default)]
+    html_url: Option<String>,
+}
+
+/// The repository payload carries far more than permissions; only the
+/// access block is parsed.
+#[derive(Debug, Deserialize)]
+struct RawPermissionsEnvelope {
+    #[serde(default)]
+    permissions: Option<RawRepoPermissions>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct RawRepoPermissions {
+    #[serde(default)]
+    push: bool,
+    #[serde(default)]
+    admin: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawIssueEvent {
+    #[serde(default)]
+    id: u64,
+    #[serde(default)]
+    event: String,
+    #[serde(default)]
+    actor: Option<RawIssueUser>,
+    #[serde(default)]
+    created_at: Option<String>,
+    #[serde(default)]
+    label: Option<RawIssueLabel>,
+    #[serde(default)]
+    assignee: Option<RawIssueUser>,
+}
+
+fn map_issue_user(raw: Option<RawIssueUser>) -> crate::api::github::GithubUser {
+    let raw = raw.unwrap_or(RawIssueUser {
+        login: String::new(),
+        avatar_url: String::new(),
+    });
+    crate::api::github::GithubUser {
+        login: raw.login,
+        avatar_url: raw.avatar_url,
+    }
+}
+
+fn map_issue_label(raw: &RawIssueLabel) -> crate::api::github::GithubLabel {
+    crate::api::github::GithubLabel {
+        name: raw.name.clone(),
+        color: raw.color.clone(),
+    }
+}
+
+fn map_issue_list_item(raw: RawIssue) -> GithubIssueListItem {
+    GithubIssueListItem {
+        number: raw.number,
+        title: raw.title,
+        state: raw.state,
+        labels: raw.labels.iter().map(map_issue_label).collect(),
+        comment_count: raw.comments,
+        assignees: raw
+            .assignees
+            .into_iter()
+            .map(|user| crate::api::github::GithubUser {
+                login: user.login,
+                avatar_url: user.avatar_url,
+            })
+            .collect(),
+        author: raw.user.map(|user| user.login).unwrap_or_default(),
+        updated_at: raw.updated_at.unwrap_or_default(),
+    }
+}
+
+fn map_issue_detail(
+    raw: RawIssue,
+    participants: Vec<crate::api::github::GithubUser>,
+) -> GithubIssueDetail {
+    GithubIssueDetail {
+        number: raw.number,
+        title: raw.title,
+        state: raw.state,
+        body: raw.body.unwrap_or_default(),
+        author: map_issue_user(raw.user),
+        labels: raw.labels.iter().map(map_issue_label).collect(),
+        assignees: raw
+            .assignees
+            .into_iter()
+            .map(|user| crate::api::github::GithubUser {
+                login: user.login,
+                avatar_url: user.avatar_url,
+            })
+            .collect(),
+        participants,
+        created_at: raw.created_at.unwrap_or_default(),
+        updated_at: raw.updated_at.unwrap_or_default(),
+        html_url: raw.html_url.unwrap_or_default(),
+    }
+}
+
+fn map_issue_comment(raw: RawIssueComment) -> GithubIssueComment {
+    GithubIssueComment {
+        id: raw.id,
+        author: map_issue_user(raw.user),
+        body: raw.body.unwrap_or_default(),
+        created_at: raw.created_at.unwrap_or_default(),
+        html_url: raw.html_url.unwrap_or_default(),
+    }
+}
+
+/// Query pairs for listing issues. An empty `labels` param filters to
+/// unlabeled issues on GitHub's side, so it is only sent when filtering.
+fn issues_query(state: &str, labels: &[String]) -> Vec<(String, String)> {
+    let mut query = vec![
+        ("state".to_owned(), state.to_owned()),
+        ("per_page".to_owned(), ISSUES_PER_PAGE.to_string()),
+        ("sort".to_owned(), "updated".to_owned()),
+        ("direction".to_owned(), "desc".to_owned()),
+    ];
+    if !labels.is_empty() {
+        query.push(("labels".to_owned(), labels.join(",")));
+    }
+    query
+}
+
+/// Order-preserving dedup by login, dropping empty logins. `dedup_by`
+/// only collapses adjacent entries, so it cannot be used here.
+fn dedup_users(
+    users: impl IntoIterator<Item = crate::api::github::GithubUser>,
+) -> Vec<crate::api::github::GithubUser> {
+    let mut seen = std::collections::HashSet::new();
+    users
+        .into_iter()
+        .filter(|user| !user.login.is_empty() && seen.insert(user.login.clone()))
+        .collect()
+}
+
+fn map_issue_event(raw: RawIssueEvent) -> GithubIssueEvent {
+    let (actor, actor_avatar_url) = raw
+        .actor
+        .map(|user| (user.login, user.avatar_url))
+        .unwrap_or_default();
+    GithubIssueEvent {
+        id: raw.id,
+        kind: raw.event,
+        actor,
+        actor_avatar_url,
+        created_at: raw.created_at.unwrap_or_default(),
+        label: raw.label.as_ref().map(|label| label.name.clone()),
+        label_color: raw.label.as_ref().map(|label| label.color.clone()),
+        assignee: raw.assignee.map(|user| user.login),
+    }
+}
+
 /// Converts an API subject URL into a best-effort web URL, so rows link
 /// out without a second round trip. Only types with a proven static
 /// mapping qualify; releases (addressed by tag, not id) and check suites
@@ -190,6 +484,11 @@ const DEVICE_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:device_code";
 /// GitHub's maximum page size. Full pages keep `has_more` true as a
 /// fallback when the `Link` header is missing.
 const NOTIFICATIONS_PER_PAGE: u32 = 100;
+const ISSUES_PER_PAGE: u32 = 100;
+/// Upper bound on issue-list pages per call: real issues hide behind
+/// pages of pull requests, so one page is never enough, but the walk
+/// still has to end.
+const MAX_ISSUE_PAGES: u32 = 10;
 
 pub struct HttpGithubApi {
     client: reqwest::Client,
@@ -495,6 +794,289 @@ impl GithubApi for HttpGithubApi {
             Ok(raw.html_url.filter(|url| !url.is_empty()))
         })
     }
+
+    fn list_issues(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        state: &str,
+        labels: &[String],
+    ) -> GithubFuture<Vec<GithubIssueListItem>> {
+        let client = self.client.clone();
+        let authorization = bearer(token);
+        let url = format!("{API_ROOT}/repos/{owner}/{repo}/issues");
+        let state = state.to_owned();
+        let labels = labels.to_owned();
+        Box::pin(async move {
+            // Real issues hide behind pages of pull requests (filtered
+            // below), so walk every page; the cap bounds pathological
+            // repos, not normal ones.
+            let mut items = Vec::new();
+            for page in 1..=MAX_ISSUE_PAGES {
+                let mut query = issues_query(&state, &labels);
+                query.push(("page".to_owned(), page.to_string()));
+                let (body, headers) = send_full(
+                    client
+                        .get(&url)
+                        .header("Authorization", authorization.clone())
+                        .query(&query),
+                )
+                .await?;
+                let raw: Vec<RawIssue> = serde_json::from_str(&body).map_err(malformed)?;
+                let has_more = page_has_more(&headers, raw.len());
+                items.extend(
+                    raw.into_iter()
+                        .filter(|issue| issue.pull_request.is_none())
+                        .map(map_issue_list_item),
+                );
+                if !has_more {
+                    break;
+                }
+            }
+            Ok(items)
+        })
+    }
+
+    fn get_issue(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> GithubFuture<GithubIssueDetail> {
+        let client = self.client.clone();
+        let authorization = bearer(token);
+        let url = format!("{API_ROOT}/repos/{owner}/{repo}/issues/{number}");
+        Box::pin(async move {
+            let body = send(client.get(url).header("Authorization", authorization)).await?;
+            let raw: RawIssue = serde_json::from_str(&body).map_err(malformed)?;
+            // The issue endpoint has no participants list; the detail
+            // carries author + assignees and the UI merges comment authors.
+            let mut participants = vec![
+                raw.user
+                    .as_ref()
+                    .map(|user| crate::api::github::GithubUser {
+                        login: user.login.clone(),
+                        avatar_url: user.avatar_url.clone(),
+                    })
+                    .unwrap_or_default(),
+            ];
+            participants.extend(
+                raw.assignees
+                    .iter()
+                    .map(|user| crate::api::github::GithubUser {
+                        login: user.login.clone(),
+                        avatar_url: user.avatar_url.clone(),
+                    }),
+            );
+            Ok(map_issue_detail(raw, dedup_users(participants)))
+        })
+    }
+
+    fn list_issue_comments(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> GithubFuture<Vec<GithubIssueComment>> {
+        let client = self.client.clone();
+        let authorization = bearer(token);
+        let url = format!("{API_ROOT}/repos/{owner}/{repo}/issues/{number}/comments");
+        Box::pin(async move {
+            let body = send(
+                client
+                    .get(url)
+                    .header("Authorization", authorization)
+                    .query(&[("per_page", ISSUES_PER_PAGE.to_string())]),
+            )
+            .await?;
+            let raw: Vec<RawIssueComment> = serde_json::from_str(&body).map_err(malformed)?;
+            Ok(raw.into_iter().map(map_issue_comment).collect())
+        })
+    }
+
+    fn list_issue_events(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> GithubFuture<Vec<GithubIssueEvent>> {
+        let client = self.client.clone();
+        let authorization = bearer(token);
+        let url = format!("{API_ROOT}/repos/{owner}/{repo}/issues/{number}/events");
+        Box::pin(async move {
+            let body = send(
+                client
+                    .get(url)
+                    .header("Authorization", authorization)
+                    .query(&[("per_page", ISSUES_PER_PAGE.to_string())]),
+            )
+            .await?;
+            let raw: Vec<RawIssueEvent> = serde_json::from_str(&body).map_err(malformed)?;
+            Ok(raw.into_iter().map(map_issue_event).collect())
+        })
+    }
+
+    fn create_issue_comment(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        body: &str,
+    ) -> GithubFuture<GithubIssueComment> {
+        let client = self.client.clone();
+        let authorization = bearer(token);
+        let url = format!("{API_ROOT}/repos/{owner}/{repo}/issues/{number}/comments");
+        let payload = serde_json::json!({ "body": body }).to_string();
+        Box::pin(async move {
+            let text = send(
+                client
+                    .post(url)
+                    .header("Authorization", authorization)
+                    .header("Content-Type", "application/json")
+                    .body(payload),
+            )
+            .await?;
+            let raw: RawIssueComment = serde_json::from_str(&text).map_err(malformed)?;
+            Ok(map_issue_comment(raw))
+        })
+    }
+
+    fn update_issue(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        body: &UpdateIssueBody,
+    ) -> GithubFuture<GithubIssueDetail> {
+        let client = self.client.clone();
+        let authorization = bearer(token);
+        let url = format!("{API_ROOT}/repos/{owner}/{repo}/issues/{number}");
+        let payload = serde_json::to_vec(body).map_err(internal);
+        Box::pin(async move {
+            let payload = payload?;
+            let text = send(
+                client
+                    .patch(url)
+                    .header("Authorization", authorization)
+                    .header("Content-Type", "application/json")
+                    .body(payload),
+            )
+            .await?;
+            let raw: RawIssue = serde_json::from_str(&text).map_err(malformed)?;
+            let participants =
+                dedup_users(
+                    raw.assignees
+                        .iter()
+                        .map(|user| crate::api::github::GithubUser {
+                            login: user.login.clone(),
+                            avatar_url: user.avatar_url.clone(),
+                        }),
+                );
+            Ok(map_issue_detail(raw, participants))
+        })
+    }
+
+    fn create_issue(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        title: &str,
+        body: Option<&str>,
+        labels: &[String],
+    ) -> GithubFuture<GithubIssueDetail> {
+        let client = self.client.clone();
+        let authorization = bearer(token);
+        let url = format!("{API_ROOT}/repos/{owner}/{repo}/issues");
+        let mut payload = serde_json::json!({ "title": title });
+        if let Some(body) = body {
+            payload["body"] = serde_json::Value::String(body.to_owned());
+        }
+        if !labels.is_empty() {
+            payload["labels"] = serde_json::json!(labels);
+        }
+        let payload = payload.to_string();
+        Box::pin(async move {
+            let text = send(
+                client
+                    .post(url)
+                    .header("Authorization", authorization)
+                    .header("Content-Type", "application/json")
+                    .body(payload),
+            )
+            .await?;
+            let raw: RawIssue = serde_json::from_str(&text).map_err(malformed)?;
+            Ok(map_issue_detail(raw, vec![]))
+        })
+    }
+
+    fn update_issue_comment(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        comment_id: u64,
+        body: &str,
+    ) -> GithubFuture<GithubIssueComment> {
+        let client = self.client.clone();
+        let authorization = bearer(token);
+        let url = format!("{API_ROOT}/repos/{owner}/{repo}/issues/comments/{comment_id}");
+        let payload = serde_json::json!({ "body": body }).to_string();
+        Box::pin(async move {
+            let text = send(
+                client
+                    .patch(url)
+                    .header("Authorization", authorization)
+                    .header("Content-Type", "application/json")
+                    .body(payload),
+            )
+            .await?;
+            let raw: RawIssueComment = serde_json::from_str(&text).map_err(malformed)?;
+            Ok(map_issue_comment(raw))
+        })
+    }
+
+    fn delete_issue_comment(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        comment_id: u64,
+    ) -> GithubFuture<()> {
+        let client = self.client.clone();
+        let authorization = bearer(token);
+        let url = format!("{API_ROOT}/repos/{owner}/{repo}/issues/comments/{comment_id}");
+        Box::pin(async move {
+            send(client.delete(url).header("Authorization", authorization)).await?;
+            Ok(())
+        })
+    }
+
+    fn repo_permissions(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+    ) -> GithubFuture<GithubRepoPermissions> {
+        let client = self.client.clone();
+        let authorization = bearer(token);
+        let url = format!("{API_ROOT}/repos/{owner}/{repo}");
+        Box::pin(async move {
+            let body = send(client.get(url).header("Authorization", authorization)).await?;
+            let raw: RawPermissionsEnvelope = serde_json::from_str(&body).map_err(malformed)?;
+            let permissions = raw.permissions.unwrap_or_default();
+            Ok(GithubRepoPermissions {
+                push: permissions.push,
+                admin: permissions.admin,
+            })
+        })
+    }
 }
 
 /// Minimal UTC timestamp formatter, avoiding a chrono dependency for one
@@ -675,6 +1257,115 @@ mod tests {
         assert_eq!(subject_html_url(Some(api), "Release"), None);
         assert_eq!(subject_html_url(Some(api), "CheckSuite"), None);
         assert_eq!(subject_html_url(Some(api), "Unknown"), None);
+    }
+
+    #[test]
+    fn issue_list_mapping_filters_pull_requests() {
+        let items: Vec<RawIssue> = serde_json::from_value(serde_json::json!([
+            {
+                "number": 7,
+                "title": "Real issue",
+                "state": "open",
+                "user": { "login": "octocat", "avatar_url": "https://a/u/1" },
+                "labels": [{ "name": "bug", "color": "d73a4a" }],
+                "assignees": [{ "login": "k", "avatar_url": "" }],
+                "comments": 3,
+                "updated_at": "2026-09-01T12:00:00Z"
+            },
+            {
+                "number": 8,
+                "title": "A PR",
+                "state": "open",
+                "pull_request": { "url": "https://api.github.com/repos/o/r/pulls/8" }
+            }
+        ]))
+        .unwrap();
+        let mapped: Vec<GithubIssueListItem> = items
+            .into_iter()
+            .filter(|issue| issue.pull_request.is_none())
+            .map(map_issue_list_item)
+            .collect();
+        assert_eq!(mapped.len(), 1);
+        let item = &mapped[0];
+        assert_eq!(item.number, 7);
+        assert_eq!(item.title, "Real issue");
+        assert_eq!(item.labels[0].name, "bug");
+        assert_eq!(item.labels[0].color, "d73a4a");
+        assert_eq!(item.assignees[0].login, "k");
+        assert_eq!(item.comment_count, 3);
+        assert_eq!(item.author, "octocat");
+    }
+
+    #[test]
+    fn issues_query_omits_empty_labels() {
+        let query = issues_query("open", &[]);
+        assert!(
+            query.iter().all(|(key, _)| key != "labels"),
+            "empty labels must not be sent: {query:?}"
+        );
+        let query = issues_query("open", &["bug".into(), "ui".into()]);
+        assert!(
+            query
+                .iter()
+                .any(|(key, value)| key == "labels" && value == "bug,ui"),
+            "active label filter must be sent: {query:?}"
+        );
+    }
+
+    #[test]
+    fn participants_dedup_is_global_and_order_preserving() {
+        use crate::api::github::GithubUser;
+        let users = vec![
+            GithubUser {
+                login: "b".into(),
+                avatar_url: String::new(),
+            },
+            GithubUser {
+                login: "a".into(),
+                avatar_url: String::new(),
+            },
+            GithubUser {
+                login: "b".into(),
+                avatar_url: "other".into(),
+            },
+            GithubUser {
+                login: String::new(),
+                avatar_url: String::new(),
+            },
+        ];
+        let deduped = dedup_users(users);
+        let logins: Vec<&str> = deduped.iter().map(|user| user.login.as_str()).collect();
+        assert_eq!(logins, ["b", "a"]);
+    }
+
+    #[test]
+    fn issue_event_mapping_carries_label_and_assignee() {
+        let labeled: RawIssueEvent = serde_json::from_value(serde_json::json!({
+            "id": 1,
+            "event": "labeled",
+            "actor": { "login": "octocat", "avatar_url": "https://a/u/1" },
+            "created_at": "2026-09-01T12:00:00Z",
+            "label": { "name": "bug", "color": "d73a4a" }
+        }))
+        .unwrap();
+        let mapped = map_issue_event(labeled);
+        assert_eq!(mapped.kind, "labeled");
+        assert_eq!(mapped.actor, "octocat");
+        assert_eq!(mapped.label.as_deref(), Some("bug"));
+        assert_eq!(mapped.label_color.as_deref(), Some("d73a4a"));
+        assert_eq!(mapped.assignee, None);
+
+        let assigned: RawIssueEvent = serde_json::from_value(serde_json::json!({
+            "id": 2,
+            "event": "assigned",
+            "actor": { "login": "octocat", "avatar_url": "" },
+            "created_at": "2026-09-01T12:00:00Z",
+            "assignee": { "login": "k" }
+        }))
+        .unwrap();
+        let mapped = map_issue_event(assigned);
+        assert_eq!(mapped.assignee.as_deref(), Some("k"));
+        assert_eq!(mapped.label, None);
     }
 
     #[test]

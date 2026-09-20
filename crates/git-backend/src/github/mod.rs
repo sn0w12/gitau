@@ -19,8 +19,9 @@ pub mod device_flow;
 pub mod token_store;
 
 pub use crate::api::github::{
-    AccountProfile, DeviceFlowStart, GithubNotification, GithubOrg, NotificationPage,
-    PublishRepositoryRequest, PublishResult,
+    AccountProfile, DeviceFlowStart, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
+    GithubIssueListItem, GithubLabel, GithubNotification, GithubOrg, GithubRepoPermissions,
+    GithubUser, NotificationPage, PublishRepositoryRequest, PublishResult, UpdateIssueBody,
 };
 pub use api::{CreateRepoBody, CreatedRepository, GithubApi, HttpGithubApi};
 pub use token_store::{KeyringTokenStore, MemoryTokenStore, TokenStore};
@@ -393,6 +394,155 @@ impl GitHubAuth {
         Ok(self.api.fetch_subject_html_url(&token, subject_url).await?)
     }
 
+    /// Issues of a repository, open/closed/all. Pull requests are excluded.
+    pub async fn list_issues(
+        &self,
+        owner: &str,
+        repo: &str,
+        state: &str,
+        labels: &[String],
+    ) -> Result<Vec<GithubIssueListItem>> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .list_issues(&token, owner, repo, state, labels)
+            .await?)
+    }
+
+    pub async fn get_issue(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<GithubIssueDetail> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self.api.get_issue(&token, owner, repo, number).await?)
+    }
+
+    pub async fn list_issue_comments(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<Vec<GithubIssueComment>> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .list_issue_comments(&token, owner, repo, number)
+            .await?)
+    }
+
+    pub async fn list_issue_events(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<Vec<GithubIssueEvent>> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .list_issue_events(&token, owner, repo, number)
+            .await?)
+    }
+
+    pub async fn create_issue_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        body: &str,
+    ) -> Result<GithubIssueComment> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .create_issue_comment(&token, owner, repo, number, body)
+            .await?)
+    }
+
+    /// Partial issue update: state (open/closed), labels, assignees.
+    pub async fn update_issue(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        body: &UpdateIssueBody,
+    ) -> Result<GithubIssueDetail> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .update_issue(&token, owner, repo, number, body)
+            .await?)
+    }
+
+    pub async fn create_issue(
+        &self,
+        owner: &str,
+        repo: &str,
+        title: &str,
+        body: Option<&str>,
+        labels: &[String],
+    ) -> Result<GithubIssueDetail> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .create_issue(&token, owner, repo, title, body, labels)
+            .await?)
+    }
+
+    pub async fn update_issue_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        comment_id: u64,
+        body: &str,
+    ) -> Result<GithubIssueComment> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .update_issue_comment(&token, owner, repo, comment_id, body)
+            .await?)
+    }
+
+    pub async fn delete_issue_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        comment_id: u64,
+    ) -> Result<()> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .delete_issue_comment(&token, owner, repo, comment_id)
+            .await?)
+    }
+
+    /// The signed-in user's access on the repository, for gating
+    /// comment moderation in the UI.
+    pub async fn repo_permissions(&self, owner: &str, repo: &str) -> Result<GithubRepoPermissions> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self.api.repo_permissions(&token, owner, repo).await?)
+    }
+
     /// Token credentials for a configured remote, but only when the remote
     /// is an https github.com URL and a token exists. Everything else falls
     /// back to whatever the request already carries.
@@ -664,6 +814,111 @@ mod tests {
                 _token: &str,
                 _subject_url: &str,
             ) -> api::GithubFuture<Option<String>> {
+                unreachable!()
+            }
+
+            fn list_issues(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _state: &str,
+                _labels: &[String],
+            ) -> api::GithubFuture<Vec<GithubIssueListItem>> {
+                unreachable!()
+            }
+
+            fn get_issue(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _number: u64,
+            ) -> api::GithubFuture<GithubIssueDetail> {
+                unreachable!()
+            }
+
+            fn list_issue_comments(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _number: u64,
+            ) -> api::GithubFuture<Vec<GithubIssueComment>> {
+                unreachable!()
+            }
+
+            fn list_issue_events(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _number: u64,
+            ) -> api::GithubFuture<Vec<GithubIssueEvent>> {
+                unreachable!()
+            }
+
+            fn create_issue_comment(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _number: u64,
+                _body: &str,
+            ) -> api::GithubFuture<GithubIssueComment> {
+                unreachable!()
+            }
+
+            fn update_issue(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _number: u64,
+                _body: &UpdateIssueBody,
+            ) -> api::GithubFuture<GithubIssueDetail> {
+                unreachable!()
+            }
+
+            fn create_issue(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _title: &str,
+                _body: Option<&str>,
+                _labels: &[String],
+            ) -> api::GithubFuture<GithubIssueDetail> {
+                unreachable!()
+            }
+
+            fn update_issue_comment(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _comment_id: u64,
+                _body: &str,
+            ) -> api::GithubFuture<GithubIssueComment> {
+                unreachable!()
+            }
+
+            fn delete_issue_comment(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _comment_id: u64,
+            ) -> api::GithubFuture<()> {
+                unreachable!()
+            }
+
+            fn repo_permissions(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+            ) -> api::GithubFuture<GithubRepoPermissions> {
                 unreachable!()
             }
         }

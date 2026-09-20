@@ -1,6 +1,6 @@
 "use no memo";
 
-import { useParams } from "@tanstack/react-router";
+import { useParams, useSearch } from "@tanstack/react-router";
 import { useSelector } from "@tanstack/react-store";
 import { useEffect, useReducer, useRef } from "react";
 
@@ -46,7 +46,7 @@ export type reducerAction =
     | { type: "CLEAR_SELECTION" };
 
 export type RepoTab = "changes" | "history";
-export type RepoView = "overview" | "graph";
+export type RepoView = "overview" | "graph" | "issues";
 
 // Every tab's repo page reports the same boot metric; only the first
 // window-to-content measurement counts.
@@ -99,9 +99,16 @@ function reducer(prevState: ReducerState, action: reducerAction) {
     }
 }
 
+function searchView(search: { view?: unknown }): RepoView {
+    return search.view === "issues" || search.view === "graph"
+        ? search.view
+        : "overview";
+}
+
 export function RepoPage() {
     const tabId = useTabId();
     const params = useParams({ strict: false });
+    const search = useSearch({ strict: false });
     const repoId = Number(params.repoId);
     const valid = Number.isInteger(repoId) && repoId > 0;
 
@@ -123,8 +130,15 @@ export function RepoPage() {
         selectedCommit: null,
         selectedStash: null,
         repoTab: "changes",
-        view: "overview",
+        view: searchView(search),
     });
+
+    // Deep links (back from an issue page, restored tabs) carry the view
+    // in `?view=`; the reducer otherwise keeps its mounted state.
+    const searchViewName = searchView(search);
+    useEffect(() => {
+        dispatch({ type: "SET_VIEW", data: searchViewName });
+    }, [searchViewName]);
 
     // Navigating between /repo/:id values reuses this component instance, so
     // the reducer keeps the old repo's selection. Drop it or a content-address

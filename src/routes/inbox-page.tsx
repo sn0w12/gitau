@@ -48,9 +48,11 @@ import {
     useMarkNotificationRead,
     useResolveSubjectUrl,
 } from "@/hooks/github/use-github-inbox";
+import { useLocalIssueRepoMap } from "@/hooks/github/use-github-issues";
 import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
 import type { GithubNotification } from "@/lib/backend/protocol";
 import { GitBackendError } from "@/lib/backend/transport/invoke";
+import { parseIssueUrl } from "@/lib/github/repo-coords";
 import { openExternal } from "@/lib/open-external";
 import { toastError } from "@/lib/toast-error";
 import { formatRelativeDate } from "@/lib/utils";
@@ -124,6 +126,9 @@ export function InboxPage() {
         () => new Set()
     );
     const { confirm } = useConfirm();
+    // Open repos keyed by `owner/repo` for in-app issue links; threads
+    // whose repo is not open fall back to the browser.
+    const localIssueRepos = useLocalIssueRepoMap();
 
     const threads = useMemo(
         () => inbox.threads.filter((thread) => matchesFilter(thread, filter)),
@@ -366,6 +371,9 @@ export function InboxPage() {
                                                             thread.id
                                                         )
                                                     }
+                                                    localIssueRepos={
+                                                        localIssueRepos
+                                                    }
                                                 />
                                             </div>
                                         ))}
@@ -385,13 +393,28 @@ function InboxRow({
     thread,
     marking,
     onMarkRead,
+    localIssueRepos,
 }: {
     thread: GithubNotification;
     marking: boolean;
     onMarkRead: () => void;
+    localIssueRepos: Map<string, number>;
 }) {
+    const router = useActiveTabRouter();
     const resolve = useResolveSubjectUrl();
     const [resolving, setResolving] = useState(false);
+
+    // Issue threads whose repo is open resolve to the in-app issue page;
+    // everything else keeps the external browser behavior.
+    const issueTarget =
+        thread.subjectType === "Issue"
+            ? parseIssueUrl(thread.htmlUrl ?? thread.subjectUrl ?? undefined)
+            : null;
+    const inAppRepoId = issueTarget
+        ? localIssueRepos.get(
+              `${issueTarget.owner.toLowerCase()}/${issueTarget.repo.toLowerCase()}`
+          )
+        : undefined;
 
     const openResolved = async () => {
         if (!thread.subjectUrl || resolving) return;
@@ -411,22 +434,44 @@ function InboxRow({
         }
     };
 
-    const title = thread.htmlUrl ? (
-        <ExternalLink href={thread.htmlUrl} className="truncate font-medium">
-            {thread.subjectTitle || "(no title)"}
-        </ExternalLink>
-    ) : (
-        <button
-            type="button"
-            disabled={resolving || !thread.subjectUrl}
-            onClick={() => void openResolved()}
-            className="flex min-w-0 cursor-pointer items-center gap-1 truncate text-left font-medium hover:underline disabled:pointer-events-none disabled:opacity-100"
-        >
-            <span className="truncate">
+    const openInApp = () => {
+        if (inAppRepoId === undefined || !issueTarget) return;
+        onMarkRead();
+        router?.navigate({
+            to: `/repo/${inAppRepoId}/issue/${issueTarget.number}`,
+        });
+    };
+
+    const title =
+        inAppRepoId !== undefined ? (
+            <button
+                type="button"
+                onClick={openInApp}
+                className="flex min-w-0 cursor-pointer items-center gap-1 truncate text-left font-medium hover:underline"
+            >
+                <span className="truncate">
+                    {thread.subjectTitle || "(no title)"}
+                </span>
+            </button>
+        ) : thread.htmlUrl ? (
+            <ExternalLink
+                href={thread.htmlUrl}
+                className="truncate font-medium"
+            >
                 {thread.subjectTitle || "(no title)"}
-            </span>
-        </button>
-    );
+            </ExternalLink>
+        ) : (
+            <button
+                type="button"
+                disabled={resolving || !thread.subjectUrl}
+                onClick={() => void openResolved()}
+                className="flex min-w-0 cursor-pointer items-center gap-1 truncate text-left font-medium hover:underline disabled:pointer-events-none disabled:opacity-100"
+            >
+                <span className="truncate">
+                    {thread.subjectTitle || "(no title)"}
+                </span>
+            </button>
+        );
     return (
         <div className="flex items-center gap-2 px-2 py-2">
             <span

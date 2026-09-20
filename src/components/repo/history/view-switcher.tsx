@@ -1,10 +1,4 @@
-import {
-    Check,
-    ChevronDown,
-    CircleDot,
-    GitPullRequest,
-    LayoutGrid,
-} from "lucide-react";
+import { Check, ChevronDown, GitPullRequest, LayoutGrid } from "lucide-react";
 
 import {
     Menu,
@@ -20,12 +14,12 @@ import type { RepoView } from "@/routes/repo-page";
 const VIEW_LABELS: Record<RepoView, string> = {
     overview: "Overview",
     graph: "Commit Graph",
+    issues: "Issues",
 };
 
 /**
  * The right-panel view menu: switches the main area between the available
- * views. GitHub views (issues, pull requests) are placeholders until their
- * backends exist.
+ * views. Pull requests stay a placeholder until their backend exists.
  */
 export function RepoViewSwitcher({
     view,
@@ -82,14 +76,19 @@ export function RepoViewSwitcher({
                         Commit Graph
                     </span>
                 </MenuItem>
-                <MenuSeparator />
-                <MenuItem disabled>
-                    <CircleDot />
-                    <span className="min-w-0 flex-1 truncate">Issues</span>
-                    <span className="ms-auto text-xs text-muted-foreground">
-                        Soon
-                    </span>
+                <MenuItem
+                    onClick={() => onView("issues")}
+                    aria-selected={view === "issues" || undefined}
+                >
+                    <Check
+                        className={cn(
+                            "size-3.5 shrink-0",
+                            view === "issues" ? "opacity-100" : "opacity-0"
+                        )}
+                    />
+                    <span className="min-w-0 flex-1 truncate pl-1">Issues</span>
                 </MenuItem>
+                <MenuSeparator />
                 <MenuItem disabled>
                     <GitPullRequest />
                     <span className="min-w-0 flex-1 truncate">

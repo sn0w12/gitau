@@ -32,6 +32,7 @@ import { setTabTitle } from "@/stores/app-store";
 import { getEntryByRepoId } from "@/stores/repository-store";
 
 import { HomePage } from "./home-page";
+import { IssuePage } from "./repo/issue";
 
 /**
  * Fresh route-tree instances per call: routers mutate their route nodes
@@ -112,6 +113,12 @@ export function createTabRouteTree(options: { tabId?: string } = {}) {
         getParentRoute: () => rootRoute,
         path: "/repo/$repoId",
         component: RepoPage,
+        validateSearch: (search: Record<string, unknown>) => ({
+            view:
+                search.view === "issues" || search.view === "graph"
+                    ? search.view
+                    : undefined,
+        }),
         loader: async ({ params }) => {
             const routeId = Number(params.repoId);
             if (!Number.isInteger(routeId) || routeId <= 0) return;
@@ -151,6 +158,13 @@ export function createTabRouteTree(options: { tabId?: string } = {}) {
         },
     });
 
+    const repoIssueRoute = createRoute({
+        getParentRoute: () => rootRoute,
+        path: "/repo/$repoId/issue/$issueId",
+        component: IssuePage,
+        loader: () => applyTitle("Issue"),
+    });
+
     return rootRoute.addChildren([
         homeRoute,
         settingsRoute,
@@ -158,5 +172,6 @@ export function createTabRouteTree(options: { tabId?: string } = {}) {
         inboxRoute,
         ...(devRoute ? [devRoute] : []),
         repoRoute,
+        repoIssueRoute,
     ]);
 }

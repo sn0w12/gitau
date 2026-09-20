@@ -75,6 +75,16 @@ export const githubKeys = {
      */
     notifications: (login: string) =>
         ["github", "notifications", login] as const,
+    issues: (owner: string, repo: string, state: string, labels: string) =>
+        ["github", "issues", owner, repo, state, labels] as const,
+    issueDetail: (owner: string, repo: string, number: number) =>
+        ["github", "issue", owner, repo, number] as const,
+    issueComments: (owner: string, repo: string, number: number) =>
+        ["github", "issue", owner, repo, number, "comments"] as const,
+    issueEvents: (owner: string, repo: string, number: number) =>
+        ["github", "issue", owner, repo, number, "events"] as const,
+    repoPermissions: (owner: string, repo: string) =>
+        ["github", "repo", owner, repo, "permissions"] as const,
 };
 
 export const templateKeys = {

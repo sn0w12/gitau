@@ -127,6 +127,140 @@ impl GithubApi for FakeApi {
     ) -> GithubFuture<Option<String>> {
         Box::pin(async { Ok(None) })
     }
+
+    fn list_issues(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _state: &str,
+        _labels: &[String],
+    ) -> GithubFuture<Vec<git_backend::api::github::GithubIssueListItem>> {
+        Box::pin(async { Ok(vec![]) })
+    }
+
+    fn get_issue(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _number: u64,
+    ) -> GithubFuture<git_backend::api::github::GithubIssueDetail> {
+        Box::pin(async {
+            Err(git_backend::github::GitHubError::NotFound {
+                message: "not implemented in fake".into(),
+            })
+        })
+    }
+
+    fn list_issue_comments(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _number: u64,
+    ) -> GithubFuture<Vec<git_backend::api::github::GithubIssueComment>> {
+        Box::pin(async { Ok(vec![]) })
+    }
+
+    fn list_issue_events(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _number: u64,
+    ) -> GithubFuture<Vec<git_backend::api::github::GithubIssueEvent>> {
+        Box::pin(async { Ok(vec![]) })
+    }
+
+    fn create_issue_comment(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _number: u64,
+        _body: &str,
+    ) -> GithubFuture<git_backend::api::github::GithubIssueComment> {
+        Box::pin(async {
+            Err(git_backend::github::GitHubError::Internal {
+                message: "not implemented in fake".into(),
+            })
+        })
+    }
+
+    fn update_issue(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _number: u64,
+        _body: &git_backend::api::github::UpdateIssueBody,
+    ) -> GithubFuture<git_backend::api::github::GithubIssueDetail> {
+        Box::pin(async {
+            Err(git_backend::github::GitHubError::Internal {
+                message: "not implemented in fake".into(),
+            })
+        })
+    }
+
+    fn create_issue(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _title: &str,
+        _body: Option<&str>,
+        _labels: &[String],
+    ) -> GithubFuture<git_backend::api::github::GithubIssueDetail> {
+        Box::pin(async {
+            Err(git_backend::github::GitHubError::Internal {
+                message: "not implemented in fake".into(),
+            })
+        })
+    }
+
+    fn update_issue_comment(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _comment_id: u64,
+        _body: &str,
+    ) -> GithubFuture<git_backend::api::github::GithubIssueComment> {
+        Box::pin(async {
+            Err(git_backend::github::GitHubError::Internal {
+                message: "not implemented in fake".into(),
+            })
+        })
+    }
+
+    fn delete_issue_comment(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _comment_id: u64,
+    ) -> GithubFuture<()> {
+        Box::pin(async {
+            Err(git_backend::github::GitHubError::Internal {
+                message: "not implemented in fake".into(),
+            })
+        })
+    }
+
+    fn repo_permissions(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+    ) -> GithubFuture<git_backend::api::github::GithubRepoPermissions> {
+        Box::pin(async {
+            Ok(git_backend::api::github::GithubRepoPermissions {
+                push: false,
+                admin: false,
+            })
+        })
+    }
 }
 
 fn backend_with_fake(bare_remote: &Path) -> (Backend, Arc<FakeApi>) {

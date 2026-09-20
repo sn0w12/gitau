@@ -15,7 +15,9 @@ pub mod worktrees;
 
 pub use changes::{DiscardRequest, StageHunkRequest, StageRequest, StatusOptions};
 pub use github::{
-    AccountProfile, DeviceFlowStart, GithubOrg, PublishRepositoryRequest, PublishResult,
+    AccountProfile, DeviceFlowStart, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
+    GithubIssueListItem, GithubLabel, GithubNotification, GithubOrg, GithubRepoPermissions,
+    GithubUser, NotificationPage, PublishRepositoryRequest, PublishResult, UpdateIssueBody,
 };
 pub use history::{BlameQuery, CommitDetailQuery, FileAtRevisionQuery, HistoryPageQuery};
 pub use hooks::{HookContent, HookInfo, HookRunResult};
