@@ -42,7 +42,7 @@ export function RepoViewSwitcher({
                         <span className="hidden text-start text-xs text-muted-foreground lg:block">
                             Current View
                         </span>
-                        <span className="font-semibold">
+                        <span className="text-start font-semibold">
                             {VIEW_LABELS[view]}
                         </span>
                     </span>
