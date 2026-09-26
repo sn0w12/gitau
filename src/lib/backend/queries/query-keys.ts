@@ -92,6 +92,23 @@ export const templateKeys = {
     licenses: ["templates", "licenses"] as const,
 };
 
+export const highlightKeys = {
+    snippet: (
+        language: string,
+        textHash: string,
+        lightTheme: string,
+        darkTheme: string
+    ) =>
+        [
+            "highlight",
+            "snippet",
+            language,
+            textHash,
+            lightTheme,
+            darkTheme,
+        ] as const,
+};
+
 export interface HistoryPageQueryLike {
     revision?: string;
     limit?: number;

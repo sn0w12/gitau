@@ -792,6 +792,17 @@ export interface GithubIssueEvent {
     assignee?: string;
 }
 
+/**
+ * One highlighted markdown code fence. `spansByLine` aligns with
+ * `text.split('\n')`; `styles` is the 1-based table the span triples
+ * index into, shaped like the diff `SyntaxStyle`.
+ */
+export interface HighlightedSnippet {
+    highlighted: boolean;
+    spansByLine: number[][];
+    styles: SyntaxStyle[];
+}
+
 /** Partial issue update: fields left out are untouched. */
 export interface UpdateIssueBody {
     state?: string;

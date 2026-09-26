@@ -1,4 +1,5 @@
 import { Markdown, type MarkdownComponents } from "@tanstack/markdown/react";
+import { Children, isValidElement } from "react";
 
 import { ExternalLink } from "../external-link";
 import { Checkbox } from "../ui/checkbox";
@@ -12,11 +13,26 @@ import {
     TableHeader,
     TableRow,
 } from "../ui/table";
+import { CodeBlock } from "./code-block";
 
 function linkHref(href: string | undefined): string | undefined {
     const hasProtocol = /^[a-z][a-z0-9+.-]*:/i.test(href || "");
     const allowed = !hasProtocol || /^(https?:|mailto:)/i.test(href || "");
     return allowed ? href : undefined;
+}
+
+/**
+ * Raw fence text out of the renderer's `<code>` element. The element is
+ * still unresolved, so its props carry the source string directly.
+ * Anything unexpected falls back to rendering the children as-is.
+ */
+function fenceTextOf(children: React.ReactNode): string | null {
+    const elements = Children.toArray(children);
+    if (elements.length !== 1) return null;
+    const only = elements[0];
+    if (!isValidElement(only)) return null;
+    const inner = (only.props as { children?: unknown }).children;
+    return typeof inner === "string" ? inner : null;
 }
 
 const components = {
@@ -87,18 +103,17 @@ const components = {
             "data-lang" in props && typeof props["data-lang"] === "string"
                 ? props["data-lang"]
                 : undefined;
-        return (
-            <Frame className="my-2">
-                {lang && lang !== "plaintext" ? (
-                    <div className="px-2 pt-1 font-mono text-muted-foreground">
-                        {lang}
-                    </div>
-                ) : null}
-                <FramePanel className="overflow-x-auto p-2 font-mono [&_code]:bg-transparent [&_code]:p-0">
-                    {children}
-                </FramePanel>
-            </Frame>
-        );
+        const text = fenceTextOf(children);
+        if (text === null) {
+            return (
+                <Frame className="my-2">
+                    <FramePanel className="overflow-x-auto p-2 font-mono">
+                        {children}
+                    </FramePanel>
+                </Frame>
+            );
+        }
+        return <CodeBlock language={lang} text={text} />;
     },
     code(props) {
         return (

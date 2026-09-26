@@ -689,6 +689,92 @@ fn fill_rows(rows: &mut [DiffRow], lineno: u32, spans: &[u32], overwrite: bool) 
     }
 }
 
+/// Fence tags with no grammar: highlighting would only echo the text
+/// back unstyled, so callers render them plain without a round trip.
+const PLAIN_LANGUAGES: &[&str] = &[
+    "console",
+    "output",
+    "plain",
+    "plaintext",
+    "shell-session",
+    "terminal",
+    "text",
+    "txt",
+];
+
+/// Full language names resolving to a different extension lookup.
+const LANGUAGE_ALIASES: &[(&str, &str)] = &[
+    ("c#", "cs"),
+    ("c++", "cpp"),
+    ("dockerfile", "Dockerfile"),
+    ("golang", "go"),
+    ("javascript", "js"),
+    ("makefile", "Makefile"),
+    ("markdown", "md"),
+    ("powershell", "ps1"),
+    ("python", "py"),
+    ("ruby", "rb"),
+    ("rust", "rs"),
+    ("shell", "sh"),
+    ("typescript", "ts"),
+    ("zsh", "sh"),
+];
+
+/// Resolves a markdown fence tag to a grammar. Extension lookup covers
+/// short tags (`rs`, `py`); a case-insensitive name match covers full
+/// names and special files (`Dockerfile`, `Makefile`).
+fn syntax_for_language(language: &str) -> Option<&'static SyntaxReference> {
+    let lang = language.trim().to_lowercase();
+    if lang.is_empty() || PLAIN_LANGUAGES.contains(&lang.as_str()) {
+        return None;
+    }
+    let ss = syntax_set();
+    let aliased = LANGUAGE_ALIASES
+        .iter()
+        .find(|(from, _)| *from == lang)
+        .map(|(_, to)| (*to).to_string())
+        .unwrap_or(lang.clone());
+    if let Some(syntax) = ss.find_syntax_by_extension(&aliased) {
+        return Some(syntax);
+    }
+    ss.syntaxes()
+        .iter()
+        .find(|syntax| syntax.name.to_lowercase() == lang)
+}
+
+/// Highlighted spans for one standalone snippet (a markdown code fence),
+/// aligned with `text.split('\n')`: empty entries render plain.
+pub struct SnippetHighlight {
+    pub spans_by_line: Vec<Vec<u32>>,
+    pub styles: Vec<WireStyle>,
+}
+
+/// Highlights `text` with full-text grammar context. Returns `None` for
+/// unknown languages, empty text, or oversized input; callers render
+/// those plain.
+pub fn highlight_snippet(language: &str, text: &str) -> Option<SnippetHighlight> {
+    warm_up();
+    if text.is_empty() || text.len() > MAX_HIGHLIGHT_BYTES {
+        return None;
+    }
+    let syntax = syntax_for_language(language)?;
+    let mut stream = SideStream::new(text, syntax);
+    let mut interner = StyleInterner::default();
+    let line_count = stream.lines.len() as u32;
+    let wanted: HashSet<u32> = (1..=line_count).collect();
+    let mut by_line: HashMap<u32, Vec<u32>> = stream
+        .advance(line_count, &wanted, &mut interner)
+        .into_iter()
+        .collect();
+    let spans_by_line = (1..=line_count)
+        .map(|lineno| by_line.remove(&lineno).unwrap_or_default())
+        .collect();
+    Some(SnippetHighlight {
+        spans_by_line,
+        styles: interner.take_new(),
+    })
+}
+
 /// Highlights every context/addition/deletion row in one call using
 /// full-file grammar context from both blobs. Convenience wrapper over
 /// [`SectionHighlighter`] for callers that buffer a whole section.
@@ -785,6 +871,48 @@ fn main() {
         for row in rows.iter().filter(|r| r.spans.is_some()) {
             assert_eq!(reconstruct(row), row.content);
         }
+    }
+
+    #[test]
+    fn fence_tags_resolve_to_grammars() {
+        for tag in [
+            "rs",
+            "py",
+            "js",
+            "ts",
+            "typescript",
+            "python",
+            "shell",
+            "Dockerfile",
+        ] {
+            assert!(
+                syntax_for_language(tag).is_some(),
+                "expected a grammar for fence tag {tag:?}"
+            );
+        }
+        for tag in ["", "plaintext", "text", "console", "brainfuck-xyz"] {
+            assert!(
+                syntax_for_language(tag).is_none(),
+                "expected no grammar for fence tag {tag:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn snippet_highlight_covers_code_and_skips_plain() {
+        let highlighted = highlight_snippet("rs", SOURCE).expect("rust snippet highlights");
+        assert_eq!(
+            highlighted.spans_by_line.len(),
+            SOURCE.split_inclusive('\n').count()
+        );
+        assert!(!highlighted.styles.is_empty());
+        assert!(
+            !highlighted.spans_by_line[1].is_empty(),
+            "comment line carries spans"
+        );
+
+        assert!(highlight_snippet("plaintext", SOURCE).is_none());
+        assert!(highlight_snippet("rs", "").is_none());
     }
 
     #[test]

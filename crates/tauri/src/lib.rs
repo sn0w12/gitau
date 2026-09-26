@@ -276,6 +276,7 @@ pub fn run() {
             commands::github::github_update_issue_comment,
             commands::github::github_delete_issue_comment,
             commands::github::github_repo_permissions,
+            commands::highlight::highlight_code,
             commands::settings::settings_load,
             commands::settings::settings_set,
             commands::editor::open_in_editor,

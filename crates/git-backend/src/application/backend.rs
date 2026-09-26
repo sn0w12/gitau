@@ -14,6 +14,7 @@ use crate::api::github::{
     PublishRepositoryRequest, PublishResult, UpdateIssueBody,
 };
 use crate::api::graph::GraphQuery;
+use crate::api::highlight::HighlightedSnippet;
 use crate::api::history::{
     BlameQuery, CommitDetailQuery, FileAtRevisionQuery, HistoryChartQuery, HistoryPageQuery,
 };
@@ -1962,6 +1963,12 @@ impl Backend {
         repo: String,
     ) -> Result<GithubRepoPermissions> {
         self.github.repo_permissions(&owner, &repo).await
+    }
+
+    /// Highlights one markdown code fence with the active theme pair.
+    /// Pure and infallible: unknown languages stay plain.
+    pub fn highlight_code(&self, language: String, text: String) -> HighlightedSnippet {
+        crate::api::highlight::highlight_code(&language, &text)
     }
 
     /// Publishes this repository: creates the GitHub repo under `owner`

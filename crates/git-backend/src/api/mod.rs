@@ -1,6 +1,7 @@
 pub mod changes;
 pub mod github;
 pub mod graph;
+pub mod highlight;
 pub mod history;
 pub mod hooks;
 pub mod lfs;
@@ -19,6 +20,7 @@ pub use github::{
     GithubIssueListItem, GithubLabel, GithubNotification, GithubOrg, GithubRepoPermissions,
     GithubUser, NotificationPage, PublishRepositoryRequest, PublishResult, UpdateIssueBody,
 };
+pub use highlight::{HighlightedSnippet, SnippetStyle, highlight_code};
 pub use history::{BlameQuery, CommitDetailQuery, FileAtRevisionQuery, HistoryPageQuery};
 pub use hooks::{HookContent, HookInfo, HookRunResult};
 pub use lfs::{LfsFileInfo, LfsStatus};

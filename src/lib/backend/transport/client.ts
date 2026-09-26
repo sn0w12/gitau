@@ -24,6 +24,7 @@ import type {
     GithubOrg,
     GithubRepoPermissions,
     GraphEvent,
+    HighlightedSnippet,
     GraphQuery,
     GraphRangeResult,
     GitHook,
@@ -608,6 +609,13 @@ function createRawBackendClient() {
                 }),
         },
 
+        highlight: {
+            code: (language: string, text: string) =>
+                invokeCommand<HighlightedSnippet>("highlight_code", {
+                    args: { language, text },
+                }),
+        },
+
         github: {
             account: () =>
                 invokeCommand<AccountProfile | null>("github_account"),
@@ -824,6 +832,7 @@ export function createBackendClient(): BackendClient {
         remoteInfo: resultifyGroup(raw.remoteInfo),
         remotes: resultifyGroup(raw.remotes),
         operations: resultifyGroup(raw.operations),
+        highlight: resultifyGroup(raw.highlight),
         github: resultifyGroup(raw.github),
         settings: resultifyGroup(raw.settings),
         editor: resultifyGroup(raw.editor),
