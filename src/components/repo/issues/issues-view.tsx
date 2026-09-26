@@ -111,7 +111,7 @@ export function IssuesView({ repoId }: { repoId: number }) {
     return (
         <div className="flex h-full min-h-0 flex-col p-0.5">
             <Tabs
-                className="min-h-0 flex-1"
+                className="min-h-0 flex-1 gap-0"
                 value={tab}
                 onValueChange={(value) => setTab(value as TabState)}
             >
@@ -305,7 +305,7 @@ function IssuesTable({
     if (rows.length === 0) {
         return (
             <Empty>
-                <EmptyMedia variant="icon">
+                <EmptyMedia variant="icon" className="mb-0">
                     <CircleDot />
                 </EmptyMedia>
                 <EmptyHeader>
@@ -323,11 +323,11 @@ function IssuesTable({
         <Table containerClassName="min-h-0 flex-1 px-0.5" variant="card">
             <TableHeader>
                 <TableRow>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Labels</TableHead>
-                    <TableHead>Comments</TableHead>
-                    <TableHead className="text-right">Assignees</TableHead>
+                    <TableHead className="h-9">Title</TableHead>
+                    <TableHead className="h-9">Status</TableHead>
+                    <TableHead className="h-9">Labels</TableHead>
+                    <TableHead className="h-9">Comments</TableHead>
+                    <TableHead className="h-9 text-right">Assignees</TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>
