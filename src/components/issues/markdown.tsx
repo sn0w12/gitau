@@ -145,6 +145,23 @@ const components = {
         return <Separator className="my-3" />;
     },
     img(props) {
+        const src = props.src || "";
+        const trusted =
+            /^https:\/\/(github\.com|githubusercontent\.com|githubassets\.com)\//i.test(
+                src
+            );
+        if (!trusted) {
+            const href = linkHref(src);
+            if (!href) return null;
+            return (
+                <ExternalLink
+                    href={href}
+                    className="text-info hover:text-info/70"
+                >
+                    {props.alt || src}
+                </ExternalLink>
+            );
+        }
         return <img {...props} className="max-w-full rounded-md" />;
     },
     input(props) {
