@@ -35,6 +35,7 @@ import {
 } from "@/hooks/github/use-github-issues";
 import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
 import type { GithubIssueListItem, GithubLabel } from "@/lib/backend/protocol";
+import { getTextColor } from "@/lib/utils";
 
 import { issueStatusOf, StatusBadge } from "../../issues/status-badge";
 
@@ -42,16 +43,16 @@ type TabState = "open" | "closed";
 
 function LabelBadge({ label }: { label: GithubLabel }) {
     return (
-        <Badge variant="outline">
-            <span
-                aria-hidden="true"
-                className="size-1.5 rounded-full"
-                style={
-                    label.color
-                        ? { backgroundColor: `#${label.color}` }
-                        : undefined
-                }
-            />
+        <Badge
+            className={
+                getTextColor(label.color) === "bright"
+                    ? "text-background dark:text-foreground"
+                    : "text-foreground dark:text-background"
+            }
+            style={{
+                backgroundColor: `#${label.color}`,
+            }}
+        >
             {label.name}
         </Badge>
     );
