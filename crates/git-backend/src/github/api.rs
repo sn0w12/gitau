@@ -525,6 +525,7 @@ const DEVICE_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:device_code";
 /// fallback when the `Link` header is missing.
 const NOTIFICATIONS_PER_PAGE: u32 = 100;
 const ISSUES_PER_PAGE: u32 = 100;
+const MAX_ISSUE_PAGES: u32 = 10;
 
 pub struct HttpGithubApi {
     client: reqwest::Client,
@@ -971,15 +972,26 @@ impl GithubApi for HttpGithubApi {
         let authorization = bearer(token);
         let url = format!("{API_ROOT}/repos/{owner}/{repo}/issues/{number}/comments");
         Box::pin(async move {
-            let body = send(
-                client
-                    .get(url)
-                    .header("Authorization", authorization)
-                    .query(&[("per_page", ISSUES_PER_PAGE.to_string())]),
-            )
-            .await?;
-            let raw: Vec<RawIssueComment> = serde_json::from_str(&body).map_err(malformed)?;
-            Ok(raw.into_iter().map(map_issue_comment).collect())
+            let mut items = Vec::new();
+            for page in 1..=MAX_ISSUE_PAGES {
+                let (body, headers) = send_full(
+                    client
+                        .get(&url)
+                        .header("Authorization", authorization.clone())
+                        .query(&[
+                            ("per_page", ISSUES_PER_PAGE.to_string()),
+                            ("page", page.to_string()),
+                        ]),
+                )
+                .await?;
+                let raw: Vec<RawIssueComment> = serde_json::from_str(&body).map_err(malformed)?;
+                let has_more = page_has_more(&headers, raw.len());
+                items.extend(raw.into_iter().map(map_issue_comment));
+                if !has_more {
+                    break;
+                }
+            }
+            Ok(items)
         })
     }
 
@@ -994,15 +1006,26 @@ impl GithubApi for HttpGithubApi {
         let authorization = bearer(token);
         let url = format!("{API_ROOT}/repos/{owner}/{repo}/issues/{number}/events");
         Box::pin(async move {
-            let body = send(
-                client
-                    .get(url)
-                    .header("Authorization", authorization)
-                    .query(&[("per_page", ISSUES_PER_PAGE.to_string())]),
-            )
-            .await?;
-            let raw: Vec<RawIssueEvent> = serde_json::from_str(&body).map_err(malformed)?;
-            Ok(raw.into_iter().map(map_issue_event).collect())
+            let mut items = Vec::new();
+            for page in 1..=MAX_ISSUE_PAGES {
+                let (body, headers) = send_full(
+                    client
+                        .get(&url)
+                        .header("Authorization", authorization.clone())
+                        .query(&[
+                            ("per_page", ISSUES_PER_PAGE.to_string()),
+                            ("page", page.to_string()),
+                        ]),
+                )
+                .await?;
+                let raw: Vec<RawIssueEvent> = serde_json::from_str(&body).map_err(malformed)?;
+                let has_more = page_has_more(&headers, raw.len());
+                items.extend(raw.into_iter().map(map_issue_event));
+                if !has_more {
+                    break;
+                }
+            }
+            Ok(items)
         })
     }
 
