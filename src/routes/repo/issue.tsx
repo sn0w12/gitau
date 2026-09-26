@@ -7,8 +7,8 @@ import { IssueEvent } from "@/components/issues/event";
 import { IssueInput, type IssueInputHandle } from "@/components/issues/input";
 import { IssueMessage, MessageSpacer } from "@/components/issues/message";
 import { issueStatusOf, StatusBadge } from "@/components/issues/status-badge";
+import { LabelBadge } from "@/components/repo/issues/issues-view";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     Empty,
@@ -224,20 +224,7 @@ function IssueSidebar({
                 ) : (
                     <div className="space-x-1">
                         {issue.labels.map((label) => (
-                            <Badge key={label.name} variant="outline">
-                                <span
-                                    aria-hidden="true"
-                                    className="size-1.5 rounded-full"
-                                    style={
-                                        label.color
-                                            ? {
-                                                  backgroundColor: `#${label.color}`,
-                                              }
-                                            : undefined
-                                    }
-                                />
-                                {label.name}
-                            </Badge>
+                            <LabelBadge key={label.name} label={label} />
                         ))}
                     </div>
                 )}
