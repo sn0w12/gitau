@@ -307,6 +307,16 @@ pub fn warm_up() {
 mod theme_tests {
     use super::*;
 
+    /// The theme pair is process-global: tests that swap it hold this lock for
+    /// their whole body so parallel tests cannot swap the pair mid-assertion.
+    static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn serial() -> std::sync::MutexGuard<'static, ()> {
+        SERIAL
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     #[test]
     fn every_embedded_theme_has_a_stable_key() {
         for (name, label, dark) in theme_options() {
@@ -318,6 +328,7 @@ mod theme_tests {
 
     #[test]
     fn unknown_keys_fall_back_to_defaults() {
+        let _serial = serial();
         set_theme_pair("", "nope");
         let themes = themes();
         let expected = two_face::theme::extra();
@@ -340,6 +351,7 @@ mod theme_tests {
 
     #[test]
     fn swapping_themes_changes_resolved_colors() {
+        let _serial = serial();
         set_theme_pair(DEFAULT_LIGHT_THEME, DEFAULT_DARK_THEME);
         let before = themes().light.settings.foreground;
         set_theme_pair("catppuccinLatte", "dracula");
