@@ -52,6 +52,8 @@ async function waitFor(predicate: () => boolean): Promise<boolean> {
 
 describe("RepoViewSwitcher", () => {
     it("shows the active view, switches on click, and disables placeholders", async () => {
+        // Issues is a live view backed by the GitHub API; only pull
+        // requests remain a disabled placeholder.
         const picked: string[] = [];
         const view = renderWith(
             <RepoViewSwitcher
@@ -83,7 +85,9 @@ describe("RepoViewSwitcher", () => {
         expect(popup.textContent).toContain("Pull requests");
 
         const items = [
-            ...popup.querySelectorAll('[data-slot="menu-item"]'),
+            ...popup.querySelectorAll(
+                '[data-slot="menu-item"], [data-slot="menu-radio-item"]'
+            ),
         ] as HTMLElement[];
 
         const graphItem = items.find((item) =>
@@ -97,8 +101,15 @@ describe("RepoViewSwitcher", () => {
         const issueItem = items.find((item) =>
             item.textContent?.includes("Issues")
         );
-        expect(issueItem?.getAttribute("aria-disabled")).toBe("true");
-        expect(picked).toEqual(["graph"]);
+        expect(issueItem?.getAttribute("aria-disabled")).toBe(null);
+        await click(issueItem as HTMLElement);
+        await flush();
+        expect(picked).toEqual(["graph", "issues"]);
+
+        const prItem = items.find((item) =>
+            item.textContent?.includes("Pull requests")
+        );
+        expect(prItem?.getAttribute("aria-disabled")).toBe("true");
         view.unmount();
     });
 });

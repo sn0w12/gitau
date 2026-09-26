@@ -100,11 +100,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             title="Pull Requests"
                             payload={pullRequestsPayload}
                         />
-                        <SidebarAction
-                            icon={<CircleDot />}
-                            title="Issues"
-                            payload={issuesPayload}
-                        />
+                        <IssuesSidebarItem />
                     </SidebarGroup>
                     <SidebarSeparator className="data-[orientation=horizontal]:w-auto" />
                     <SidebarGroup className="min-h-0 flex-1 gap-1">
@@ -189,6 +185,27 @@ function InboxSidebarItem() {
                     {unread > 99 ? "99+" : exact ? unread : `${unread}+`}
                 </Badge>
             ) : null}
+        </SidebarMenuItem>
+    );
+}
+
+function IssuesSidebarItem() {
+    const router = useActiveTabRouter();
+    return (
+        <SidebarMenuItem>
+            <TooltipTrigger
+                handle={handle}
+                payload={issuesPayload}
+                render={
+                    <SidebarMenuButton
+                        variant="ghost"
+                        onClick={() => void router?.navigate({ to: "/issues" })}
+                    >
+                        <CircleDot />
+                        <span>Issues</span>
+                    </SidebarMenuButton>
+                }
+            />
         </SidebarMenuItem>
     );
 }

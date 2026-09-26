@@ -25,6 +25,7 @@ pub mod changes;
 pub mod editor;
 pub mod file_manager;
 pub mod github;
+pub mod highlight;
 pub mod hooks;
 pub mod icons;
 pub mod launch;
