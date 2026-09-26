@@ -96,7 +96,7 @@ export function getTextColor(hex: string): TextColor {
     }
 
     if (!/^[0-9a-fA-F]{6}$/.test(value)) {
-        throw new Error(`Invalid hex color string: "${hex}"`);
+        return "dark";
     }
 
     const r = parseInt(value.slice(0, 2), 16);
