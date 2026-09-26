@@ -403,6 +403,13 @@ body {
     min-height: 0;
 }
 
+[data-slot="resizable-panel-group"]:has([data-resizing])
+    [data-slot="tab-indicator"],
+[data-slot="resizable-panel-group"]:has([data-resizing])
+    [data-slot="tabs-tab"] {
+    transition: none;
+}
+
 textarea {
     resize: none;
 }
