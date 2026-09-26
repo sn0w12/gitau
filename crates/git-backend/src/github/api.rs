@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use super::device_flow::{DeviceCodeResponse, TokenPoll, parse_device_code, parse_token_poll};
 use super::{
     AccountProfile, GitHubError, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
-    GithubIssueListItem, GithubNotification, GithubOrg, GithubRepoPermissions,
-    NotificationPage, SearchIssueItem, SearchIssuePage, UpdateIssueBody,
+    GithubIssueListItem, GithubNotification, GithubOrg, GithubRepoPermissions, NotificationPage,
+    SearchIssueItem, SearchIssuePage, UpdateIssueBody,
 };
 
 /// Object-safe async surface: boxed futures let tests inject fakes without
