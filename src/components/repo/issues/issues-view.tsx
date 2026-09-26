@@ -156,20 +156,7 @@ export function IssuesView({ repoId }: { repoId: number }) {
                                         value={item.name}
                                     >
                                         <span className="flex items-center gap-2">
-                                            <span
-                                                aria-hidden="true"
-                                                className="size-1.5 rounded-full"
-                                                style={
-                                                    item.color
-                                                        ? {
-                                                              backgroundColor: `#${item.color}`,
-                                                          }
-                                                        : undefined
-                                                }
-                                            />
-                                            <span className="truncate">
-                                                {item.name}
-                                            </span>
+                                            <LabelBadge label={item} />
                                         </span>
                                     </SelectItem>
                                 ))}

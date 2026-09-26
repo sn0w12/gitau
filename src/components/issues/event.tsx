@@ -1,9 +1,9 @@
 import { CircleCheck, CircleDot, Tag, UserRound } from "lucide-react";
 
+import { LabelBadge } from "@/components/repo/issues/issues-view";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import type { GithubLabel } from "@/lib/backend/protocol";
 import { formatRelativeDate } from "@/lib/utils";
-
-import { Badge } from "../ui/badge";
 
 function EventIcon({ kind }: { kind: string }) {
     switch (kind) {
@@ -76,18 +76,14 @@ export function IssueEvent({
                     </span>
                 </span>
                 {label ? (
-                    <Badge variant="outline">
-                        <span
-                            aria-hidden="true"
-                            className="size-1.5 rounded-full"
-                            style={
-                                labelColor
-                                    ? { backgroundColor: `#${labelColor}` }
-                                    : undefined
-                            }
-                        />
-                        {label}
-                    </Badge>
+                    <LabelBadge
+                        label={
+                            {
+                                name: label,
+                                color: labelColor ?? "",
+                            } satisfies GithubLabel
+                        }
+                    />
                 ) : null}
                 {assignee && !label ? <span>{assignee}</span> : null}
                 {createdAt ? (
