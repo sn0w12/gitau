@@ -73,7 +73,7 @@ export function formatRelativeDate(dateString: string | number): string {
     } else {
         const options: Intl.DateTimeFormatOptions = {
             year: "numeric",
-            month: "long",
+            month: "short",
             day: "numeric",
         };
         return date.toLocaleDateString("en-US", options);
