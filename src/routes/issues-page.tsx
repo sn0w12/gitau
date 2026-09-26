@@ -4,6 +4,7 @@ import { CircleDot, Inbox, RotateCw } from "lucide-react";
 import { useMemo } from "react";
 
 import { ExternalLink } from "@/components/external-link";
+import { LabelBadge } from "@/components/repo/issues/issues-view";
 import { Button } from "@/components/ui/button";
 import {
     Empty,
@@ -268,15 +269,29 @@ function IssuesRow({
             </ExternalLink>
         );
 
+    const isOpen = issue.state.toLowerCase() === "open";
     return (
         <div className="flex items-center gap-2 px-2 py-2">
-            <span className="shrink-0 text-muted-foreground [&_svg:not([class*='size-'])]:size-4">
+            <span
+                className={
+                    isOpen
+                        ? "shrink-0 text-success [&_svg:not([class*='size-'])]:size-4"
+                        : "shrink-0 text-info [&_svg:not([class*='size-'])]:size-4"
+                }
+            >
                 <CircleDot />
             </span>
             <div className="min-w-0 flex-1">
-                <div className="truncate text-sm">{title}</div>
+                <div className="flex items-center gap-2">
+                    <span className="truncate text-sm">{title}</span>
+                    <div className="flex shrink-0 flex-wrap gap-1">
+                        {issue.labels.map((label) => (
+                            <LabelBadge key={label.name} label={label} />
+                        ))}
+                    </div>
+                </div>
                 <p className="truncate text-xs text-muted-foreground">
-                    #{issue.number} · {issue.state}
+                    #{issue.number}
                     {issue.updatedAt
                         ? ` · ${formatRelativeDate(issue.updatedAt)}`
                         : ""}
