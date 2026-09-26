@@ -425,6 +425,15 @@ impl Backend {
         if let Some(CachedValue::Status(cached)) = entry.cached("status", &cache_key) {
             return Ok(cached);
         }
+
+        // Serve stale: if a previous generation's report exists, return it
+        // immediately and recompute in the background. This avoids blocking
+        // the UI on a full worktree rescan after a mutation.
+        if let Some(stale) = self.get_stale_status(&entry, &options) {
+            self.spawn_status_warmup(id);
+            return Ok(stale);
+        }
+
         let snapshot_id = entry.next_snapshot_id();
         let generation = entry.generation();
 
@@ -445,6 +454,27 @@ impl Backend {
         let arc = Arc::new(report);
         entry.store_cached("status", &cache_key, CachedValue::Status(arc.clone()));
         Ok(arc)
+    }
+
+    /// Returns the most recent cached status report regardless of generation,
+    /// for stale-while-revalidate. Looks up any status cache entry and returns
+    /// the one with the highest generation number.
+    fn get_stale_status(
+        &self,
+        entry: &Arc<crate::runtime::registry::RepoEntry>,
+        options: &StatusOptions,
+    ) -> Option<Arc<StatusReport>> {
+        let current_gen = entry.generation();
+        let mut best: Option<(Generation, Arc<StatusReport>)> = None;
+        for g in (1..current_gen.0).rev() {
+            let key = (Generation(g), options.clone());
+            if let Some(CachedValue::Status(report)) = entry.cached("status", &key) {
+                if best.as_ref().is_none_or(|(bg, _)| g > bg.0) {
+                    best = Some((Generation(g), report));
+                }
+            }
+        }
+        best.map(|(_, report)| report)
     }
 
     pub async fn open_diff(
@@ -2132,6 +2162,7 @@ impl Backend {
         self.registry.hub().publish(id.0, generation.0, "mutation");
         self.operations
             .prune_completed(self.config.keep_completed_operations);
+        self.spawn_status_warmup(id);
         Ok(value)
     }
 }

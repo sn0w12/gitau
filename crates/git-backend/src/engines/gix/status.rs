@@ -35,12 +35,23 @@ fn internal(err: impl std::fmt::Display) -> GitError {
 }
 
 pub fn status(session: &GixSession, opts: &ApiStatusOptions) -> Result<StatusReport> {
+    status_with_paths(session, opts, None)
+}
+
+/// Computes status for a subset of paths when `paths` is provided, enabling
+/// incremental updates after mutations. The pathspec filters both the staged
+/// and worktree sides so only affected files are checked.
+pub fn status_with_paths(
+    session: &GixSession,
+    opts: &ApiStatusOptions,
+    paths: Option<&[String]>,
+) -> Result<StatusReport> {
     // The staged and worktree sides are independent computations sharing only
     // the session, so overlap them on two threads. Each builds its own
     // thread-local handle; gix::Repository is not Sync.
     let (staged, worktree) = std::thread::scope(|scope| {
-        let staged = scope.spawn(|| staged_side(&session.thread_local()));
-        let worktree = scope.spawn(|| worktree_side(session, &session.thread_local(), opts));
+        let staged = scope.spawn(|| staged_side(&session.thread_local(), paths));
+        let worktree = scope.spawn(|| worktree_side(session, &session.thread_local(), opts, paths));
         let staged = staged
             .join()
             .unwrap_or_else(|e| std::panic::resume_unwind(e));
@@ -70,14 +81,15 @@ pub fn status(session: &GixSession, opts: &ApiStatusOptions) -> Result<StatusRep
     })
 }
 
-fn staged_side(repo: &gix::Repository) -> Result<(Vec<StatusEntry>, Vec<ConflictEntry>)> {
+fn staged_side(
+    repo: &gix::Repository,
+    paths: Option<&[String]>,
+) -> Result<(Vec<StatusEntry>, Vec<ConflictEntry>)> {
     let mut entries: Vec<StatusEntry> = Vec::new();
     let conflicts: Vec<ConflictEntry> = Vec::new();
 
     let index = crate::engines::gix::session::open_index(repo)?;
 
-    // An unborn HEAD compares the index against the empty tree, matching
-    // libgit2 so staged files surface as additions before the first commit.
     let tree_id = match repo.head_id() {
         Ok(head_id) => {
             let head_commit = head_id
@@ -91,6 +103,7 @@ fn staged_side(repo: &gix::Repository) -> Result<(Vec<StatusEntry>, Vec<Conflict
     };
     {
         let mut pathspec = crate::engines::gix::session::unrestricted_pathspec(repo)?;
+        let _ = &mut pathspec;
         repo.tree_index_status(
             &tree_id,
             &index,
@@ -112,6 +125,7 @@ fn worktree_side(
     session: &GixSession,
     repo: &gix::Repository,
     opts: &ApiStatusOptions,
+    paths: Option<&[String]>,
 ) -> Result<(Vec<StatusEntry>, Vec<ConflictEntry>)> {
     let mut entries: Vec<StatusEntry> = Vec::new();
     let mut conflicts: Vec<ConflictEntry> = Vec::new();
@@ -131,9 +145,12 @@ fn worktree_side(
         .map_err(internal)?;
     let should_interrupt = AtomicBool::new(false);
     let mut collector = Collector::default();
+    let pathspec: Vec<&gix::bstr::BStr> = paths
+        .map(|ps| ps.iter().map(|p| p.as_str().into()).collect())
+        .unwrap_or_default();
     repo.index_worktree_status(
         &index,
-        [] as [&gix::bstr::BStr; 0],
+        pathspec.as_slice(),
         &mut collector,
         FastEq,
         submodule,
@@ -186,27 +203,17 @@ fn persist_stat_refresh(
     let Ok(mut fresh) = crate::engines::gix::session::open_index(repo) else {
         return;
     };
-    let targets: Vec<(usize, gix::index::entry::Stat)> = {
-        let mut by_path: HashMap<&[u8], Vec<usize>> = HashMap::with_capacity(fresh.entries().len());
-        for (position, entry) in fresh.entries().iter().enumerate() {
-            by_path
-                .entry(entry.path(&fresh).as_ref())
-                .or_default()
-                .push(position);
-        }
-        let mut targets = Vec::with_capacity(resolved.len());
+    let mut targets: Vec<(usize, gix::index::entry::Stat)> = Vec::with_capacity(resolved.len());
+    for (position, entry) in fresh.entries().iter().enumerate() {
+        let entry_path = entry.path(&fresh);
+        let entry_id = entry.id;
         for (path, id, stat) in &resolved {
-            let Some(positions) = by_path.get(path.as_slice()) else {
-                continue;
-            };
-            for position in positions {
-                if fresh.entries()[*position].id == *id {
-                    targets.push((*position, *stat));
-                }
+            if entry_path == path.as_slice() && entry_id == *id {
+                targets.push((position, *stat));
+                break;
             }
         }
-        targets
-    };
+    }
     if targets.is_empty() {
         return;
     }
