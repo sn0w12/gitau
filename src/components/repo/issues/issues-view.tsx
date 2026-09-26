@@ -1,5 +1,5 @@
 import { CircleDot } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import {
     Table,
     TableBody,
@@ -92,22 +93,22 @@ export function IssuesView({ repoId }: { repoId: number }) {
 
     const labels = useMemo(() => {
         const seen = new Map<string, GithubLabel>();
-        for (const issue of issues.data ?? []) {
+        for (const issue of issues.issues) {
             for (const item of issue.labels) {
                 if (!seen.has(item.name)) seen.set(item.name, item);
             }
         }
         return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
-    }, [issues.data]);
+    }, [issues.issues]);
 
     const rows = useMemo(
         () =>
-            (issues.data ?? []).filter(
+            issues.issues.filter(
                 (issue) =>
                     label === "none" ||
                     issue.labels.some((item) => item.name === label)
             ),
-        [issues.data, label]
+        [issues.issues, label]
     );
 
     return (
@@ -187,6 +188,9 @@ export function IssuesView({ repoId }: { repoId: number }) {
                             onRetry={() => void issues.refetch()}
                             hasCoords={coords !== null}
                             signedIn={account.data != null}
+                            hasNextPage={issues.hasNextPage ?? false}
+                            isFetchingNextPage={issues.isFetchingNextPage}
+                            onLoadMore={() => void issues.fetchNextPage()}
                         />
                     </TabsPanel>
                     <TabsPanel
@@ -211,6 +215,9 @@ export function IssuesView({ repoId }: { repoId: number }) {
                             onRetry={() => void issues.refetch()}
                             hasCoords={coords !== null}
                             signedIn={account.data != null}
+                            hasNextPage={issues.hasNextPage ?? false}
+                            isFetchingNextPage={issues.isFetchingNextPage}
+                            onLoadMore={() => void issues.fetchNextPage()}
                         />
                     </TabsPanel>
                 </Frame>
@@ -243,6 +250,9 @@ function IssuesTable({
     onRetry,
     hasCoords,
     signedIn,
+    hasNextPage,
+    isFetchingNextPage,
+    onLoadMore,
 }: {
     repoId: number;
     state: TabState;
@@ -253,7 +263,25 @@ function IssuesTable({
     onRetry: () => void;
     hasCoords: boolean;
     signedIn: boolean;
+    hasNextPage: boolean;
+    isFetchingNextPage: boolean;
+    onLoadMore: () => void;
 }) {
+    const sentinelRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        const sentinel = sentinelRef.current;
+        if (!sentinel || !hasNextPage) return;
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0]?.isIntersecting && !isFetchingNextPage) {
+                    onLoadMore();
+                }
+            },
+            { rootMargin: "200px" }
+        );
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+    }, [hasNextPage, isFetchingNextPage, onLoadMore]);
     const router = useActiveTabRouter();
 
     if (isLoading) {
@@ -325,42 +353,56 @@ function IssuesTable({
     }
 
     return (
-        <Table containerClassName="min-h-0 flex-1 px-0.5" variant="card">
-            <IssuesTableHead />
-            <TableBody>
-                {rows.map((issue) => (
-                    <TableRow
-                        key={issue.number}
-                        className="cursor-pointer"
-                        onClick={() => {
-                            router?.navigate({
-                                to: `/repo/${repoId}/issue/${issue.number}`,
-                            });
-                        }}
-                    >
-                        <TableCell className="font-medium">
-                            {issue.title}
-                        </TableCell>
-                        <TableCell>
-                            <StatusBadge status={issueStatusOf(issue.state)} />
-                        </TableCell>
-                        <TableCell className="space-x-1">
-                            {issue.labels.map((label) => (
-                                <LabelBadge key={label.name} label={label} />
-                            ))}
-                        </TableCell>
-                        <TableCell className="font-mono">
-                            {issue.commentCount}
-                        </TableCell>
-                        <TableCell>
-                            <div className="flex min-h-5 items-center justify-end">
-                                <AssigneeStack assignees={issue.assignees} />
-                            </div>
-                        </TableCell>
-                    </TableRow>
-                ))}
-            </TableBody>
-        </Table>
+        <div className="flex h-full min-h-0 flex-col">
+            <Table containerClassName="min-h-0 flex-1 px-0.5" variant="card">
+                <IssuesTableHead />
+                <TableBody>
+                    {rows.map((issue) => (
+                        <TableRow
+                            key={issue.number}
+                            className="cursor-pointer"
+                            onClick={() => {
+                                router?.navigate({
+                                    to: `/repo/${repoId}/issue/${issue.number}`,
+                                });
+                            }}
+                        >
+                            <TableCell className="font-medium">
+                                {issue.title}
+                            </TableCell>
+                            <TableCell>
+                                <StatusBadge
+                                    status={issueStatusOf(issue.state)}
+                                />
+                            </TableCell>
+                            <TableCell className="space-x-1">
+                                {issue.labels.map((label) => (
+                                    <LabelBadge
+                                        key={label.name}
+                                        label={label}
+                                    />
+                                ))}
+                            </TableCell>
+                            <TableCell className="font-mono">
+                                {issue.commentCount}
+                            </TableCell>
+                            <TableCell>
+                                <div className="flex min-h-5 items-center justify-end">
+                                    <AssigneeStack
+                                        assignees={issue.assignees}
+                                    />
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+            {hasNextPage ? (
+                <div ref={sentinelRef} className="flex justify-center py-2">
+                    {isFetchingNextPage ? <Spinner className="size-4" /> : null}
+                </div>
+            ) : null}
+        </div>
     );
 }
 

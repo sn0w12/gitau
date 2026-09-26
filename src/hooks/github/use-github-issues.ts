@@ -11,10 +11,10 @@ import { useMemo } from "react";
 import { useAppServices } from "@/contexts/services-context";
 import type { UpdateIssueBody } from "@/lib/backend/protocol";
 import {
+    infiniteRepoIssuesQuery,
     issueCommentsQuery,
     issueDetailQuery,
     issueEventsQuery,
-    repoIssuesQuery,
     repoPermissionsQuery,
     type IssueStateFilter,
 } from "@/lib/backend/queries/github-issues-queries";
@@ -36,7 +36,7 @@ export function useGithubCoords(repoId: number | undefined) {
     return { ...remotes, coords };
 }
 
-/** Issues of the repository open in `repoId`, filtered by state. */
+/** Issues of the repository open in `repoId`, filtered by state, paginated. */
 export function useRepoIssues(
     repoId: number | undefined,
     state: IssueStateFilter,
@@ -45,8 +45,8 @@ export function useRepoIssues(
     const { backend } = useAppServices();
     const account = useGithubAccount();
     const { coords } = useGithubCoords(repoId);
-    const query = useQuery(
-        repoIssuesQuery(
+    const query = useInfiniteQuery(
+        infiniteRepoIssuesQuery(
             { backend },
             coords?.owner ?? null,
             coords?.repo ?? null,
@@ -55,7 +55,8 @@ export function useRepoIssues(
             account.data != null
         )
     );
-    return { ...query, coords };
+    const issues = (query.data?.pages ?? []).flatMap((page) => page.items);
+    return { ...query, issues, coords };
 }
 
 /**

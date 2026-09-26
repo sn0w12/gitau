@@ -10,8 +10,8 @@ use tokio::sync::mpsc;
 use crate::api::changes::{DiscardRequest, StageRequest, StatusOptions};
 use crate::api::github::{
     AccountProfile, DeviceFlowStart, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
-    GithubIssueListItem, GithubOrg, GithubRepoPermissions, NotificationPage,
-    PublishRepositoryRequest, PublishResult, SearchIssuePage, UpdateIssueBody,
+    GithubOrg, GithubRepoPermissions, NotificationPage, PublishRepositoryRequest, PublishResult,
+    SearchIssuePage, UpdateIssueBody,
 };
 use crate::api::graph::GraphQuery;
 use crate::api::highlight::HighlightedSnippet;
@@ -1847,16 +1847,17 @@ impl Backend {
     }
 
     /// Issues of a GitHub repository, `state` is open/closed/all.
-    /// Pull requests are excluded.
+    /// Paginated, 1-based pages.
     pub async fn github_list_issues(
         &self,
         owner: String,
         repo: String,
         state: String,
         labels: Vec<String>,
-    ) -> Result<Vec<GithubIssueListItem>> {
+        page: u32,
+    ) -> Result<SearchIssuePage> {
         self.github
-            .list_issues(&owner, &repo, &state, &labels)
+            .list_issues(&owner, &repo, &state, &labels, page)
             .await
     }
 

@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import type { BackendClient } from "@/lib/backend/transport/client";
 import { expectOk } from "@/lib/backend/transport/result";
@@ -11,8 +11,8 @@ interface GithubIssuesDeps {
 
 export type IssueStateFilter = "open" | "closed" | "all";
 
-/** Issues of one GitHub repository, newest activity first. */
-export function repoIssuesQuery(
+/** Issues of one GitHub repository, newest activity first, paginated. */
+export function infiniteRepoIssuesQuery(
     deps: GithubIssuesDeps,
     owner: string | null,
     repo: string | null,
@@ -20,22 +20,26 @@ export function repoIssuesQuery(
     labels: string[],
     enabled: boolean
 ) {
-    return queryOptions({
+    return infiniteQueryOptions({
         queryKey: githubKeys.issues(
             owner ?? "",
             repo ?? "",
             state,
             [...labels].sort().join(",")
         ),
-        queryFn: async () =>
+        queryFn: async ({ pageParam }) =>
             expectOk(
                 await deps.backend.github.listIssues(
                     owner ?? "",
                     repo ?? "",
                     state,
-                    labels
+                    labels,
+                    pageParam
                 )
             ),
+        initialPageParam: 1,
+        getNextPageParam: (lastPage) =>
+            lastPage.hasMore ? lastPage.page + 1 : undefined,
         staleTime: 30_000,
         retry: false,
         enabled: enabled && owner != null && repo != null,

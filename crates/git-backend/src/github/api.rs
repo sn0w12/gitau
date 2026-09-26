@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use super::device_flow::{DeviceCodeResponse, TokenPoll, parse_device_code, parse_token_poll};
 use super::{
     AccountProfile, GitHubError, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
-    GithubIssueListItem, GithubNotification, GithubOrg, GithubRepoPermissions, NotificationPage,
-    SearchIssueItem, SearchIssuePage, UpdateIssueBody,
+    GithubLabel, GithubNotification, GithubOrg, GithubRepoPermissions, GithubUser,
+    NotificationPage, SearchIssueItem, SearchIssuePage, UpdateIssueBody,
 };
 
 /// Object-safe async surface: boxed futures let tests inject fakes without
@@ -44,8 +44,8 @@ pub trait GithubApi: Send + Sync {
         token: &str,
         subject_url: &str,
     ) -> GithubFuture<Option<String>>;
-    /// Issues of a repository, open/closed/all. Pull requests are filtered
-    /// out; `labels` matches issues carrying every named label.
+    /// Issues of a repository, open/closed/all. `labels` matches issues
+    /// carrying every named label.
     fn list_issues(
         &self,
         token: &str,
@@ -53,7 +53,8 @@ pub trait GithubApi: Send + Sync {
         repo: &str,
         state: &str,
         labels: &[String],
-    ) -> GithubFuture<Vec<GithubIssueListItem>>;
+        page: u32,
+    ) -> GithubFuture<SearchIssuePage>;
     /// Search issues across all of GitHub. The query is fixed to
     /// `is:issue involves:@me sort:updated-desc`.
     fn search_issues(&self, token: &str, page: u32) -> GithubFuture<SearchIssuePage>;
@@ -248,17 +249,11 @@ struct RawIssue {
     #[serde(default)]
     assignees: Vec<RawIssueUser>,
     #[serde(default)]
-    comments: u64,
-    #[serde(default)]
     created_at: Option<String>,
     #[serde(default)]
     updated_at: Option<String>,
     #[serde(default)]
     html_url: Option<String>,
-    /// Present on pull requests returned by the issues endpoint; used to
-    /// filter them out. The value shape is irrelevant.
-    #[serde(default)]
-    pull_request: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -354,26 +349,6 @@ fn map_issue_label(raw: &RawIssueLabel) -> crate::api::github::GithubLabel {
     }
 }
 
-fn map_issue_list_item(raw: RawIssue) -> GithubIssueListItem {
-    GithubIssueListItem {
-        number: raw.number,
-        title: raw.title,
-        state: raw.state,
-        labels: raw.labels.iter().map(map_issue_label).collect(),
-        comment_count: raw.comments,
-        assignees: raw
-            .assignees
-            .into_iter()
-            .map(|user| crate::api::github::GithubUser {
-                login: user.login,
-                avatar_url: user.avatar_url,
-            })
-            .collect(),
-        author: raw.user.map(|user| user.login).unwrap_or_default(),
-        updated_at: raw.updated_at.unwrap_or_default(),
-    }
-}
-
 fn map_search_issue_item(raw: RawSearchIssue) -> SearchIssueItem {
     let repo_full_name = raw
         .html_url
@@ -458,19 +433,6 @@ fn map_issue_comment(raw: RawIssueComment) -> GithubIssueComment {
 
 /// Query pairs for listing issues. An empty `labels` param filters to
 /// unlabeled issues on GitHub's side, so it is only sent when filtering.
-fn issues_query(state: &str, labels: &[String]) -> Vec<(String, String)> {
-    let mut query = vec![
-        ("state".to_owned(), state.to_owned()),
-        ("per_page".to_owned(), ISSUES_PER_PAGE.to_string()),
-        ("sort".to_owned(), "updated".to_owned()),
-        ("direction".to_owned(), "desc".to_owned()),
-    ];
-    if !labels.is_empty() {
-        query.push(("labels".to_owned(), labels.join(",")));
-    }
-    query
-}
-
 /// Order-preserving dedup by login, dropping empty logins. `dedup_by`
 /// only collapses adjacent entries, so it cannot be used here.
 fn dedup_users(
@@ -563,10 +525,6 @@ const DEVICE_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:device_code";
 /// fallback when the `Link` header is missing.
 const NOTIFICATIONS_PER_PAGE: u32 = 100;
 const ISSUES_PER_PAGE: u32 = 100;
-/// Upper bound on issue-list pages per call: real issues hide behind
-/// pages of pull requests, so one page is never enough, but the walk
-/// still has to end.
-const MAX_ISSUE_PAGES: u32 = 10;
 
 pub struct HttpGithubApi {
     client: reqwest::Client,
@@ -880,39 +838,64 @@ impl GithubApi for HttpGithubApi {
         repo: &str,
         state: &str,
         labels: &[String],
-    ) -> GithubFuture<Vec<GithubIssueListItem>> {
+        page: u32,
+    ) -> GithubFuture<SearchIssuePage> {
         let client = self.client.clone();
         let authorization = bearer(token);
-        let url = format!("{API_ROOT}/repos/{owner}/{repo}/issues");
+        let owner = owner.to_owned();
+        let repo = repo.to_owned();
         let state = state.to_owned();
         let labels = labels.to_owned();
+        let page = page.max(1);
         Box::pin(async move {
-            // Real issues hide behind pages of pull requests (filtered
-            // below), so walk every page; the cap bounds pathological
-            // repos, not normal ones.
-            let mut items = Vec::new();
-            for page in 1..=MAX_ISSUE_PAGES {
-                let mut query = issues_query(&state, &labels);
-                query.push(("page".to_owned(), page.to_string()));
-                let (body, headers) = send_full(
-                    client
-                        .get(&url)
-                        .header("Authorization", authorization.clone())
-                        .query(&query),
-                )
-                .await?;
-                let raw: Vec<RawIssue> = serde_json::from_str(&body).map_err(malformed)?;
-                let has_more = page_has_more(&headers, raw.len());
-                items.extend(
-                    raw.into_iter()
-                        .filter(|issue| issue.pull_request.is_none())
-                        .map(map_issue_list_item),
-                );
-                if !has_more {
-                    break;
-                }
+            let mut query = format!("is:issue+repo:{owner}/{repo}+state:{state}");
+            if !labels.is_empty() {
+                query.push('+');
+                query.push_str(&labels.join(","));
             }
-            Ok(items)
+            let (body, headers) = send_full(
+                client
+                    .get(format!(
+                        "{API_ROOT}/search/issues?q={query}&per_page={ISSUES_PER_PAGE}&page={page}"
+                    ))
+                    .header("Authorization", authorization),
+            )
+            .await?;
+            let raw: RawSearchIssueResponse = serde_json::from_str(&body).map_err(malformed)?;
+            let items: Vec<SearchIssueItem> = raw
+                .items
+                .into_iter()
+                .map(|item| {
+                    let labels: Vec<GithubLabel> =
+                        item.labels.iter().map(map_issue_label).collect();
+                    let assignees: Vec<GithubUser> = item
+                        .assignees
+                        .into_iter()
+                        .map(|user| GithubUser {
+                            login: user.login,
+                            avatar_url: user.avatar_url,
+                        })
+                        .collect();
+                    SearchIssueItem {
+                        number: item.number,
+                        title: item.title,
+                        state: item.state,
+                        labels,
+                        comment_count: item.comments,
+                        assignees,
+                        author: item.user.map(|user| user.login).unwrap_or_default(),
+                        updated_at: item.updated_at.unwrap_or_default(),
+                        html_url: item.html_url.unwrap_or_default(),
+                        repo_full_name: format!("{owner}/{repo}"),
+                    }
+                })
+                .collect();
+            let has_more = page_has_more(&headers, items.len());
+            Ok(SearchIssuePage {
+                items,
+                page,
+                has_more,
+            })
         })
     }
 
@@ -1360,59 +1343,6 @@ mod tests {
         assert_eq!(subject_html_url(Some(api), "Release"), None);
         assert_eq!(subject_html_url(Some(api), "CheckSuite"), None);
         assert_eq!(subject_html_url(Some(api), "Unknown"), None);
-    }
-
-    #[test]
-    fn issue_list_mapping_filters_pull_requests() {
-        let items: Vec<RawIssue> = serde_json::from_value(serde_json::json!([
-            {
-                "number": 7,
-                "title": "Real issue",
-                "state": "open",
-                "user": { "login": "octocat", "avatar_url": "https://a/u/1" },
-                "labels": [{ "name": "bug", "color": "d73a4a" }],
-                "assignees": [{ "login": "k", "avatar_url": "" }],
-                "comments": 3,
-                "updated_at": "2026-09-01T12:00:00Z"
-            },
-            {
-                "number": 8,
-                "title": "A PR",
-                "state": "open",
-                "pull_request": { "url": "https://api.github.com/repos/o/r/pulls/8" }
-            }
-        ]))
-        .unwrap();
-        let mapped: Vec<GithubIssueListItem> = items
-            .into_iter()
-            .filter(|issue| issue.pull_request.is_none())
-            .map(map_issue_list_item)
-            .collect();
-        assert_eq!(mapped.len(), 1);
-        let item = &mapped[0];
-        assert_eq!(item.number, 7);
-        assert_eq!(item.title, "Real issue");
-        assert_eq!(item.labels[0].name, "bug");
-        assert_eq!(item.labels[0].color, "d73a4a");
-        assert_eq!(item.assignees[0].login, "k");
-        assert_eq!(item.comment_count, 3);
-        assert_eq!(item.author, "octocat");
-    }
-
-    #[test]
-    fn issues_query_omits_empty_labels() {
-        let query = issues_query("open", &[]);
-        assert!(
-            query.iter().all(|(key, _)| key != "labels"),
-            "empty labels must not be sent: {query:?}"
-        );
-        let query = issues_query("open", &["bug".into(), "ui".into()]);
-        assert!(
-            query
-                .iter()
-                .any(|(key, value)| key == "labels" && value == "bug,ui"),
-            "active label filter must be sent: {query:?}"
-        );
     }
 
     #[test]

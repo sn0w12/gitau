@@ -20,7 +20,6 @@ import type {
     GithubIssueComment,
     GithubIssueDetail,
     GithubIssueEvent,
-    GithubIssueListItem,
     GithubOrg,
     GithubRepoPermissions,
     GraphEvent,
@@ -645,10 +644,11 @@ function createRawBackendClient() {
                 owner: string,
                 repo: string,
                 issueState?: string,
-                labels?: string[]
+                labels?: string[],
+                page?: number
             ) =>
-                invokeCommand<GithubIssueListItem[]>("github_list_issues", {
-                    args: { owner, repo, issueState, labels },
+                invokeCommand<SearchIssuePage>("github_list_issues", {
+                    args: { owner, repo, issueState, labels, page },
                 }),
             searchIssues: (page?: number) =>
                 invokeCommand<SearchIssuePage>("github_search_issues", {

@@ -395,20 +395,21 @@ impl GitHubAuth {
         Ok(self.api.fetch_subject_html_url(&token, subject_url).await?)
     }
 
-    /// Issues of a repository, open/closed/all. Pull requests are excluded.
+    /// Issues of a repository, open/closed/all, paginated.
     pub async fn list_issues(
         &self,
         owner: &str,
         repo: &str,
         state: &str,
         labels: &[String],
-    ) -> Result<Vec<GithubIssueListItem>> {
+        page: u32,
+    ) -> Result<SearchIssuePage> {
         let token = self.token().ok_or(GitError::AuthenticationRequired {
             remote: "github.com".into(),
         })?;
         Ok(self
             .api
-            .list_issues(&token, owner, repo, state, labels)
+            .list_issues(&token, owner, repo, state, labels, page)
             .await?)
     }
 
@@ -834,7 +835,8 @@ mod tests {
                 _repo: &str,
                 _state: &str,
                 _labels: &[String],
-            ) -> api::GithubFuture<Vec<GithubIssueListItem>> {
+                _page: u32,
+            ) -> api::GithubFuture<SearchIssuePage> {
                 unreachable!()
             }
 

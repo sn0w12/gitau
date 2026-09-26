@@ -137,8 +137,15 @@ impl GithubApi for FakeApi {
         _repo: &str,
         _state: &str,
         _labels: &[String],
-    ) -> GithubFuture<Vec<git_backend::api::github::GithubIssueListItem>> {
-        Box::pin(async { Ok(vec![]) })
+        _page: u32,
+    ) -> GithubFuture<SearchIssuePage> {
+        Box::pin(async {
+            Ok(SearchIssuePage {
+                items: vec![],
+                page: 1,
+                has_more: false,
+            })
+        })
     }
 
     fn search_issues(&self, _token: &str, _page: u32) -> GithubFuture<SearchIssuePage> {
