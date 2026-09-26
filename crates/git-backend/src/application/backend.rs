@@ -9,10 +9,12 @@ use tokio::sync::mpsc;
 
 use crate::api::changes::{DiscardRequest, StageRequest, StatusOptions};
 use crate::api::github::{
-    AccountProfile, DeviceFlowStart, GithubOrg, NotificationPage, PublishRepositoryRequest,
-    PublishResult,
+    AccountProfile, DeviceFlowStart, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
+    GithubIssueListItem, GithubOrg, GithubRepoPermissions, NotificationPage,
+    PublishRepositoryRequest, PublishResult, SearchIssuePage, UpdateIssueBody,
 };
 use crate::api::graph::GraphQuery;
+use crate::api::highlight::HighlightedSnippet;
 use crate::api::history::{
     BlameQuery, CommitDetailQuery, FileAtRevisionQuery, HistoryChartQuery, HistoryPageQuery,
 };
@@ -1842,6 +1844,137 @@ impl Backend {
     /// `None` when the subject is gone; the UI falls back to the repo.
     pub async fn github_resolve_subject_url(&self, subject_url: String) -> Result<Option<String>> {
         self.github.resolve_subject_url(&subject_url).await
+    }
+
+    /// Issues of a GitHub repository, `state` is open/closed/all.
+    /// Pull requests are excluded.
+    pub async fn github_list_issues(
+        &self,
+        owner: String,
+        repo: String,
+        state: String,
+        labels: Vec<String>,
+    ) -> Result<Vec<GithubIssueListItem>> {
+        self.github
+            .list_issues(&owner, &repo, &state, &labels)
+            .await
+    }
+
+    /// Search issues across all of GitHub matching
+    /// `is:issue involves:@me sort:updated-desc`.
+    pub async fn github_search_issues(&self, page: u32) -> Result<SearchIssuePage> {
+        self.github.search_issues(page).await
+    }
+
+    pub async fn github_get_issue(
+        &self,
+        owner: String,
+        repo: String,
+        number: u64,
+    ) -> Result<GithubIssueDetail> {
+        self.github.get_issue(&owner, &repo, number).await
+    }
+
+    pub async fn github_list_issue_comments(
+        &self,
+        owner: String,
+        repo: String,
+        number: u64,
+    ) -> Result<Vec<GithubIssueComment>> {
+        self.github.list_issue_comments(&owner, &repo, number).await
+    }
+
+    pub async fn github_list_issue_events(
+        &self,
+        owner: String,
+        repo: String,
+        number: u64,
+    ) -> Result<Vec<GithubIssueEvent>> {
+        self.github.list_issue_events(&owner, &repo, number).await
+    }
+
+    pub async fn github_create_issue_comment(
+        &self,
+        owner: String,
+        repo: String,
+        number: u64,
+        body: String,
+    ) -> Result<GithubIssueComment> {
+        if body.trim().is_empty() {
+            return Err(GitError::invalid_input("comment body must not be empty"));
+        }
+        self.github
+            .create_issue_comment(&owner, &repo, number, &body)
+            .await
+    }
+
+    /// Partial issue update: state (open/closed), labels, assignees.
+    pub async fn github_update_issue(
+        &self,
+        owner: String,
+        repo: String,
+        number: u64,
+        body: UpdateIssueBody,
+    ) -> Result<GithubIssueDetail> {
+        self.github.update_issue(&owner, &repo, number, &body).await
+    }
+
+    pub async fn github_create_issue(
+        &self,
+        owner: String,
+        repo: String,
+        title: String,
+        body: Option<String>,
+        labels: Vec<String>,
+    ) -> Result<GithubIssueDetail> {
+        if title.trim().is_empty() {
+            return Err(GitError::invalid_input("issue title must not be empty"));
+        }
+        self.github
+            .create_issue(&owner, &repo, &title, body.as_deref(), &labels)
+            .await
+    }
+
+    pub async fn github_update_issue_comment(
+        &self,
+        owner: String,
+        repo: String,
+        comment_id: u64,
+        body: String,
+    ) -> Result<GithubIssueComment> {
+        if body.trim().is_empty() {
+            return Err(GitError::invalid_input("comment body must not be empty"));
+        }
+        self.github
+            .update_issue_comment(&owner, &repo, comment_id, &body)
+            .await
+    }
+
+    pub async fn github_delete_issue_comment(
+        &self,
+        owner: String,
+        repo: String,
+        comment_id: u64,
+    ) -> Result<()> {
+        self.github
+            .delete_issue_comment(&owner, &repo, comment_id)
+            .await
+    }
+
+    /// The signed-in user's access on the repository, for gating
+    /// comment moderation in the UI.
+    pub async fn github_repo_permissions(
+        &self,
+        owner: String,
+        repo: String,
+    ) -> Result<GithubRepoPermissions> {
+        self.github.repo_permissions(&owner, &repo).await
+    }
+
+    /// Highlights one markdown code fence with the active theme pair.
+    /// Pure and infallible: unknown languages stay plain.
+    pub fn highlight_code(&self, language: String, text: String) -> HighlightedSnippet {
+        crate::api::highlight::highlight_code(&language, &text)
     }
 
     /// Publishes this repository: creates the GitHub repo under `owner`

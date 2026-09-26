@@ -55,3 +55,27 @@ export function infiniteNotificationsQuery(
         enabled: enabled && login != null,
     });
 }
+
+/**
+ * Accumulating search results for `is:issue involves:@me
+ * sort:updated-desc`, newest first. Scoped by account login.
+ */
+export function infiniteSearchIssuesQuery(
+    deps: GithubQueryDeps,
+    login: string | null,
+    enabled: boolean
+) {
+    return infiniteQueryOptions({
+        queryKey: githubKeys.searchIssues(login ?? ""),
+        queryFn: async ({ pageParam }) =>
+            expectOk(await deps.backend.github.searchIssues(pageParam)),
+        initialPageParam: 1,
+        getNextPageParam: (lastPage) =>
+            lastPage.hasMore ? lastPage.page + 1 : undefined,
+        staleTime: 30_000,
+        gcTime: 5 * 60_000,
+        refetchInterval: 60_000,
+        retry: false,
+        enabled: enabled && login != null,
+    });
+}

@@ -12,6 +12,7 @@ import { DiffViewer } from "../diff/diff-viewer";
 import { CatCurled, CatSitting, CatStretching } from "../icons/cat";
 import { CommitGraphView } from "./history/commit-graph-view";
 import { HistoryChartView } from "./history/history-chart-view";
+import { IssuesView } from "./issues/issues-view";
 
 function stripChangeSide(changeId: string): string {
     const separator = changeId.indexOf(":");
@@ -133,6 +134,14 @@ export function MainRepoView({
                         dispatch({ type: "SET_COMMIT", data: commitId })
                     }
                 />
+            </div>
+        );
+    }
+
+    if (view === "issues") {
+        return (
+            <div className="min-h-0 flex-1">
+                <IssuesView repoId={repoId} />
             </div>
         );
     }

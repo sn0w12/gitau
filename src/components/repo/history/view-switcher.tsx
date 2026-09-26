@@ -1,15 +1,11 @@
-import {
-    Check,
-    ChevronDown,
-    CircleDot,
-    GitPullRequest,
-    LayoutGrid,
-} from "lucide-react";
+import { ChevronDown, GitPullRequest, LayoutGrid } from "lucide-react";
 
 import {
     Menu,
     MenuItem,
     MenuPopup,
+    MenuRadioGroup,
+    MenuRadioItem,
     MenuSeparator,
     MenuTrigger,
 } from "@/components/ui/menu";
@@ -20,12 +16,12 @@ import type { RepoView } from "@/routes/repo-page";
 const VIEW_LABELS: Record<RepoView, string> = {
     overview: "Overview",
     graph: "Commit Graph",
+    issues: "Issues",
 };
 
 /**
  * The right-panel view menu: switches the main area between the available
- * views. GitHub views (issues, pull requests) are placeholders until their
- * backends exist.
+ * views. Pull requests stay a placeholder until their backend exists.
  */
 export function RepoViewSwitcher({
     view,
@@ -54,42 +50,23 @@ export function RepoViewSwitcher({
                 <ChevronDown className="size-4" />
             </MenuTrigger>
             <MenuPopup align="center">
-                <MenuItem
-                    onClick={() => onView("overview")}
-                    aria-selected={view === "overview" || undefined}
-                >
-                    <Check
-                        className={cn(
-                            "size-3.5 shrink-0",
-                            view === "overview" ? "opacity-100" : "opacity-0"
-                        )}
-                    />
-                    <span className="min-w-0 flex-1 truncate pl-1">
-                        Overview
-                    </span>
-                </MenuItem>
-                <MenuItem
-                    onClick={() => onView("graph")}
-                    aria-selected={view === "graph" || undefined}
-                >
-                    <Check
-                        className={cn(
-                            "size-3.5 shrink-0",
-                            view === "graph" ? "opacity-100" : "opacity-0"
-                        )}
-                    />
-                    <span className="min-w-0 flex-1 truncate pl-1">
-                        Commit Graph
-                    </span>
-                </MenuItem>
+                <MenuRadioGroup value={view}>
+                    {Object.entries(VIEW_LABELS).map(([key, label]) => {
+                        const repoView = key as RepoView;
+
+                        return (
+                            <MenuRadioItem
+                                key={repoView}
+                                value={repoView}
+                                onClick={() => onView(repoView)}
+                                aria-selected={view === repoView || undefined}
+                            >
+                                {label}
+                            </MenuRadioItem>
+                        );
+                    })}
+                </MenuRadioGroup>
                 <MenuSeparator />
-                <MenuItem disabled>
-                    <CircleDot />
-                    <span className="min-w-0 flex-1 truncate">Issues</span>
-                    <span className="ms-auto text-xs text-muted-foreground">
-                        Soon
-                    </span>
-                </MenuItem>
                 <MenuItem disabled>
                     <GitPullRequest />
                     <span className="min-w-0 flex-1 truncate">

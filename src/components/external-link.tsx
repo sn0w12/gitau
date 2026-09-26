@@ -15,7 +15,7 @@ export function ExternalLink({
     sideOffset,
 }: {
     href?: string;
-    children: React.ReactNode;
+    children?: React.ReactNode;
     className?: string;
     align?: TooltipPrimitive.Positioner.Props["align"];
     side?: TooltipPrimitive.Positioner.Props["side"];

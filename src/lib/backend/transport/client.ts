@@ -17,8 +17,14 @@ import type {
     DiffImage,
     DiffRequest,
     FileContent,
+    GithubIssueComment,
+    GithubIssueDetail,
+    GithubIssueEvent,
+    GithubIssueListItem,
     GithubOrg,
+    GithubRepoPermissions,
     GraphEvent,
+    HighlightedSnippet,
     GraphQuery,
     GraphRangeResult,
     GitHook,
@@ -36,6 +42,7 @@ import type {
     OperationState,
     PublishResult,
     PushOutcome,
+    SearchIssuePage,
     RangeResult,
     RepoListing,
     RepoSnapshot,
@@ -52,6 +59,7 @@ import type {
     StatusOptions,
     StatusReport,
     TagInfo,
+    UpdateIssueBody,
     ValuesSnapshot,
     WorkflowOutcome,
     WorktreeInfo,
@@ -602,6 +610,13 @@ function createRawBackendClient() {
                 }),
         },
 
+        highlight: {
+            code: (language: string, text: string) =>
+                invokeCommand<HighlightedSnippet>("highlight_code", {
+                    args: { language, text },
+                }),
+        },
+
         github: {
             account: () =>
                 invokeCommand<AccountProfile | null>("github_account"),
@@ -625,6 +640,84 @@ function createRawBackendClient() {
             resolveSubjectUrl: (subjectUrl: string) =>
                 invokeCommand<string | null>("github_resolve_subject_url", {
                     args: { subjectUrl },
+                }),
+            listIssues: (
+                owner: string,
+                repo: string,
+                issueState?: string,
+                labels?: string[]
+            ) =>
+                invokeCommand<GithubIssueListItem[]>("github_list_issues", {
+                    args: { owner, repo, issueState, labels },
+                }),
+            searchIssues: (page?: number) =>
+                invokeCommand<SearchIssuePage>("github_search_issues", {
+                    args: { page },
+                }),
+            getIssue: (owner: string, repo: string, number: number) =>
+                invokeCommand<GithubIssueDetail>("github_get_issue", {
+                    args: { owner, repo, number },
+                }),
+            listIssueComments: (owner: string, repo: string, number: number) =>
+                invokeCommand<GithubIssueComment[]>(
+                    "github_list_issue_comments",
+                    { args: { owner, repo, number } }
+                ),
+            listIssueEvents: (owner: string, repo: string, number: number) =>
+                invokeCommand<GithubIssueEvent[]>("github_list_issue_events", {
+                    args: { owner, repo, number },
+                }),
+            createIssueComment: (
+                owner: string,
+                repo: string,
+                number: number,
+                body: string
+            ) =>
+                invokeCommand<GithubIssueComment>(
+                    "github_create_issue_comment",
+                    { args: { owner, repo, number, body } }
+                ),
+            updateIssue: (
+                owner: string,
+                repo: string,
+                number: number,
+                body: UpdateIssueBody
+            ) =>
+                invokeCommand<GithubIssueDetail>("github_update_issue", {
+                    args: { owner, repo, number, body },
+                }),
+            updateIssueComment: (
+                owner: string,
+                repo: string,
+                commentId: number,
+                body: string
+            ) =>
+                invokeCommand<GithubIssueComment>(
+                    "github_update_issue_comment",
+                    { args: { owner, repo, commentId, body } }
+                ),
+            deleteIssueComment: (
+                owner: string,
+                repo: string,
+                commentId: number
+            ) =>
+                invokeCommand<void>("github_delete_issue_comment", {
+                    args: { owner, repo, commentId },
+                }),
+            repoPermissions: (owner: string, repo: string) =>
+                invokeCommand<GithubRepoPermissions>(
+                    "github_repo_permissions",
+                    { args: { owner, repo } }
+                ),
+            createIssue: (
+                owner: string,
+                repo: string,
+                title: string,
+                body?: string,
+                labels?: string[]
+            ) =>
+                invokeCommand<GithubIssueDetail>("github_create_issue", {
+                    args: { owner, repo, title, body, labels },
                 }),
             publishRepository: (
                 repoId: number,
@@ -744,6 +837,7 @@ export function createBackendClient(): BackendClient {
         remoteInfo: resultifyGroup(raw.remoteInfo),
         remotes: resultifyGroup(raw.remotes),
         operations: resultifyGroup(raw.operations),
+        highlight: resultifyGroup(raw.highlight),
         github: resultifyGroup(raw.github),
         settings: resultifyGroup(raw.settings),
         editor: resultifyGroup(raw.editor),

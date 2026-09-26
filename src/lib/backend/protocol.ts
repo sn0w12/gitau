@@ -725,10 +725,119 @@ export interface NotificationPage {
     hasMore: boolean;
 }
 
+/** One issue from a GitHub search result. */
+export interface SearchIssueItem {
+    number: number;
+    title: string;
+    state: string;
+    labels: GithubLabel[];
+    commentCount: number;
+    assignees: GithubUser[];
+    author: string;
+    updatedAt: string;
+    htmlUrl: string;
+    repoFullName: string;
+}
+
+/** One 1-based page of search results; `hasMore` derives from the
+ * response `Link` header. */
+export interface SearchIssuePage {
+    items: SearchIssueItem[];
+    page: number;
+    hasMore: boolean;
+}
+
 export interface PublishResult {
     fullName: string;
     htmlUrl: string;
     defaultBranch?: string | null;
+}
+
+/** A GitHub user as shown on issues: login plus avatar. */
+export interface GithubUser {
+    login: string;
+    avatarUrl: string;
+}
+
+/** A label on an issue. `color` is hex without `#`. */
+export interface GithubLabel {
+    name: string;
+    color: string;
+}
+
+/** One row of the issues list; pull requests are filtered out backend-side. */
+export interface GithubIssueListItem {
+    number: number;
+    title: string;
+    state: string;
+    labels: GithubLabel[];
+    commentCount: number;
+    assignees: GithubUser[];
+    author: string;
+    updatedAt: string;
+}
+
+/** Full issue detail for the issue page header and sidebar. */
+export interface GithubIssueDetail {
+    number: number;
+    title: string;
+    state: string;
+    body: string;
+    author: GithubUser;
+    labels: GithubLabel[];
+    assignees: GithubUser[];
+    /** Author plus assignees, deduped; the UI merges comment authors in. */
+    participants: GithubUser[];
+    createdAt: string;
+    updatedAt: string;
+    htmlUrl: string;
+}
+
+/** One comment on the issue timeline. */
+export interface GithubIssueComment {
+    id: number;
+    author: GithubUser;
+    body: string;
+    createdAt: string;
+    htmlUrl: string;
+}
+
+/** One non-comment timeline entry. `kind` is the raw GitHub event name. */
+export interface GithubIssueEvent {
+    id: number;
+    kind: string;
+    actor: string;
+    actorAvatarUrl: string;
+    createdAt: string;
+    label?: string;
+    labelColor?: string;
+    assignee?: string;
+}
+
+/**
+ * One highlighted markdown code fence. `spansByLine` aligns with
+ * `text.split('\n')`; `styles` is the 1-based table the span triples
+ * index into, shaped like the diff `SyntaxStyle`.
+ */
+export interface HighlightedSnippet {
+    highlighted: boolean;
+    spansByLine: number[][];
+    styles: SyntaxStyle[];
+}
+
+/** Partial issue update: fields left out are untouched. */
+export interface UpdateIssueBody {
+    state?: string;
+    body?: string;
+    labels?: string[];
+    assignees?: string[];
+}
+
+/** The signed-in user's access on a repository. The issue UI gates
+ * editing and deleting other people's comments on `push`. */
+export interface GithubRepoPermissions {
+    push: boolean;
+    admin: boolean;
 }
 
 /** A tab as persisted in the session document. `repoId` is process-local
