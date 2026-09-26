@@ -11,7 +11,7 @@ use crate::api::changes::{DiscardRequest, StageRequest, StatusOptions};
 use crate::api::github::{
     AccountProfile, DeviceFlowStart, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
     GithubIssueListItem, GithubOrg, GithubRepoPermissions, NotificationPage,
-    PublishRepositoryRequest, PublishResult, UpdateIssueBody,
+    PublishRepositoryRequest, PublishResult, SearchIssuePage, UpdateIssueBody,
 };
 use crate::api::graph::GraphQuery;
 use crate::api::highlight::HighlightedSnippet;
@@ -1858,6 +1858,12 @@ impl Backend {
         self.github
             .list_issues(&owner, &repo, &state, &labels)
             .await
+    }
+
+    /// Search issues across all of GitHub matching
+    /// `is:issue involves:@me sort:updated-desc`.
+    pub async fn github_search_issues(&self, page: u32) -> Result<SearchIssuePage> {
+        self.github.search_issues(page).await
     }
 
     pub async fn github_get_issue(

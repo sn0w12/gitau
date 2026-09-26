@@ -1,4 +1,5 @@
 import {
+    useInfiniteQuery,
     useMutation,
     useQueries,
     useQuery,
@@ -17,6 +18,7 @@ import {
     repoPermissionsQuery,
     type IssueStateFilter,
 } from "@/lib/backend/queries/github-issues-queries";
+import { infiniteSearchIssuesQuery } from "@/lib/backend/queries/github-queries";
 import { githubKeys } from "@/lib/backend/queries/query-keys";
 import { remotesByPathQuery } from "@/lib/backend/queries/repository-queries";
 import { expectOk } from "@/lib/backend/transport/result";
@@ -299,4 +301,19 @@ export function useCreateIssue() {
             labels?: string[]
         ) => mutation.mutateAsync({ owner, repo, title, body, labels }),
     };
+}
+
+/**
+ * Paginated search results for `is:issue involves:@me
+ * sort:updated-desc`, newest first. Scoped by account login.
+ */
+export function useGithubSearchIssues() {
+    const { backend } = useAppServices();
+    const account = useGithubAccount();
+    const login = account.data?.login ?? null;
+    const query = useInfiniteQuery(
+        infiniteSearchIssuesQuery({ backend }, login, account.data != null)
+    );
+    const issues = (query.data?.pages ?? []).flatMap((page) => page.items);
+    return { ...query, issues };
 }

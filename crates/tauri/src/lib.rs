@@ -267,6 +267,7 @@ pub fn run() {
             commands::github::github_mark_all_notifications_read,
             commands::github::github_resolve_subject_url,
             commands::github::github_list_issues,
+            commands::github::github_search_issues,
             commands::github::github_get_issue,
             commands::github::github_list_issue_comments,
             commands::github::github_list_issue_events,

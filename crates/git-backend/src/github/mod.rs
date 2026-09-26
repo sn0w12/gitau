@@ -21,7 +21,8 @@ pub mod token_store;
 pub use crate::api::github::{
     AccountProfile, DeviceFlowStart, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
     GithubIssueListItem, GithubLabel, GithubNotification, GithubOrg, GithubRepoPermissions,
-    GithubUser, NotificationPage, PublishRepositoryRequest, PublishResult, UpdateIssueBody,
+    GithubUser, NotificationPage, PublishRepositoryRequest, PublishResult, SearchIssueItem,
+    SearchIssuePage, UpdateIssueBody,
 };
 pub use api::{CreateRepoBody, CreatedRepository, GithubApi, HttpGithubApi};
 pub use token_store::{KeyringTokenStore, MemoryTokenStore, TokenStore};
@@ -409,6 +410,15 @@ impl GitHubAuth {
             .api
             .list_issues(&token, owner, repo, state, labels)
             .await?)
+    }
+
+    /// Search issues across all of GitHub matching
+    /// `is:issue involves:@me sort:updated-desc`.
+    pub async fn search_issues(&self, page: u32) -> Result<SearchIssuePage> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self.api.search_issues(&token, page).await?)
     }
 
     pub async fn get_issue(
@@ -825,6 +835,14 @@ mod tests {
                 _state: &str,
                 _labels: &[String],
             ) -> api::GithubFuture<Vec<GithubIssueListItem>> {
+                unreachable!()
+            }
+
+            fn search_issues(
+                &self,
+                _token: &str,
+                _page: u32,
+            ) -> api::GithubFuture<SearchIssuePage> {
                 unreachable!()
             }
 

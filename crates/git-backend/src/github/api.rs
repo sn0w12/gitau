@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use super::device_flow::{DeviceCodeResponse, TokenPoll, parse_device_code, parse_token_poll};
 use super::{
     AccountProfile, GitHubError, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
-    GithubIssueListItem, GithubNotification, GithubOrg, GithubRepoPermissions, NotificationPage,
-    UpdateIssueBody,
+    GithubIssueListItem, GithubNotification, GithubOrg, GithubRepoPermissions,
+    NotificationPage, SearchIssueItem, SearchIssuePage, UpdateIssueBody,
 };
 
 /// Object-safe async surface: boxed futures let tests inject fakes without
@@ -54,6 +54,9 @@ pub trait GithubApi: Send + Sync {
         state: &str,
         labels: &[String],
     ) -> GithubFuture<Vec<GithubIssueListItem>>;
+    /// Search issues across all of GitHub. The query is fixed to
+    /// `is:issue involves:@me sort:updated-desc`.
+    fn search_issues(&self, token: &str, page: u32) -> GithubFuture<SearchIssuePage>;
     fn get_issue(
         &self,
         token: &str,
@@ -259,6 +262,35 @@ struct RawIssue {
 }
 
 #[derive(Debug, Deserialize)]
+struct RawSearchIssueResponse {
+    items: Vec<RawSearchIssue>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawSearchIssue {
+    #[serde(default)]
+    number: u64,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    state: String,
+    #[serde(default)]
+    user: Option<RawIssueUser>,
+    #[serde(default)]
+    labels: Vec<RawIssueLabel>,
+    #[serde(default)]
+    assignees: Vec<RawIssueUser>,
+    #[serde(default)]
+    comments: u64,
+    #[serde(default)]
+    updated_at: Option<String>,
+    #[serde(default)]
+    html_url: Option<String>,
+    #[serde(default)]
+    repository_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 struct RawIssueComment {
     #[serde(default)]
     id: u64,
@@ -339,6 +371,52 @@ fn map_issue_list_item(raw: RawIssue) -> GithubIssueListItem {
             .collect(),
         author: raw.user.map(|user| user.login).unwrap_or_default(),
         updated_at: raw.updated_at.unwrap_or_default(),
+    }
+}
+
+fn map_search_issue_item(raw: RawSearchIssue) -> SearchIssueItem {
+    let repo_full_name = raw
+        .html_url
+        .as_deref()
+        .and_then(|url| {
+            let parts: Vec<&str> = url.split('/').collect();
+            let issues_pos = parts.iter().position(|p| *p == "issues")?;
+            if issues_pos >= 2 {
+                Some(format!(
+                    "{}/{}",
+                    parts[issues_pos - 2],
+                    parts[issues_pos - 1]
+                ))
+            } else {
+                None
+            }
+        })
+        .or_else(|| {
+            raw.repository_url.as_deref().and_then(|url| {
+                let prefix = "https://api.github.com/repos/";
+                url.strip_prefix(prefix)
+                    .map(|rest| rest.trim_end_matches('/').to_owned())
+            })
+        })
+        .unwrap_or_default();
+    SearchIssueItem {
+        number: raw.number,
+        title: raw.title,
+        state: raw.state,
+        labels: raw.labels.iter().map(map_issue_label).collect(),
+        comment_count: raw.comments,
+        assignees: raw
+            .assignees
+            .into_iter()
+            .map(|user| crate::api::github::GithubUser {
+                login: user.login,
+                avatar_url: user.avatar_url,
+            })
+            .collect(),
+        author: raw.user.map(|user| user.login).unwrap_or_default(),
+        updated_at: raw.updated_at.unwrap_or_default(),
+        html_url: raw.html_url.unwrap_or_default(),
+        repo_full_name,
     }
 }
 
@@ -835,6 +913,31 @@ impl GithubApi for HttpGithubApi {
                 }
             }
             Ok(items)
+        })
+    }
+
+    fn search_issues(&self, token: &str, page: u32) -> GithubFuture<SearchIssuePage> {
+        let client = self.client.clone();
+        let authorization = bearer(token);
+        let page = page.max(1);
+        Box::pin(async move {
+            let (body, headers) = send_full(
+                client
+                    .get(format!(
+                        "{API_ROOT}/search/issues?q=is:issue+involves:@me+sort:updated-desc&per_page={ISSUES_PER_PAGE}&page={page}"
+                    ))
+                    .header("Authorization", authorization),
+            )
+            .await?;
+            let raw: RawSearchIssueResponse = serde_json::from_str(&body).map_err(malformed)?;
+            let items: Vec<SearchIssueItem> =
+                raw.items.into_iter().map(map_search_issue_item).collect();
+            let has_more = page_has_more(&headers, items.len());
+            Ok(SearchIssuePage {
+                items,
+                page,
+                has_more,
+            })
         })
     }
 

@@ -725,6 +725,28 @@ export interface NotificationPage {
     hasMore: boolean;
 }
 
+/** One issue from a GitHub search result. */
+export interface SearchIssueItem {
+    number: number;
+    title: string;
+    state: string;
+    labels: GithubLabel[];
+    commentCount: number;
+    assignees: GithubUser[];
+    author: string;
+    updatedAt: string;
+    htmlUrl: string;
+    repoFullName: string;
+}
+
+/** One 1-based page of search results; `hasMore` derives from the
+ * response `Link` header. */
+export interface SearchIssuePage {
+    items: SearchIssueItem[];
+    page: number;
+    hasMore: boolean;
+}
+
 export interface PublishResult {
     fullName: string;
     htmlUrl: string;

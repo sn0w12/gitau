@@ -5,7 +5,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use git_backend::Backend;
-use git_backend::api::github::{AccountProfile, DeviceFlowStart, GithubOrg, NotificationPage};
+use git_backend::api::github::{
+    AccountProfile, DeviceFlowStart, GithubOrg, NotificationPage, SearchIssuePage,
+};
 use git_backend::github::api::{GithubApi, GithubFuture};
 use git_backend::github::device_flow::{DeviceCodeResponse, TokenPoll};
 use git_backend::github::{CreateRepoBody, CreatedRepository, GitHubAuth, MemoryTokenStore};
@@ -137,6 +139,20 @@ impl GithubApi for FakeApi {
         _labels: &[String],
     ) -> GithubFuture<Vec<git_backend::api::github::GithubIssueListItem>> {
         Box::pin(async { Ok(vec![]) })
+    }
+
+    fn search_issues(
+        &self,
+        _token: &str,
+        _page: u32,
+    ) -> GithubFuture<SearchIssuePage> {
+        Box::pin(async {
+            Ok(SearchIssuePage {
+                items: vec![],
+                page: 1,
+                has_more: false,
+            })
+        })
     }
 
     fn get_issue(

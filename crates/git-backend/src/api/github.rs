@@ -94,6 +94,34 @@ pub struct NotificationPage {
     pub has_more: bool,
 }
 
+/// One issue from a GitHub search result. Search items carry `html_url`
+/// and `repository_url` instead of a nested `repository.full_name`, so
+/// the repo name is derived from the URL.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchIssueItem {
+    pub number: u64,
+    pub title: String,
+    pub state: String,
+    pub labels: Vec<GithubLabel>,
+    pub comment_count: u64,
+    pub assignees: Vec<GithubUser>,
+    pub author: String,
+    pub updated_at: String,
+    pub html_url: String,
+    pub repo_full_name: String,
+}
+
+/// One page of search results. `has_more` comes from the response `Link`
+/// header.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchIssuePage {
+    pub items: Vec<SearchIssueItem>,
+    pub page: u32,
+    pub has_more: bool,
+}
+
 /// A GitHub user as shown on issues: login plus avatar, never the token.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]

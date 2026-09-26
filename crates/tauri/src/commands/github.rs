@@ -3,7 +3,7 @@ use crate::state::{to_repo_id, SharedState};
 use git_backend::api::github::{
     AccountProfile, DeviceFlowStart, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
     GithubIssueListItem, GithubOrg, GithubRepoPermissions, NotificationPage,
-    PublishRepositoryRequest, PublishResult, UpdateIssueBody,
+    PublishRepositoryRequest, PublishResult, SearchIssuePage, UpdateIssueBody,
 };
 
 /// The connected account, `None` while signed out.
@@ -154,6 +154,20 @@ pub async fn github_list_issues(
             issue_state.unwrap_or_else(|| "open".into()),
             labels.unwrap_or_default(),
         )
+        .await
+        .map_err(to_serialized)
+}
+
+/// Search issues across all of GitHub matching
+/// `is:issue involves:@me sort:updated-desc`.
+#[tauri::command]
+pub async fn github_search_issues(
+    state: SharedState<'_>,
+    page: Option<u32>,
+) -> CommandResult<SearchIssuePage> {
+    state
+        .backend
+        .github_search_issues(page.unwrap_or(1).max(1))
         .await
         .map_err(to_serialized)
 }
