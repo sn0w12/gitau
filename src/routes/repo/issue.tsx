@@ -338,6 +338,7 @@ function IssueContent({
             await createComment.createComment(owner, repo, issue.number, body);
         } catch (error) {
             toastError("Could not post comment", error);
+            throw error;
         }
     };
 
@@ -445,7 +446,7 @@ function IssueContent({
                                 stateLabel={
                                     open ? "Close issue" : "Reopen issue"
                                 }
-                                onSubmit={(body) => void handleComment(body)}
+                                onSubmit={handleComment}
                                 onToggleState={() => void handleToggleState()}
                                 inputRef={composerRef}
                             />

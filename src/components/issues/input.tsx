@@ -92,7 +92,7 @@ export function IssueInput({
     pending?: boolean;
     /** Label for the close/reopen button; hides it when absent. */
     stateLabel?: string;
-    onSubmit: (body: string) => void;
+    onSubmit: (body: string) => Promise<void>;
     onToggleState?: () => void;
     inputRef?: React.Ref<IssueInputHandle>;
 }) {
@@ -289,8 +289,8 @@ export function IssueInput({
                     variant="info"
                     disabled={!canSubmit}
                     loading={pending}
-                    onClick={() => {
-                        onSubmit(value.trim());
+                    onClick={async () => {
+                        await onSubmit(value.trim());
                         setValue("");
                     }}
                 >
