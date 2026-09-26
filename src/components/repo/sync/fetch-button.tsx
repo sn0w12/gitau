@@ -17,6 +17,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { PublishToGitHubDialog } from "@/components/repo/dialogs/publish-dialog";
 import { ForcePushDialog } from "@/components/repo/sync/force-push-dialog";
+import { Badge } from "@/components/ui/badge";
 import {
     useRemotes,
     useRepoListing,
@@ -319,16 +320,16 @@ function AheadBehind({ ahead, behind }: { ahead: number; behind: number }) {
     return (
         <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
             {ahead > 0 && (
-                <span className="flex items-center gap-0.5">
+                <Badge className="pr-[1px]" size="sm">
                     {ahead}
                     <ArrowUp className="size-3.5" />
-                </span>
+                </Badge>
             )}
             {behind > 0 && (
-                <span className="flex items-center gap-0.5">
+                <Badge className="pr-[1px]" size="sm">
                     {behind}
                     <ArrowDown className="size-3.5" />
-                </span>
+                </Badge>
             )}
         </span>
     );
