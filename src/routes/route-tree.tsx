@@ -162,7 +162,7 @@ export function createTabRouteTree(options: { tabId?: string } = {}) {
         getParentRoute: () => rootRoute,
         path: "/repo/$repoId/issue/$issueId",
         component: IssuePage,
-        loader: () => applyTitle("Issue"),
+        loader: () => applyTitle("Issue", "issue"),
     });
 
     return rootRoute.addChildren([
