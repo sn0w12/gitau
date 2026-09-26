@@ -849,17 +849,22 @@ impl GithubApi for HttpGithubApi {
         let labels = labels.to_owned();
         let page = page.max(1);
         Box::pin(async move {
-            let mut query = format!("is:issue+repo:{owner}/{repo}+state:{state}");
-            if !labels.is_empty() {
-                query.push('+');
-                query.push_str(&labels.join(","));
+            let mut terms = vec!["is:issue".to_owned(), format!("repo:{owner}/{repo}")];
+            if state == "open" || state == "closed" {
+                terms.push(format!("state:{state}"));
+            }
+            for label in &labels {
+                terms.push(format!("label:\"{label}\""));
             }
             let (body, headers) = send_full(
                 client
-                    .get(format!(
-                        "{API_ROOT}/search/issues?q={query}&per_page={ISSUES_PER_PAGE}&page={page}"
-                    ))
-                    .header("Authorization", authorization),
+                    .get(format!("{API_ROOT}/search/issues"))
+                    .header("Authorization", authorization)
+                    .query(&[
+                        ("q", terms.join(" ")),
+                        ("per_page", ISSUES_PER_PAGE.to_string()),
+                        ("page", page.to_string()),
+                    ]),
             )
             .await?;
             let raw: RawSearchIssueResponse = serde_json::from_str(&body).map_err(malformed)?;
