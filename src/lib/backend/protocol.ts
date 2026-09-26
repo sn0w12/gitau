@@ -432,6 +432,8 @@ export interface DiffRequest {
     ignoreWhitespace?: boolean;
 }
 
+export type CheckoutMode = "safe" | "force" | "keepChanges" | "takeChanges";
+
 export type DiffRowKind =
     | "fileHeader"
     | "hunkHeader"

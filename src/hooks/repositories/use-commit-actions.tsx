@@ -147,7 +147,7 @@ export function useCommitActions(repoId: number | undefined) {
         });
         if (!result.confirmed) return;
         try {
-            await checkout.mutateAsync(commit.id);
+            await checkout.mutateAsync({ target: commit.id });
         } catch (error) {
             toastError("Could not checkout commit", error);
         }

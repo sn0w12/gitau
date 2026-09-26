@@ -11,6 +11,7 @@ import type {
     ConflictFile,
     CreateRepositoryRequest,
     CreateRepositoryResult,
+    CheckoutMode,
     CredentialRequest,
     DeviceFlowStart,
     DiffEvent,
@@ -347,7 +348,11 @@ function createRawBackendClient() {
             checkout: (
                 repoId: number,
                 target: string,
-                options: { force?: boolean; paths?: string[] } = {},
+                options: {
+                    force?: boolean;
+                    mode?: CheckoutMode;
+                    paths?: string[];
+                } = {},
                 expectedGeneration?: number
             ) =>
                 invokeCommand<void>("git_checkout", {

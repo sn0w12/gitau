@@ -3,7 +3,7 @@ mod common;
 use common::TestRepo;
 use git_backend::api::history::{CommitDetailQuery, HistoryPageQuery};
 use git_backend::api::mutations::{
-    BranchCreateRequest, CheckoutRequest, CommitRequest, TagCreateRequest,
+    BranchCreateRequest, CheckoutMode, CheckoutRequest, CommitRequest, TagCreateRequest,
 };
 use git_backend::domain::RevisionSpec;
 use git_backend::{Backend, BackendConfig};
@@ -455,6 +455,7 @@ async fn checkout_and_restore_paths() {
             CheckoutRequest {
                 target: RevisionSpec::head(),
                 force: true,
+                mode: CheckoutMode::Safe,
                 paths: vec!["a.txt".into()],
             },
             None,

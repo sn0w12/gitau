@@ -1,11 +1,11 @@
 use std::path::Path;
 
 use git2::build::CheckoutBuilder;
-use git2::{BranchType, IndexAddOption, ResetType, Signature};
+use git2::{BranchType, IndexAddOption, ResetType, Signature, StashApplyOptions};
 
 use crate::api::mutations::{
-    AmendRequest, BranchCreateRequest, CheckoutRequest, CommitRequest, ResetKind, ResetRequest,
-    TagCreateRequest,
+    AmendRequest, BranchCreateRequest, CheckoutMode, CheckoutRequest, CommitRequest, ResetKind,
+    ResetRequest, TagCreateRequest,
 };
 use crate::domain::{
     BranchInfo, CommitSummary, ObjectId, RelativePath, Signature as DomainSignature, TagInfo,
@@ -235,7 +235,7 @@ pub fn amend(repo: &git2::Repository, request: &AmendRequest) -> Result<CommitSu
     summarize_commit(repo, oid)
 }
 
-pub fn checkout(repo: &git2::Repository, request: &CheckoutRequest) -> Result<()> {
+pub fn checkout(repo: &mut git2::Repository, request: &CheckoutRequest) -> Result<()> {
     if !request.paths.is_empty() {
         let rels = validate_paths(&request.paths)?;
         let obj = repo.revparse_single(request.target.as_str()).map_err(|_| {
@@ -258,42 +258,61 @@ pub fn checkout(repo: &git2::Repository, request: &CheckoutRequest) -> Result<()
         return Ok(());
     }
 
+    let stash = match request.mode {
+        CheckoutMode::KeepChanges | CheckoutMode::TakeChanges => {
+            let sig = resolve_signature(repo)?;
+            let message = "gitau: auto-stash before checkout";
+            let stash_oid = repo.stash_save(&sig, message, None)?;
+            Some(stash_oid)
+        }
+        _ => None,
+    };
+
     let reference = repo.find_reference(request.target.as_str()).or_else(|_| {
         repo.find_branch(request.target.as_str(), BranchType::Local)
             .map(|branch| branch.into_reference())
     });
 
-    match reference {
-        Ok(reference) => {
-            let commit = reference.peel_to_commit()?;
-            let is_local_branch = reference
-                .name()
-                .map(|n| n.starts_with("refs/heads/"))
-                .unwrap_or(false);
-            let mut builder = CheckoutBuilder::new();
-            if request.force {
-                builder.force();
+    let result = (|| -> Result<()> {
+        match reference {
+            Ok(reference) => {
+                let commit = reference.peel_to_commit()?;
+                let is_local_branch = reference
+                    .name()
+                    .map(|n| n.starts_with("refs/heads/"))
+                    .unwrap_or(false);
+                let mut builder = CheckoutBuilder::new();
+                if request.force {
+                    builder.force();
+                }
+                if is_local_branch {
+                    repo.set_head(reference.name().expect("named ref"))?;
+                    repo.checkout_tree(commit.as_object(), Some(&mut builder))?;
+                } else {
+                    repo.set_head_detached(commit.id())?;
+                    repo.checkout_tree(commit.as_object(), Some(&mut builder))?;
+                }
+                Ok(())
             }
-            if is_local_branch {
-                repo.set_head(reference.name().expect("named ref"))?;
-                repo.checkout_tree(commit.as_object(), Some(&mut builder))?;
-            } else {
+            Err(_) => {
+                let commit = crate::streaming::pipeline::resolve_commit(repo, &request.target)?;
                 repo.set_head_detached(commit.id())?;
+                let mut builder = CheckoutBuilder::new();
+                if request.force {
+                    builder.force();
+                }
                 repo.checkout_tree(commit.as_object(), Some(&mut builder))?;
+                Ok(())
             }
-            Ok(())
         }
-        Err(_) => {
-            let commit = crate::streaming::pipeline::resolve_commit(repo, &request.target)?;
-            repo.set_head_detached(commit.id())?;
-            let mut builder = CheckoutBuilder::new();
-            if request.force {
-                builder.force();
-            }
-            repo.checkout_tree(commit.as_object(), Some(&mut builder))?;
-            Ok(())
-        }
+    })();
+
+    if stash.is_some() {
+        let mut options = StashApplyOptions::default();
+        let _ = repo.stash_pop(0, Some(&mut options));
     }
+
+    result
 }
 
 pub fn reset(repo: &git2::Repository, request: &ResetRequest) -> Result<()> {

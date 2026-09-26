@@ -1,7 +1,7 @@
 use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
 use git_backend::api::mutations::{
-    BranchCreateRequest, CheckoutRequest, ResetKind, ResetRequest, TagCreateRequest,
+    BranchCreateRequest, CheckoutMode, CheckoutRequest, ResetKind, ResetRequest, TagCreateRequest,
 };
 use git_backend::domain::{BranchInfo, Generation, RevisionSpec, TagInfo};
 
@@ -135,6 +135,7 @@ pub async fn git_checkout(
     repo_id: u64,
     target: String,
     force: Option<bool>,
+    mode: Option<CheckoutMode>,
     paths: Option<Vec<String>>,
     expected_generation: Option<u64>,
 ) -> CommandResult<()> {
@@ -145,6 +146,7 @@ pub async fn git_checkout(
             CheckoutRequest {
                 target: spec(target)?,
                 force: force.unwrap_or(false),
+                mode: mode.unwrap_or(CheckoutMode::Safe),
                 paths: paths.unwrap_or_default(),
             },
             gen(expected_generation),

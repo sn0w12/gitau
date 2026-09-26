@@ -33,18 +33,20 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverPopup, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTab } from "@/components/ui/tabs";
+import { useConfirm } from "@/contexts/confirm-context";
 import { useMergeActions } from "@/hooks/repositories/use-merge-actions";
 import {
     useOperationState,
     useRepoListing,
     useRepositorySnapshot,
+    useRepositoryStatus,
     useWorktrees,
 } from "@/hooks/repositories/use-repository-queries";
 import {
     useCheckoutMutation,
     useCreateBranchMutation,
 } from "@/lib/backend/mutations/repository-mutations";
-import type { BranchInfo } from "@/lib/backend/protocol";
+import type { BranchInfo, CheckoutMode } from "@/lib/backend/protocol";
 import { repositoryKeys } from "@/lib/backend/queries/query-keys";
 import { BORDER_GRADIENT, REPO_TOOLBAR_TRIGGER_CLASS } from "@/lib/constants";
 import { toastError } from "@/lib/toast-error";
@@ -96,6 +98,11 @@ export function BranchSelector({ repoId }: { repoId: number }) {
     const operation = useOperationState(repoId);
     const mergeActions = useMergeActions(repoId);
     const queryClient = useQueryClient();
+    const { confirm } = useConfirm();
+    const status = useRepositoryStatus(repoId);
+    const hasChanges =
+        (status.data?.entries.length ?? 0) > 0 ||
+        (status.data?.conflicts.length ?? 0) > 0;
     const mergeInProgress = operation.data?.kind === "merge";
 
     const [open, setOpen] = useState(false);
@@ -172,8 +179,22 @@ export function BranchSelector({ repoId }: { repoId: number }) {
             );
             return;
         }
+        let mode: CheckoutMode = "safe";
+        if (hasChanges) {
+            const result = await confirm({
+                title: "Uncommitted changes",
+                description:
+                    "You have uncommitted changes. Keep them on this branch or take them with you?",
+                confirmText: "Take changes",
+                cancelText: "Keep changes",
+            });
+            mode = result.confirmed ? "takeChanges" : "keepChanges";
+        }
         try {
-            await checkout.mutateAsync(branchName);
+            await checkout.mutateAsync({
+                target: branchName,
+                options: { mode },
+            });
             // The listing's ahead/behind data is stale for the new HEAD;
             // drop it so the next open re-derives sync state cleanly.
             queryClient.removeQueries({

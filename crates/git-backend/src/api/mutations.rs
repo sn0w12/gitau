@@ -49,11 +49,21 @@ pub struct TagCreateRequest {
     pub force: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CheckoutMode {
+    Safe,
+    Force,
+    KeepChanges,
+    TakeChanges,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct CheckoutRequest {
     pub target: RevisionSpec,
     pub force: bool,
+    pub mode: CheckoutMode,
     /// When set, only restores these paths from the target ("restore").
     pub paths: Vec<String>,
 }
@@ -63,6 +73,7 @@ impl Default for CheckoutRequest {
         Self {
             target: RevisionSpec::head(),
             force: false,
+            mode: CheckoutMode::Safe,
             paths: vec![],
         }
     }

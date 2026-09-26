@@ -8,6 +8,7 @@ import {
 import type { InvalidationScope } from "@/lib/backend/mutations/invalidation";
 import type {
     BranchInfo,
+    CheckoutMode,
     CommitExecution,
     CommitSummary,
     PublishResult,
@@ -184,6 +185,11 @@ export function usePushMutation(repoId: number) {
 
 type PullOptions = Parameters<BackendClient["remotes"]["pull"]>[1];
 type CheckoutTarget = string;
+export type CheckoutOptions = {
+    mode?: CheckoutMode;
+    force?: boolean;
+    paths?: string[];
+};
 type CreateBranchInput = {
     name: string;
     startPoint?: string;
@@ -201,11 +207,19 @@ export function usePullMutation(repoId: number) {
 }
 
 export function useCheckoutMutation(repoId: number) {
-    return useRepoWrite<CheckoutTarget, void>(
+    return useRepoWrite<
+        { target: CheckoutTarget; options?: CheckoutOptions },
+        void
+    >(
         repoId,
-        (be, target, expectedGeneration) =>
+        (be, input, expectedGeneration) =>
             be.mutations
-                .checkout(repoId, target, {}, expectedGeneration)
+                .checkout(
+                    repoId,
+                    input.target,
+                    input.options ?? {},
+                    expectedGeneration
+                )
                 .then(expectOk),
         { scopes: ["refs", "history", "status", "files"] }
     );
