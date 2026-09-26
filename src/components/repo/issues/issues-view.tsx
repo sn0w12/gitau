@@ -11,6 +11,7 @@ import {
     EmptyMedia,
     EmptyTitle,
 } from "@/components/ui/empty";
+import { Frame } from "@/components/ui/frame";
 import {
     Select,
     SelectItem,
@@ -41,7 +42,7 @@ import { issueStatusOf, StatusBadge } from "../../issues/status-badge";
 
 type TabState = "open" | "closed";
 
-function LabelBadge({ label }: { label: GithubLabel }) {
+export function LabelBadge({ label }: { label: GithubLabel }) {
     return (
         <Badge
             className={
@@ -69,7 +70,7 @@ function AssigneeStack({
             {assignees.map((assignee) => (
                 <Avatar
                     key={assignee.login}
-                    className="size-6 ring-2 ring-card"
+                    className="size-5 ring-2 ring-card"
                 >
                     <AvatarImage src={assignee.avatarUrl || undefined} />
                     <AvatarFallback>
@@ -112,7 +113,7 @@ export function IssuesView({ repoId }: { repoId: number }) {
     return (
         <div className="flex h-full min-h-0 flex-col p-0.5">
             <Tabs
-                className="min-h-0 flex-1 gap-0"
+                className="min-h-0 flex-1 gap-0.5"
                 value={tab}
                 onValueChange={(value) => setTab(value as TabState)}
             >
@@ -176,54 +177,56 @@ export function IssuesView({ repoId }: { repoId: number }) {
                         </Select>
                     </div>
                 </div>
-                <TabsPanel
-                    className="flex min-h-0 flex-1 flex-col"
-                    value="open"
-                >
-                    <IssuesTable
-                        repoId={repoId}
-                        state={tab}
-                        rows={rows}
-                        isLoading={
-                            account.isLoading ||
-                            coordsLoading ||
-                            issues.isLoading
-                        }
-                        isError={issues.isError}
-                        errorMessage={
-                            issues.error instanceof Error
-                                ? issues.error.message
-                                : "Could not load issues"
-                        }
-                        onRetry={() => void issues.refetch()}
-                        hasCoords={coords !== null}
-                        signedIn={account.data != null}
-                    />
-                </TabsPanel>
-                <TabsPanel
-                    className="flex min-h-0 flex-1 flex-col"
-                    value="closed"
-                >
-                    <IssuesTable
-                        repoId={repoId}
-                        state={tab}
-                        rows={rows}
-                        isLoading={
-                            account.isLoading ||
-                            coordsLoading ||
-                            issues.isLoading
-                        }
-                        isError={issues.isError}
-                        errorMessage={
-                            issues.error instanceof Error
-                                ? issues.error.message
-                                : "Could not load issues"
-                        }
-                        onRetry={() => void issues.refetch()}
-                        hasCoords={coords !== null}
-                        signedIn={account.data != null}
-                    />
-                </TabsPanel>
+                <Frame className="w-full">
+                    <TabsPanel
+                        className="flex min-h-0 flex-1 flex-col"
+                        value="open"
+                    >
+                        <IssuesTable
+                            repoId={repoId}
+                            state={tab}
+                            rows={rows}
+                            isLoading={
+                                account.isLoading ||
+                                coordsLoading ||
+                                issues.isLoading
+                            }
+                            isError={issues.isError}
+                            errorMessage={
+                                issues.error instanceof Error
+                                    ? issues.error.message
+                                    : "Could not load issues"
+                            }
+                            onRetry={() => void issues.refetch()}
+                            hasCoords={coords !== null}
+                            signedIn={account.data != null}
+                        />
+                    </TabsPanel>
+                    <TabsPanel
+                        className="flex min-h-0 flex-1 flex-col"
+                        value="closed"
+                    >
+                        <IssuesTable
+                            repoId={repoId}
+                            state={tab}
+                            rows={rows}
+                            isLoading={
+                                account.isLoading ||
+                                coordsLoading ||
+                                issues.isLoading
+                            }
+                            isError={issues.isError}
+                            errorMessage={
+                                issues.error instanceof Error
+                                    ? issues.error.message
+                                    : "Could not load issues"
+                            }
+                            onRetry={() => void issues.refetch()}
+                            hasCoords={coords !== null}
+                            signedIn={account.data != null}
+                        />
+                    </TabsPanel>
+                </Frame>
             </Tabs>
         </div>
     );
@@ -363,7 +366,7 @@ function IssuesTable({
                             {issue.commentCount}
                         </TableCell>
                         <TableCell>
-                            <div className="flex min-h-6 items-center justify-end">
+                            <div className="flex min-h-5 items-center justify-end">
                                 <AssigneeStack assignees={issue.assignees} />
                             </div>
                         </TableCell>
@@ -377,7 +380,7 @@ function IssuesTable({
 /** Same table shell with skeleton rows shaped like real rows. */
 function IssuesTableSkeleton() {
     return (
-        <Table containerClassName="min-h-0 flex-1 px-0.5" variant="card">
+        <Table containerClassName="min-h-0 flex-1" variant="card">
             <IssuesTableHead />
             <TableBody>
                 {Array.from({ length: 8 }, (_, index) => (
@@ -403,11 +406,11 @@ function IssuesTableSkeleton() {
                             <Skeleton className="h-4 w-6" />
                         </TableCell>
                         <TableCell>
-                            <div className="flex min-h-6 items-center justify-end">
+                            <div className="flex min-h-5 items-center justify-end">
                                 <div className="flex -space-x-[0.4rem]">
-                                    <Skeleton className="size-6 rounded-full ring-2 ring-card" />
+                                    <Skeleton className="size-5 rounded-full ring-2 ring-card" />
                                     {index % 2 === 0 ? (
-                                        <Skeleton className="size-6 rounded-full ring-2 ring-card" />
+                                        <Skeleton className="size-5 rounded-full ring-2 ring-card" />
                                     ) : null}
                                 </div>
                             </div>
