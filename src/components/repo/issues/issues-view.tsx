@@ -334,7 +334,7 @@ function IssuesTable({
                 {rows.map((issue) => (
                     <TableRow
                         key={issue.number}
-                        className="pointer-cursor"
+                        className="cursor-pointer"
                         onClick={() => {
                             router?.navigate({
                                 to: `/repo/${repoId}/issue/${issue.number}`,
