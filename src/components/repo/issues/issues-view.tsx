@@ -395,13 +395,22 @@ function IssuesTable({
                             </TableCell>
                         </TableRow>
                     ))}
+                    {hasNextPage ? (
+                        <TableRow>
+                            <TableCell colSpan={5}>
+                                <div
+                                    ref={sentinelRef}
+                                    className="flex justify-center py-2"
+                                >
+                                    {isFetchingNextPage ? (
+                                        <Spinner className="size-4" />
+                                    ) : null}
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    ) : null}
                 </TableBody>
             </Table>
-            {hasNextPage ? (
-                <div ref={sentinelRef} className="flex justify-center py-2">
-                    {isFetchingNextPage ? <Spinner className="size-4" /> : null}
-                </div>
-            ) : null}
         </div>
     );
 }
