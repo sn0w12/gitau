@@ -436,7 +436,7 @@ function InboxRow({
 
     const openInApp = () => {
         if (inAppRepoId === undefined || !issueTarget) return;
-        onMarkRead();
+        if (thread.unread) onMarkRead();
         router?.navigate({
             to: `/repo/${inAppRepoId}/issue/${issueTarget.number}`,
         });
