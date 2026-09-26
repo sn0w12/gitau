@@ -864,6 +864,8 @@ impl GithubApi for HttpGithubApi {
                         ("q", terms.join(" ")),
                         ("per_page", ISSUES_PER_PAGE.to_string()),
                         ("page", page.to_string()),
+                        ("sort", "created".to_owned()),
+                        ("order", "desc".to_owned()),
                     ]),
             )
             .await?;
