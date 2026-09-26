@@ -354,7 +354,7 @@ function IssuesTable({
 
     return (
         <div className="flex h-full min-h-0 flex-col">
-            <Table containerClassName="min-h-0 flex-1 px-0.5" variant="card">
+            <Table containerClassName="min-h-0 flex-1" variant="card">
                 <IssuesTableHead />
                 <TableBody>
                     {rows.map((issue) => (
