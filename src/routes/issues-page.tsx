@@ -152,7 +152,7 @@ export function IssuesPage() {
                                 </p>
                                 {showScopeHint ? (
                                     <p className="max-w-sm text-sm text-muted-foreground">
-                                        Tokens granted before the notifications
+                                        Tokens granted before the repo
                                         permission existed cannot search issues.
                                         Sign out and back in on the Account page
                                         to grant it.
