@@ -85,7 +85,9 @@ describe("RepoViewSwitcher", () => {
         expect(popup.textContent).toContain("Pull requests");
 
         const items = [
-            ...popup.querySelectorAll('[data-slot="menu-item"]'),
+            ...popup.querySelectorAll(
+                '[data-slot="menu-item"], [data-slot="menu-radio-item"]'
+            ),
         ] as HTMLElement[];
 
         const graphItem = items.find((item) =>
@@ -96,23 +98,7 @@ describe("RepoViewSwitcher", () => {
         await flush();
         expect(picked).toEqual(["graph"]);
 
-        // The menu closes after picking; reopen it for the next pick.
-        await click(trigger);
-        const reopened = await waitFor(
-            () =>
-                view.container.ownerDocument.querySelector(
-                    '[data-slot="menu-popup"]'
-                ) !== null
-        );
-        expect(reopened).toBe(true);
-        const popupAgain = view.container.ownerDocument.querySelector(
-            '[data-slot="menu-popup"]'
-        ) as HTMLElement;
-        const itemsAgain = [
-            ...popupAgain.querySelectorAll('[data-slot="menu-item"]'),
-        ] as HTMLElement[];
-
-        const issueItem = itemsAgain.find((item) =>
+        const issueItem = items.find((item) =>
             item.textContent?.includes("Issues")
         );
         expect(issueItem?.getAttribute("aria-disabled")).toBe(null);
@@ -120,7 +106,7 @@ describe("RepoViewSwitcher", () => {
         await flush();
         expect(picked).toEqual(["graph", "issues"]);
 
-        const prItem = itemsAgain.find((item) =>
+        const prItem = items.find((item) =>
             item.textContent?.includes("Pull requests")
         );
         expect(prItem?.getAttribute("aria-disabled")).toBe("true");
