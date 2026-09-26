@@ -228,6 +228,20 @@ export function IssuesView({ repoId }: { repoId: number }) {
     );
 }
 
+function IssuesTableHead() {
+    return (
+        <TableHeader>
+            <TableRow>
+                <TableHead className="h-9">Title</TableHead>
+                <TableHead className="h-9">Status</TableHead>
+                <TableHead className="h-9">Labels</TableHead>
+                <TableHead className="h-9">Comments</TableHead>
+                <TableHead className="h-9 text-right">Assignees</TableHead>
+            </TableRow>
+        </TableHeader>
+    );
+}
+
 function IssuesTable({
     repoId,
     state,
@@ -321,15 +335,7 @@ function IssuesTable({
 
     return (
         <Table containerClassName="min-h-0 flex-1 px-0.5" variant="card">
-            <TableHeader>
-                <TableRow>
-                    <TableHead className="h-9">Title</TableHead>
-                    <TableHead className="h-9">Status</TableHead>
-                    <TableHead className="h-9">Labels</TableHead>
-                    <TableHead className="h-9">Comments</TableHead>
-                    <TableHead className="h-9 text-right">Assignees</TableHead>
-                </TableRow>
-            </TableHeader>
+            <IssuesTableHead />
             <TableBody>
                 {rows.map((issue) => (
                     <TableRow
@@ -371,15 +377,7 @@ function IssuesTable({
 function IssuesTableSkeleton() {
     return (
         <Table containerClassName="min-h-0 flex-1 px-0.5" variant="card">
-            <TableHeader>
-                <TableRow>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Labels</TableHead>
-                    <TableHead>Comments</TableHead>
-                    <TableHead className="text-right">Assignees</TableHead>
-                </TableRow>
-            </TableHeader>
+            <IssuesTableHead />
             <TableBody>
                 {Array.from({ length: 8 }, (_, index) => (
                     <TableRow key={index}>
