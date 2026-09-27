@@ -28,7 +28,7 @@ export function CodeBlock({
                     {language}
                 </div>
             ) : null}
-            <FramePanel className="overflow-x-auto p-2 font-mono">
+            <FramePanel className="code-hl overflow-x-auto p-2 font-mono">
                 <div className="whitespace-pre">
                     {lines.map((rawLine, index) => {
                         // Spans are computed on the line without its

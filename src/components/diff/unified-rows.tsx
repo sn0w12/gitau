@@ -25,7 +25,7 @@ function LineContent({
 }) {
     if (!row) return <span>&nbsp;</span>;
     return (
-        <span className="diff-hl-code pl-1 whitespace-pre">
+        <span className="code-hl pl-1 whitespace-pre">
             <HighlightedLine code={row.content} row={row} styles={styles} />
         </span>
     );

@@ -462,24 +462,26 @@ img {
 
     /* Backend syntax highlighting. Spans reference a per-section style
      * table resolved by syntect against embedded themes; each span carries
-     * both theme colors as custom properties so theme flips stay CSS-only. */
-    .diff-hl-code .syn {
+     * both theme colors as custom properties so theme flips stay CSS-only.
+     * `code-hl` is the wrapper every highlighted surface sets, diff rows and
+     * markdown fences alike. */
+    .code-hl .syn {
         color: var(--syn-light);
     }
 
-    .dark .diff-hl-code .syn {
+    .dark .code-hl .syn {
         color: var(--syn-dark);
     }
 
-    .diff-hl-code .syn-b {
+    .code-hl .syn-b {
         font-weight: 600;
     }
 
-    .diff-hl-code .syn-i {
+    .code-hl .syn-i {
         font-style: italic;
     }
 
-    .diff-hl-code .syn-u {
+    .code-hl .syn-u {
         text-decoration: underline;
     }
 }

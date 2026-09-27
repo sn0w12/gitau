@@ -112,7 +112,7 @@ function WrappedCell({
                 ) : (
                     <span className="inline-block w-10 shrink-0" />
                 )}
-                <span className="diff-hl-code min-w-0 flex-1 overflow-hidden">
+                <span className="code-hl min-w-0 flex-1 overflow-hidden">
                     {line ? (
                         <HighlightedLine
                             code={line.text}

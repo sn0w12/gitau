@@ -164,6 +164,8 @@ export function IssueMessage({
     createdAt,
     actionLabel = "opened on",
     link,
+    owner,
+    repo,
     canQuote = false,
     onQuote,
     canEdit = false,
@@ -180,6 +182,9 @@ export function IssueMessage({
     actionLabel?: string;
     /** Web URL of the message; hides Copy Link when absent. */
     link?: string;
+    /** Repository of the issue, so `#123` references link out. */
+    owner?: string;
+    repo?: string;
     canQuote?: boolean;
     onQuote?: (text: string) => void;
     /** Edit/Delete reflect authorship and repo push access. */
@@ -283,7 +288,9 @@ export function IssueMessage({
                         onSave={() => void saveEdit()}
                     />
                 ) : (
-                    <CustomMarkdown>{text}</CustomMarkdown>
+                    <CustomMarkdown owner={owner} repo={repo}>
+                        {text}
+                    </CustomMarkdown>
                 )}
             </FramePanel>
         </Frame>

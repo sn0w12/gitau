@@ -1,5 +1,8 @@
 import { Markdown, type MarkdownComponents } from "@tanstack/markdown/react";
-import { Children, isValidElement } from "react";
+import { Children, isValidElement, useMemo } from "react";
+
+import { ALERT_TAG, githubMarkdownExtension } from "@/lib/markdown/github";
+import { cn } from "@/lib/utils";
 
 import { ExternalLink } from "../external-link";
 import { Checkbox } from "../ui/checkbox";
@@ -13,6 +16,7 @@ import {
     TableHeader,
     TableRow,
 } from "../ui/table";
+import { MarkdownAlert } from "./alert";
 import { CodeBlock } from "./code-block";
 
 function linkHref(href: string | undefined): string | undefined {
@@ -39,31 +43,29 @@ const components = {
     a(props) {
         const href = linkHref(props.href);
         const external = /^https?:\/\//i.test(href || "");
+        // The heading anchor arrives with its own classes; merge so the
+        // hover-reveal styling survives the link color.
+        const className = cn("text-info hover:text-info/70", props.className);
         if (external) {
             return (
-                <ExternalLink
-                    {...props}
-                    href={href}
-                    className="text-info hover:text-info/70"
-                />
+                <ExternalLink {...props} href={href} className={className} />
             );
         }
-        return (
-            <a
-                {...props}
-                href={href}
-                className="text-info hover:text-info/70"
-            />
-        );
+        return <a {...props} href={href} className={className} />;
     },
     p(props) {
         return <p {...props} className="my-2 first:mt-0 last:mb-0" />;
     },
+    // Headings merge the renderer's className: the footnotes heading ships
+    // `sr-only`, which replacing the class list would un-hide.
     h1(props) {
         return (
             <h1
                 {...props}
-                className="mt-3 mb-1 border-b pb-1 text-lg font-semibold first:mt-0"
+                className={cn(
+                    "mt-3 mb-1 border-b pb-1 text-lg font-semibold first:mt-0",
+                    props.className
+                )}
             />
         );
     },
@@ -71,15 +73,34 @@ const components = {
         return (
             <h2
                 {...props}
-                className="mt-3 mb-1 border-b pb-1 text-base font-semibold first:mt-0"
+                className={cn(
+                    "mt-3 mb-1 border-b pb-1 text-base font-semibold first:mt-0",
+                    props.className
+                )}
             />
         );
     },
     h3(props) {
-        return <h3 {...props} className="mt-2 mb-1 font-semibold first:mt-0" />;
+        return (
+            <h3
+                {...props}
+                className={cn(
+                    "mt-2 mb-1 font-semibold first:mt-0",
+                    props.className
+                )}
+            />
+        );
     },
     h4(props) {
-        return <h4 {...props} className="mt-2 mb-1 font-semibold first:mt-0" />;
+        return (
+            <h4
+                {...props}
+                className={cn(
+                    "mt-2 mb-1 font-semibold first:mt-0",
+                    props.className
+                )}
+            />
+        );
     },
     ul(props) {
         return <ul {...props} className="my-2 list-disc space-y-1 pr-0 pl-6" />;
@@ -124,7 +145,11 @@ const components = {
         );
     },
     table({ children }) {
-        return <Table containerClassName="my-2">{children}</Table>;
+        return (
+            <Frame className="my-2 w-full">
+                <Table variant="card">{children}</Table>
+            </Frame>
+        );
     },
     thead(props) {
         return <TableHeader {...props} />;
@@ -176,16 +201,32 @@ const components = {
         }
         return <input {...props} />;
     },
+    [ALERT_TAG]: MarkdownAlert,
 } satisfies MarkdownComponents;
 
 export function CustomMarkdown({
     children,
+    owner,
+    repo,
 }: {
     children: React.ComponentProps<typeof Markdown>["children"];
+    /** Repository the message belongs to; `#123` only links when both are set. */
+    owner?: string;
+    repo?: string;
 }) {
+    const extensions = useMemo(
+        () => [
+            githubMarkdownExtension(
+                owner && repo ? { owner, repo } : undefined
+            ),
+        ],
+        [owner, repo]
+    );
     return (
         <div className="min-w-0 break-words">
-            <Markdown components={components}>{children}</Markdown>
+            <Markdown extensions={extensions} components={components}>
+                {children}
+            </Markdown>
         </div>
     );
 }

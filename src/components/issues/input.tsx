@@ -88,6 +88,8 @@ export function IssueInput({
     onSubmit,
     onToggleState,
     inputRef,
+    owner,
+    repo,
 }: {
     pending?: boolean;
     /** Label for the close/reopen button; hides it when absent. */
@@ -95,6 +97,9 @@ export function IssueInput({
     onSubmit: (body: string) => Promise<void>;
     onToggleState?: () => void;
     inputRef?: React.Ref<IssueInputHandle>;
+    /** Repository the draft is posted to, so `#123` references link out. */
+    owner?: string;
+    repo?: string;
 }) {
     const [value, setValue] = useState("");
     const areaRef = useRef<HTMLTextAreaElement>(null);
@@ -266,7 +271,9 @@ export function IssueInput({
                 <TabsContent value="preview" className="ui-selectable">
                     <FramePanel className="px-3 py-2">
                         {value.trim() ? (
-                            <CustomMarkdown>{value}</CustomMarkdown>
+                            <CustomMarkdown owner={owner} repo={repo}>
+                                {value}
+                            </CustomMarkdown>
                         ) : (
                             <span className="text-muted-foreground">
                                 Nothing to preview

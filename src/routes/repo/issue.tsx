@@ -129,9 +129,13 @@ interface MessageActions {
 
 function TimelineBody({
     issue,
+    owner,
+    repo,
     actions,
 }: {
     issue: GithubIssueDetail;
+    owner: string;
+    repo: string;
     actions: MessageActions;
 }) {
     return (
@@ -141,6 +145,8 @@ function TimelineBody({
             avatarUrl={issue.author.avatarUrl || undefined}
             createdAt={issue.createdAt}
             link={issue.htmlUrl || undefined}
+            owner={owner}
+            repo={repo}
             canQuote={actions.canQuote}
             onQuote={actions.onQuote}
             canEdit={actions.canEdit(issue.author.login)}
@@ -151,9 +157,13 @@ function TimelineBody({
 
 function TimelineComment({
     comment,
+    owner,
+    repo,
     actions,
 }: {
     comment: GithubIssueComment;
+    owner: string;
+    repo: string;
     actions: MessageActions;
 }) {
     return (
@@ -164,6 +174,8 @@ function TimelineComment({
             createdAt={comment.createdAt}
             actionLabel="commented on"
             link={comment.htmlUrl || undefined}
+            owner={owner}
+            repo={repo}
             canQuote={actions.canQuote}
             onQuote={actions.onQuote}
             canEdit={actions.canEdit(comment.author.login)}
@@ -178,17 +190,35 @@ function TimelineRow({
     item,
     last,
     issue,
+    owner,
+    repo,
     actions,
 }: {
     item: TimelineItem;
     last: boolean;
     issue: GithubIssueDetail;
+    owner: string;
+    repo: string;
     actions: MessageActions;
 }) {
     if (item.kind === "body")
-        return <TimelineBody issue={issue} actions={actions} />;
+        return (
+            <TimelineBody
+                issue={issue}
+                owner={owner}
+                repo={repo}
+                actions={actions}
+            />
+        );
     if (item.kind === "comment")
-        return <TimelineComment comment={item.comment} actions={actions} />;
+        return (
+            <TimelineComment
+                comment={item.comment}
+                owner={owner}
+                repo={repo}
+                actions={actions}
+            />
+        );
     const event = item.event;
     return (
         <IssueEvent
@@ -434,6 +464,8 @@ function IssueContent({
                                         item={item}
                                         last={index === timeline.length - 1}
                                         issue={issue}
+                                        owner={owner}
+                                        repo={repo}
                                         actions={actions}
                                     />
                                 </Fragment>
@@ -446,6 +478,8 @@ function IssueContent({
                                 stateLabel={
                                     open ? "Close issue" : "Reopen issue"
                                 }
+                                owner={owner}
+                                repo={repo}
                                 onSubmit={handleComment}
                                 onToggleState={() => void handleToggleState()}
                                 inputRef={composerRef}
