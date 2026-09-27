@@ -1,3 +1,5 @@
+import { ExternalLinkIcon } from "lucide-react";
+
 import {
     Tooltip,
     TooltipTrigger,
@@ -30,11 +32,12 @@ export function ExternalLink({
                         target="_blank"
                         rel="noreferrer"
                         className={cn(
-                            "underline-offset-2 hover:text-foreground hover:underline",
+                            "inline-flex items-center gap-0.5 underline-offset-2 hover:text-foreground hover:underline",
                             className
                         )}
                     >
                         {children}
+                        <ExternalLinkIcon className="size-3" />
                     </a>
                 }
             />
