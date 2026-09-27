@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { act, useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -194,6 +194,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+    // Unmount so ConfirmProvider clears its close timer; Vitest never
+    // unmounts on its own, and a timer outliving the environment throws.
+    cleanup();
     document.body.innerHTML = "";
     vi.restoreAllMocks();
 });
