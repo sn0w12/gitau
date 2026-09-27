@@ -29,7 +29,7 @@ import { InboxPage } from "@/routes/inbox-page";
 import { IssuesPage } from "@/routes/issues-page";
 import { RepoPage } from "@/routes/repo-page";
 import { SettingsPage } from "@/routes/settings-page";
-import { setTabTitle } from "@/stores/app-store";
+import { associateTabWithRepoPath, setTabTitle } from "@/stores/app-store";
 import { getEntryByRepoId } from "@/stores/repository-store";
 
 import { HomePage } from "./home-page";
@@ -170,7 +170,14 @@ export function createTabRouteTree(options: { tabId?: string } = {}) {
         getParentRoute: () => rootRoute,
         path: "/repo/$repoId/issue/$issueId",
         component: IssuePage,
-        loader: () => applyTitle("Issue", "issue"),
+        loader: ({ params }) => {
+            applyTitle("Issue", "issue");
+            if (tabId === null) return;
+            const path = getEntryByRepoId(Number(params.repoId))?.path;
+            if (path !== undefined) {
+                associateTabWithRepoPath(tabId, path);
+            }
+        },
     });
 
     return rootRoute.addChildren([

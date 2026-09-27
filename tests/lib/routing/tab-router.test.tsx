@@ -7,6 +7,7 @@ import { createAppServices } from "@/lib/bootstrap/app-runtime";
 import type { AppServices } from "@/lib/bootstrap/app-runtime";
 import { createTabRouter } from "@/lib/routing/tab-router-factory";
 import { appStore, createTabRecord, openTab } from "@/stores/app-store";
+import { registerOpen } from "@/stores/repository-store";
 import {
     resetRuntimesForTests,
     getOrCreateRuntime,
@@ -122,5 +123,20 @@ describe("per-tab routers", () => {
 
         expect(routerA.routeTree).not.toBe(routerB.routeTree);
         expect(routerA.routesById["/"]).not.toBe(routerB.routesById["/"]);
+    });
+
+    it("binds the tab to the repository an issue route names", () => {
+        const tab = makeTab("issue");
+        registerOpen("C:/repos/gitau", 5);
+        const router = createTabRouter(tab.record.tabId, "/", services);
+
+        const loader = router.routesById["/repo/$repoId/issue/$issueId"].options
+            .loader as (context: { params: Record<string, string> }) => void;
+        loader({ params: { repoId: "5", issueId: "42" } });
+
+        const stored = appStore.state.tabs.find(
+            (candidate) => candidate.tabId === tab.record.tabId
+        );
+        expect(stored?.repoPath).toBe("C:/repos/gitau");
     });
 });
