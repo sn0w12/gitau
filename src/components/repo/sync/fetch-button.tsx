@@ -320,15 +320,15 @@ function AheadBehind({ ahead, behind }: { ahead: number; behind: number }) {
     return (
         <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
             {ahead > 0 && (
-                <Badge className="pr-[1px]" size="sm">
-                    {ahead}
-                    <ArrowUp className="size-3.5" />
+                <Badge className="gap-0.5 pr-[1px]" size="sm">
+                    <span className="mt-[1.5px]">{ahead}</span>
+                    <ArrowUp className="size-3" />
                 </Badge>
             )}
             {behind > 0 && (
-                <Badge className="pr-[1px]" size="sm">
-                    {behind}
-                    <ArrowDown className="size-3.5" />
+                <Badge className="gap-0.5 pr-[1px]" size="sm">
+                    <span className="mt-[1.5px]">{behind}</span>
+                    <ArrowDown className="size-3" />
                 </Badge>
             )}
         </span>
