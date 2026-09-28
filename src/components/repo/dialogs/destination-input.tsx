@@ -25,7 +25,7 @@ export function DestinationInput({
     parentTitle = "Choose a location",
     folderPlaceholder,
     autoFocus = false,
-    folderNameDisabled = false,
+    nameOptional = false,
     onChangeParentDirectory,
     onChangeFolderName,
 }: {
@@ -36,8 +36,8 @@ export function DestinationInput({
     parentTitle?: string;
     folderPlaceholder: string;
     autoFocus?: boolean;
-    /** Hides the editable folder name when the target is the parent itself. */
-    folderNameDisabled?: boolean;
+    /** An empty name means the parent folder is the target itself. */
+    nameOptional?: boolean;
     onChangeParentDirectory: (directory: string) => void;
     onChangeFolderName: (name: string) => void;
 }) {
@@ -51,6 +51,9 @@ export function DestinationInput({
             onChangeParentDirectory(selection);
         }
     };
+
+    const trimmedName = folderName.trim();
+    const usesParent = nameOptional && !trimmedName;
 
     return (
         <>
@@ -73,8 +76,7 @@ export function DestinationInput({
                     type="text"
                     placeholder={folderPlaceholder}
                     value={folderName}
-                    disabled={folderNameDisabled}
-                    autoFocus={autoFocus && !folderNameDisabled}
+                    autoFocus={autoFocus}
                     onChange={(event) => onChangeFolderName(event.target.value)}
                 />
             </InsetInput>
@@ -83,11 +85,11 @@ export function DestinationInput({
                     {actionLabel}{" "}
                     <span className="text-foreground">
                         {displayDist(parentDirectory)}
-                        {folderNameDisabled ? "" : "/"}
+                        {usesParent ? "" : "/"}
                     </span>
-                    {!folderNameDisabled && (
+                    {!usesParent && (
                         <span className="text-info">
-                            {folderName.trim() || "(folder)"}
+                            {trimmedName || "(folder)"}
                         </span>
                     )}
                 </FieldDescription>

@@ -2487,9 +2487,9 @@ fn prune_dir_older_than(dir: &Path, max_age: Duration) -> usize {
     removed
 }
 
-/// Creates the repository folder (or reuses `parent_directory` itself for
-/// in-place init), runs `git init`, and writes the requested scaffolding
-/// files (never commits). Returns the canonical path.
+/// Creates the target folder, or uses `parent_directory` itself when `name` is
+/// empty, runs `git init`, and writes the requested scaffolding files that do
+/// not exist yet (never commits, never overwrites). Returns the canonical path.
 fn scaffold_repository(request: &CreateRepositoryRequest) -> Result<PathBuf> {
     let parent = PathBuf::from(&request.parent_directory);
     if !parent.is_dir() {
@@ -2498,41 +2498,41 @@ fn scaffold_repository(request: &CreateRepositoryRequest) -> Result<PathBuf> {
             request.parent_directory
         )));
     }
-    let (target, name) = if request.init_in_place {
-        let name = parent
-            .file_name()
-            .map(|raw| raw.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        (parent, name)
+    let requested_name = request.name.trim();
+    let target = if requested_name.is_empty() {
+        parent
     } else {
-        let name = request.name.trim();
-        if name.is_empty() {
-            return Err(GitError::invalid_input("repository name is empty"));
-        }
-        if name == "." || name == ".." || name.contains('/') || name.contains('\\') {
+        if requested_name == "."
+            || requested_name == ".."
+            || requested_name.contains('/')
+            || requested_name.contains('\\')
+        {
             return Err(GitError::invalid_input(format!(
-                "invalid repository name: {name}"
+                "invalid repository name: {requested_name}"
             )));
         }
-        let target = parent.join(name);
-        if target.exists() {
-            let empty = std::fs::read_dir(&target)
-                .map(|mut entries| entries.next().is_none())
-                .unwrap_or(true);
-            if !empty {
-                return Err(GitError::Conflict {
-                    details: format!("directory is not empty: {}", target.display()),
-                });
-            }
+        let target = parent.join(requested_name);
+        if target.exists() && !target.is_dir() {
+            return Err(GitError::Conflict {
+                details: format!("not a folder: {}", target.display()),
+            });
         }
         std::fs::create_dir_all(&target)?;
-        (target, name.to_owned())
+        target
+    };
+    let name = if requested_name.is_empty() {
+        target
+            .file_name()
+            .map(|raw| raw.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    } else {
+        requested_name.to_owned()
     };
 
-    // Re-initializing an existing repository is a no-op for git but would
-    // surprise the user; refuse instead. Only checked for in-place init so
-    // creating a (nested) repo folder inside a repository keeps working.
-    if request.init_in_place && git2::Repository::discover(&target).is_ok() {
+    // Re-initializing a repository is a no-op for git but would surprise the
+    // user. Only the target itself is inspected, so a repository nested inside
+    // another repository stays allowed.
+    if git2::Repository::open(&target).is_ok() {
         return Err(GitError::Conflict {
             details: format!(
                 "directory is already a git repository: {}",
@@ -2571,7 +2571,11 @@ fn scaffold_repository(request: &CreateRepositoryRequest) -> Result<PathBuf> {
         }
     }
     for (file_name, content) in files {
-        std::fs::write(target.join(file_name), content)?;
+        let path = target.join(file_name);
+        if path.symlink_metadata().is_ok() {
+            continue;
+        }
+        std::fs::write(&path, content)?;
     }
 
     Ok(std::fs::canonicalize(&target).unwrap_or(target))

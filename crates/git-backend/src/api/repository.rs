@@ -10,17 +10,12 @@ pub struct OpenRepositoryRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateRepositoryRequest {
-    /// Existing directory the new repository folder is created inside, or the
-    /// repository root itself when [`CreateRepositoryRequest::init_in_place`]
-    /// is set.
+    /// Existing directory the repository folder lives in, or the directory a
+    /// new folder is created inside when `name` is set.
     pub parent_directory: String,
-    /// Name of the new repository folder; ignored when `init_in_place` is
-    /// set.
+    /// Folder to create inside `parent_directory`; empty initializes
+    /// `parent_directory` itself.
     pub name: String,
-    /// Initializes the repository directly in `parent_directory` instead of
-    /// creating a named subfolder, allowing existing files.
-    #[serde(default)]
-    pub init_in_place: bool,
     pub readme: bool,
     pub gitignore_template: Option<String>,
     pub license: Option<String>,

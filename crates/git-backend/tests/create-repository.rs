@@ -9,18 +9,6 @@ fn request(parent: &std::path::Path, name: &str, readme: bool) -> CreateReposito
     CreateRepositoryRequest {
         parent_directory: parent.to_string_lossy().into_owned(),
         name: name.into(),
-        init_in_place: false,
-        readme,
-        gitignore_template: None,
-        license: None,
-    }
-}
-
-fn in_place_request(parent: &std::path::Path, readme: bool) -> CreateRepositoryRequest {
-    CreateRepositoryRequest {
-        parent_directory: parent.to_string_lossy().into_owned(),
-        name: String::new(),
-        init_in_place: true,
         readme,
         gitignore_template: None,
         license: None,
@@ -35,7 +23,6 @@ fn creates_repository_with_scaffolding_files() {
     let result = futures_block(backend.create_repository(CreateRepositoryRequest {
         parent_directory: outer.path().to_string_lossy().into_owned(),
         name: "scaffolded".into(),
-        init_in_place: false,
         readme: true,
         gitignore_template: Some("rust".into()),
         license: Some("mit".into()),
@@ -74,7 +61,7 @@ fn empty_request_writes_nothing_extra() {
 }
 
 #[test]
-fn rejects_missing_parent_and_nonempty_targets() {
+fn rejects_missing_parent_paths_that_cannot_hold_a_repo() {
     let outer = tempfile::tempdir().unwrap();
     let backend = Backend::new(BackendConfig::default());
 
@@ -83,13 +70,11 @@ fn rejects_missing_parent_and_nonempty_targets() {
             .unwrap_err();
     assert_eq!(missing_parent.code(), "invalidInput");
 
-    let occupied = outer.path().join("occupied");
-    std::fs::create_dir_all(&occupied).unwrap();
-    std::fs::write(occupied.join("existing.txt"), "data").unwrap();
-    let conflict =
-        futures_block(backend.create_repository(request(outer.path(), "occupied", true)))
-            .unwrap_err();
-    assert_eq!(conflict.code(), "conflict");
+    let file = outer.path().join("file.txt");
+    std::fs::write(&file, "data").unwrap();
+    let not_a_directory =
+        futures_block(backend.create_repository(request(&file, "repo", true))).unwrap_err();
+    assert_eq!(not_a_directory.code(), "invalidInput");
 
     let invalid_name =
         futures_block(backend.create_repository(request(outer.path(), "..", true))).unwrap_err();
@@ -97,38 +82,100 @@ fn rejects_missing_parent_and_nonempty_targets() {
 }
 
 #[test]
-fn initializes_in_place_inside_existing_directory_with_files() {
+fn initializes_an_existing_folder_with_its_files_kept() {
     let outer = tempfile::tempdir().unwrap();
     std::fs::write(outer.path().join("existing.txt"), "data").unwrap();
     std::fs::create_dir(outer.path().join("src")).unwrap();
     let backend = Backend::new(BackendConfig::default());
 
-    let result =
-        futures_block(backend.create_repository(in_place_request(outer.path(), true))).unwrap();
+    let result = futures_block(backend.create_repository(request(outer.path(), "", true))).unwrap();
 
     let root = std::path::PathBuf::from(&result.path);
     assert_eq!(root, outer.path().canonicalize().unwrap());
     assert!(root.join(".git").exists(), "git init must run");
     assert!(root.join("existing.txt").exists(), "files are kept");
+    assert!(root.join("src").exists(), "folders are kept");
     let readme = std::fs::read_to_string(root.join("README.md")).unwrap();
     assert!(readme.starts_with("# "), "title comes from the folder name");
 }
 
 #[test]
-fn rejects_in_place_init_inside_an_existing_repository() {
+fn initializes_a_named_folder_that_already_has_files() {
     let outer = tempfile::tempdir().unwrap();
-    let repo = git2::Repository::init(outer.path()).unwrap();
-    drop(repo);
+    let target = outer.path().join("project");
+    std::fs::create_dir_all(target.join("src")).unwrap();
+    std::fs::write(target.join("main.rs"), "fn main() {}").unwrap();
     let backend = Backend::new(BackendConfig::default());
 
-    let error = futures_block(backend.create_repository(in_place_request(outer.path(), false)))
-        .unwrap_err();
+    let result =
+        futures_block(backend.create_repository(request(outer.path(), "project", true))).unwrap();
+
+    let root = std::path::PathBuf::from(&result.path);
+    assert_eq!(root, target.canonicalize().unwrap());
+    assert!(root.join(".git").exists(), "git init must run");
+    assert!(root.join("main.rs").exists(), "files are kept");
+}
+
+#[test]
+fn scaffolding_never_overwrites_existing_files() {
+    let outer = tempfile::tempdir().unwrap();
+    let target = outer.path().join("project");
+    std::fs::create_dir_all(&target).unwrap();
+    std::fs::write(target.join("README.md"), "mine").unwrap();
+    std::fs::write(target.join("LICENSE"), "mine").unwrap();
+    let backend = Backend::new(BackendConfig::default());
+
+    futures_block(backend.create_repository(CreateRepositoryRequest {
+        parent_directory: outer.path().to_string_lossy().into_owned(),
+        name: "project".into(),
+        readme: true,
+        gitignore_template: Some("rust".into()),
+        license: Some("mit".into()),
+    }))
+    .unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(target.join("README.md")).unwrap(),
+        "mine"
+    );
+    assert_eq!(
+        std::fs::read_to_string(target.join("LICENSE")).unwrap(),
+        "mine"
+    );
+    // Absent files are still written.
+    assert!(
+        std::fs::read_to_string(target.join(".gitignore"))
+            .unwrap()
+            .contains("/target/")
+    );
+}
+
+#[test]
+fn rejects_folders_that_are_already_repositories() {
+    let outer = tempfile::tempdir().unwrap();
+    let repo = outer.path().join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    drop(git2::Repository::init(&repo).unwrap());
+    let backend = Backend::new(BackendConfig::default());
+
+    // The folder itself is a repository.
+    let error = futures_block(backend.create_repository(request(&repo, "", false))).unwrap_err();
     assert_eq!(error.code(), "conflict");
 
-    // Existing non-repo folders stay allowed.
-    let plain = tempfile::tempdir().unwrap();
-    std::fs::write(plain.path().join("note.txt"), "keep me").unwrap();
-    let ok =
-        futures_block(backend.create_repository(in_place_request(plain.path(), false))).unwrap();
-    assert!(std::path::Path::new(&ok.path).join(".git").exists());
+    // The folder that would be created already exists as a repository.
+    let error =
+        futures_block(backend.create_repository(request(outer.path(), "repo", false))).unwrap_err();
+    assert_eq!(error.code(), "conflict");
+}
+
+#[test]
+fn allows_a_repository_nested_inside_another_one() {
+    let outer = tempfile::tempdir().unwrap();
+    drop(git2::Repository::init(outer.path()).unwrap());
+    let backend = Backend::new(BackendConfig::default());
+
+    let result =
+        futures_block(backend.create_repository(request(outer.path(), "nested", false))).unwrap();
+
+    assert!(std::path::Path::new(&result.path).join(".git").exists());
 }

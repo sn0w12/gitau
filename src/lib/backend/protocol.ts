@@ -30,10 +30,8 @@ export interface OpenedRepository {
 
 export interface CreateRepositoryRequest {
     parentDirectory: string;
-    /** Ignored when initInPlace is set. */
+    /** Empty initializes parentDirectory itself instead of a new subfolder. */
     name: string;
-    /** Initializes directly in parentDirectory instead of a new subfolder. */
-    initInPlace?: boolean;
     readme: boolean;
     gitignoreTemplate?: string | null;
     license?: string | null;

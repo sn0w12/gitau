@@ -27,6 +27,7 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
     globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
+const NAME_INPUT = 'input[placeholder="my-project (optional)"]';
 const TEMPLATES: GitignoreTemplateInfo[] = [{ id: "rust", label: "Rust" }];
 const LICENSES: LicenseTemplateInfo[] = [
     {
@@ -155,7 +156,7 @@ describe("NewRepoDialog", () => {
         vi.clearAllMocks();
     });
 
-    it("creates from the picked parent and remembers it for next time", async () => {
+    it("creates a new folder from the picked parent and remembers it", async () => {
         const services = backendWith();
         const onCreated = vi.fn();
 
@@ -167,13 +168,13 @@ describe("NewRepoDialog", () => {
 
         await clickButtonWithText("Browse");
         await flush();
-        await typeInto('input[placeholder="my-project"]', "demo");
+        await typeInto(NAME_INPUT, "demo");
 
         await clickButtonWithText("Create");
         await flush();
 
         expect(services.createCalls.length).toBe(1);
-        expect(services.createCalls[0]).toMatchObject({
+        expect(services.createCalls[0]).toEqual({
             parentDirectory: "/repo-parent",
             name: "demo",
             readme: true,
@@ -182,6 +183,28 @@ describe("NewRepoDialog", () => {
         });
         expect(onCreated).toHaveBeenCalledWith("/repo-parent/demo");
         expect(getSetting("lastRepositoryDirectory")).toBe("/repo-parent");
+    });
+
+    it("initializes the picked folder itself when no name is typed", async () => {
+        const services = backendWith();
+        services.setCreateOutcome(created("/repo-parent"));
+        const onCreated = vi.fn();
+
+        renderWith(
+            services,
+            <NewRepoDialog open onClose={() => {}} onCreated={onCreated} />
+        );
+        await flush();
+
+        await clickButtonWithText("Browse");
+        await clickButtonWithText("Create");
+        await flush();
+
+        expect(services.createCalls[0]).toMatchObject({
+            parentDirectory: "/repo-parent",
+            name: "",
+        });
+        expect(onCreated).toHaveBeenCalledWith("/repo-parent");
     });
 
     it("seeds the parent from the remembered setting", async () => {
@@ -196,7 +219,7 @@ describe("NewRepoDialog", () => {
         await flush();
 
         // No Browse needed: the remembered parent is already active.
-        await typeInto('input[placeholder="my-project"]', "demo");
+        await typeInto(NAME_INPUT, "demo");
         await clickButtonWithText("Create");
         await flush();
 
@@ -210,7 +233,7 @@ describe("NewRepoDialog", () => {
             ok: false,
             error: new GitBackendError({
                 code: "conflict",
-                message: "directory is not empty",
+                message: "directory is already a git repository",
                 detail: undefined,
                 retryable: false,
             }),
@@ -224,11 +247,11 @@ describe("NewRepoDialog", () => {
 
         await clickButtonWithText("Browse");
         await flush();
-        await typeInto('input[placeholder="my-project"]', "demo");
+        await typeInto(NAME_INPUT, "demo");
         await clickButtonWithText("Create");
         await flush();
 
         const alert = document.body.querySelector('[role="alert"]');
-        expect(alert?.textContent).toContain("directory is not empty");
+        expect(alert?.textContent).toContain("already a git repository");
     });
 });

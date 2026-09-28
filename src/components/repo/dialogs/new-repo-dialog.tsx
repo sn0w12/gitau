@@ -33,11 +33,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "../../ui/select";
-import { Tabs, TabsList, TabsTrigger } from "../../ui/tabs";
 import { DestinationInput } from "./destination-input";
 
-const NEW_FOLDER = "new-folder";
-const EXISTING_FOLDER = "existing-folder";
 const NO_GITIGNORE = "";
 const NO_LICENSE = "";
 
@@ -48,8 +45,9 @@ const NO_LICENSE_OPTION: LicenseTemplateInfo = {
 };
 
 /**
- * Creates an empty repository with optional scaffolding in a new folder
- * under the chosen parent. Files are written but not committed.
+ * Creates an empty repository in the picked folder, or in a new folder inside
+ * it when a name is typed. Existing files are kept and never overwritten;
+ * scaffolding is written but not committed.
  */
 export function NewRepoDialog({
     open,
@@ -62,7 +60,6 @@ export function NewRepoDialog({
 }) {
     const { backend } = useAppServices();
 
-    const [mode, setMode] = useState(NEW_FOLDER);
     const [parentDirectory, setParentDirectory] = useState(
         lastRepositoryDirectory
     );
@@ -76,7 +73,6 @@ export function NewRepoDialog({
     // Fresh form for the next open; re-reads the remembered destination so
     // a clone run since last time is picked up.
     const resetForm = () => {
-        setMode(NEW_FOLDER);
         setParentDirectory(lastRepositoryDirectory());
         setFolderName("");
         setReadme(true);
@@ -117,10 +113,7 @@ export function NewRepoDialog({
         ),
     }));
 
-    const inPlace = mode === EXISTING_FOLDER;
-    const trimmedName = folderName.trim();
-    const canCreate =
-        !!parentDirectory && (inPlace || !!trimmedName) && !submitting;
+    const canCreate = !!parentDirectory && !submitting;
 
     const handleCreate = async () => {
         if (!canCreate) return;
@@ -129,8 +122,7 @@ export function NewRepoDialog({
         try {
             const outcome = await createRepositoryOnDisk(backend, {
                 parentDirectory,
-                name: inPlace ? "" : trimmedName,
-                initInPlace: inPlace,
+                name: folderName.trim(),
                 readme,
                 gitignoreTemplate: gitignore || null,
                 license: license || null,
@@ -156,45 +148,20 @@ export function NewRepoDialog({
                 <DialogHeader>
                     <DialogTitle>Create new repo</DialogTitle>
                     <DialogDescription>
-                        {inPlace
-                            ? "Initializes an empty repository directly in the chosen folder. Existing files are kept."
-                            : "Initializes an empty repository in a new folder. Scaffolding files are written but not committed."}
+                        Initializes a repository in the picked folder, or in a
+                        new folder inside it when you add a name. Existing files
+                        are never overwritten.
                     </DialogDescription>
                 </DialogHeader>
                 <DialogPanel className="flex flex-col gap-3">
-                    <Tabs
-                        value={mode}
-                        onValueChange={(value) => {
-                            if (
-                                value === NEW_FOLDER ||
-                                value === EXISTING_FOLDER
-                            )
-                                setMode(value);
-                        }}
-                    >
-                        <TabsList>
-                            <TabsTrigger value={NEW_FOLDER}>
-                                New folder
-                            </TabsTrigger>
-                            <TabsTrigger value={EXISTING_FOLDER}>
-                                Existing folder
-                            </TabsTrigger>
-                        </TabsList>
-                    </Tabs>
                     <Field>
-                        <FieldLabel>
-                            {inPlace ? "Folder to initialize" : "New folder"}
-                        </FieldLabel>
+                        <FieldLabel>Location</FieldLabel>
                         <DestinationInput
-                            actionLabel={
-                                inPlace ? "Will initialize" : "Will create into"
-                            }
-                            folderPlaceholder={
-                                inPlace ? "(this folder)" : "my-project"
-                            }
+                            actionLabel="Will create in"
+                            folderPlaceholder="my-project (optional)"
+                            nameOptional
                             parentDirectory={parentDirectory}
-                            folderName={inPlace ? "" : folderName}
-                            folderNameDisabled={inPlace}
+                            folderName={folderName}
                             autoFocus
                             onChangeParentDirectory={setParentDirectory}
                             onChangeFolderName={setFolderName}
