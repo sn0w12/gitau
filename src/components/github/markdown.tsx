@@ -25,6 +25,7 @@ import {
 import { MarkdownAlert } from "./alert";
 import { CodeBlock } from "./code-block";
 import { MarkdownDetails } from "./html";
+import { MermaidDiagram } from "./mermaid-diagram";
 
 function linkHref(href: string | undefined): string | undefined {
     const hasProtocol = /^[a-z][a-z0-9+.-]*:/i.test(href || "");
@@ -44,6 +45,10 @@ function fenceTextOf(children: React.ReactNode): string | null {
     if (!isValidElement(only)) return null;
     const inner = (only.props as { children?: unknown }).children;
     return typeof inner === "string" ? inner : null;
+}
+
+function isMermaid(lang: string | undefined): boolean {
+    return (lang ?? "").trim().toLowerCase() === "mermaid";
 }
 
 const components = {
@@ -141,7 +146,11 @@ const components = {
                 </Frame>
             );
         }
-        return <CodeBlock language={lang} text={text} />;
+        return isMermaid(lang) ? (
+            <MermaidDiagram text={text} />
+        ) : (
+            <CodeBlock language={lang} text={text} />
+        );
     },
     code(props) {
         return (

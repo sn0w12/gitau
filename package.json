@@ -43,6 +43,7 @@
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "lucide-react": "^1.46.0",
+        "mermaid": "^12.0.0",
         "motion": "^13.3.0",
         "motion-panels": "^0.5.2",
         "react": "^19.3.0",

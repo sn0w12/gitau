@@ -43,7 +43,7 @@ function CopyCodeButton({ text }: { text: string }) {
                 render={
                     <Button
                         aria-label="Copy code"
-                        size="icon-sm"
+                        size="icon-xs"
                         variant="ghost"
                         className="absolute end-1 top-1 z-10 opacity-0 transition-opacity group-hover/code:opacity-100 focus-visible:opacity-100"
                         onClick={() => copyToClipboard(text)}
