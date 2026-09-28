@@ -425,18 +425,12 @@ function JobLogSkeleton() {
         <div className="flex flex-col gap-2" aria-busy="true">
             {[0, 1, 2, 3].map((index) => (
                 <Frame key={index}>
-                    <FrameHeader className="flex flex-row items-center gap-1.5 px-2 py-1.5">
+                    <FrameHeader className="flex flex-row items-center gap-1.5 px-2 py-1">
                         <Skeleton className="size-4 rounded-full" />
                         <Skeleton
                             className={`h-3.5 ${index % 2 === 0 ? "w-2/5" : "w-1/3"}`}
                         />
                     </FrameHeader>
-                    <FramePanel className="px-3 py-2">
-                        <div className="flex flex-col gap-1.5">
-                            <Skeleton className="h-3 w-full" />
-                            <Skeleton className="h-3 w-4/5" />
-                        </div>
-                    </FramePanel>
                 </Frame>
             ))}
         </div>
