@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::engines::gix::highlight;
 
@@ -19,15 +19,16 @@ pub struct HighlightedSnippet {
 
 /// One resolved style covering both app themes. Field names match the
 /// frontend `SyntaxStyle` (`b`/`i`/`u`), not the diff `WireStyle`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct SnippetStyle {
     pub light: String,
     pub dark: String,
-    #[serde(skip_serializing_if = "std::ops::Not::not", rename = "b")]
+    #[serde(rename = "b")]
     pub bold: bool,
-    #[serde(skip_serializing_if = "std::ops::Not::not", rename = "i")]
+    #[serde(rename = "i")]
     pub italic: bool,
-    #[serde(skip_serializing_if = "std::ops::Not::not", rename = "u")]
+    #[serde(rename = "u")]
     pub underline: bool,
 }
 

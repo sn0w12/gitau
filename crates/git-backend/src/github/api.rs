@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
+use super::ansi;
 use super::device_flow::{DeviceCodeResponse, TokenPoll, parse_device_code, parse_token_poll};
 use super::{
     AccountProfile, GitHubError, GithubActionStep, GithubCheckAnnotation, GithubCheckRun,
@@ -686,14 +687,19 @@ fn map_check_run(raw: RawCheckRun) -> GithubCheckRun {
     }
 }
 
+/// A bare RFC 3339 stamp, as it leads every log line.
+fn parse_stamp(stamp: &str) -> Option<Timestamp> {
+    chrono::DateTime::parse_from_rfc3339(stamp)
+        .ok()
+        .map(|parsed| parsed.with_timezone(&chrono::Utc))
+}
+
 /// The timestamp a log line was emitted at. GitHub prefixes each line with an
 /// RFC 3339 stamp, and there is no other separator, so splitting on the first
 /// space is unambiguous.
 fn log_line_time(line: &str) -> Option<Timestamp> {
     let (stamp, _) = line.split_once(' ')?;
-    chrono::DateTime::parse_from_rfc3339(stamp)
-        .ok()
-        .map(|parsed| parsed.with_timezone(&chrono::Utc))
+    parse_stamp(stamp)
 }
 
 /// A step's start and end, absent when GitHub did not report them.
@@ -703,8 +709,17 @@ type Timestamp = chrono::DateTime<chrono::Utc>;
 /// Assigns each log line to the step that was running when it was emitted. A
 /// line that falls outside every window, which happens when a step has no
 /// timestamps, goes to the first step rather than being dropped.
-fn slice_log_by_steps(steps: &[GithubActionStep], log: &str) -> Vec<String> {
-    let mut buckets: Vec<String> = vec![String::new(); steps.len()];
+///
+/// Lines are parsed for colour first, so the escape codes never reach the
+/// text and each step carries the spans that restore them. Every step indexes
+/// the one style table the caller receives.
+fn slice_log_by_steps(
+    steps: &[GithubActionStep],
+    log: &str,
+    table: &mut ansi::AnsiTable,
+) -> Vec<StepLines> {
+    let coloured = log.contains('\u{1b}');
+    let mut buckets: Vec<StepLines> = steps.iter().map(|_| StepLines::default()).collect();
     let windows: Vec<StepWindow> = steps
         .iter()
         .map(|step| {
@@ -736,12 +751,41 @@ fn slice_log_by_steps(steps: &[GithubActionStep], log: &str) -> Vec<String> {
                     })
             })
             .or(Some(0));
-        if let Some(index) = owner {
-            buckets[index].push_str(line);
-            buckets[index].push('\n');
-        }
+        let Some(index) = owner else { continue };
+        // The leading stamp is how the line is routed, not part of the output,
+        // so it is dropped. Spans are computed after this, so they stay in
+        // step with the trimmed text.
+        let body = match line.split_once(' ') {
+            Some((stamp, rest)) if parse_stamp(stamp).is_some() => rest,
+            _ => line,
+        };
+        buckets[index].push(ansi::parse_line(
+            &ansi::strip_workflow_commands(body),
+            table,
+            coloured,
+        ));
     }
     buckets
+}
+
+/// One step's log as parallel lines and span triples, so the frontend can
+/// render it with the same component as a code fence.
+#[derive(Default)]
+struct StepLines {
+    lines: Vec<String>,
+    spans_by_line: Vec<Vec<u32>>,
+}
+
+impl StepLines {
+    fn push(&mut self, parsed: ansi::ParsedLine) {
+        self.lines.push(parsed.text);
+        self.spans_by_line.push(parsed.spans);
+    }
+
+    fn into_step(self, step: &mut GithubActionStep) {
+        step.log = self.lines.join("\n");
+        step.spans_by_line = self.spans_by_line;
+    }
 }
 
 fn map_check_annotation(raw: RawCheckAnnotation) -> GithubCheckAnnotation {
@@ -1868,14 +1912,17 @@ impl GithubApi for HttpGithubApi {
                     started_at: step.started_at,
                     completed_at: step.completed_at,
                     log: String::new(),
+                    spans_by_line: Vec::new(),
                 })
                 .collect();
-            let buckets = slice_log_by_steps(&steps, &log);
+            let mut table = ansi::AnsiTable::default();
+            let buckets = slice_log_by_steps(&steps, &log, &mut table);
             for (step, bucket) in steps.iter_mut().zip(buckets) {
-                step.log = bucket;
+                bucket.into_step(step);
             }
             Ok(GithubCheckRunLog {
                 steps,
+                styles: table.styles().to_vec(),
                 unavailable: None,
             })
         })
@@ -2213,7 +2260,20 @@ mod tests {
             started_at: Some(start.to_string()),
             completed_at: Some(end.to_string()),
             log: String::new(),
+            spans_by_line: Vec::new(),
         }
+    }
+
+    /// Slices and renders, since the point of the change is what a step's log
+    /// looks like rather than which bucket a line lands in.
+    fn slice(steps: &[GithubActionStep], log: &str) -> Vec<GithubActionStep> {
+        let mut table = ansi::AnsiTable::default();
+        let buckets = slice_log_by_steps(steps, log, &mut table);
+        let mut steps = steps.to_vec();
+        for (step, bucket) in steps.iter_mut().zip(buckets) {
+            bucket.into_step(step);
+        }
+        steps
     }
 
     #[test]
@@ -2227,12 +2287,9 @@ mod tests {
             "2024-01-01T00:00:11Z running tests\n",
             "2024-01-01T00:00:19Z 3 passed\n",
         );
-        let buckets = slice_log_by_steps(&steps, log);
-        assert_eq!(buckets[0], "2024-01-01T00:00:01Z fetching\n");
-        assert_eq!(
-            buckets[1],
-            "2024-01-01T00:00:11Z running tests\n2024-01-01T00:00:19Z 3 passed\n"
-        );
+        let steps = slice(&steps, log);
+        assert_eq!(steps[0].log, "fetching");
+        assert_eq!(steps[1].log, "running tests\n3 passed");
     }
 
     #[test]
@@ -2248,16 +2305,28 @@ mod tests {
             "2024-01-01T00:00:30Z after teardown\n",
             "no timestamp on this line\n",
         );
-        let buckets = slice_log_by_steps(&steps, log);
+        let steps = slice(&steps, log);
         assert_eq!(
-            buckets[0],
-            concat!(
-                "2024-01-01T00:00:01Z before setup\n",
-                "2024-01-01T00:00:11Z compiling\n",
-                "2024-01-01T00:00:30Z after teardown\n",
-                "no timestamp on this line\n",
-            )
+            steps[0].log,
+            "before setup\ncompiling\nafter teardown\nno timestamp on this line"
         );
+    }
+
+    #[test]
+    fn ansi_colour_is_split_out_of_the_log_text() {
+        let steps = vec![step("test", "2024-01-01T00:00:00Z", "2024-01-01T00:01:00Z")];
+        let log = "2024-01-01T00:00:01Z \u{1b}[32m\u{2713}\u{1b}[39m 4 tests passed\n";
+        let steps = slice(&steps, log);
+        assert_eq!(steps[0].log, "\u{2713} 4 tests passed");
+        assert_eq!(steps[0].spans_by_line.len(), 1);
+        assert_eq!(steps[0].spans_by_line[0], vec![0, 1, 1]);
+    }
+
+    #[test]
+    fn a_plain_line_carries_no_spans() {
+        let steps = vec![step("test", "2024-01-01T00:00:00Z", "2024-01-01T00:01:00Z")];
+        let steps = slice(&steps, "2024-01-01T00:00:01Z no colour here\n");
+        assert_eq!(steps[0].spans_by_line, vec![Vec::<u32>::new()]);
     }
 
     #[test]

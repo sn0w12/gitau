@@ -962,8 +962,11 @@ export interface GithubActionStep {
     startedAt?: string;
     completedAt?: string;
     /** The log lines this step produced, sliced out of the job log by
-     * timestamp. */
+     * timestamp, with any ANSI colour escapes removed. */
     log: string;
+    /** Span triples per line of `log`, indexing
+     * `GithubCheckRunLog.styles`. */
+    spansByLine: number[][];
 }
 
 /** A run's job log, split the way GitHub's job view splits it. The check run
@@ -971,8 +974,9 @@ export interface GithubActionStep {
  * the real log only exists on the job. */
 export interface GithubCheckRunLog {
     steps: GithubActionStep[];
-    /** Lines outside every step's window, so nothing is dropped. */
-    log: string;
+    /** The 1-based table every step's spans index into, carrying the log's own
+     * colours rather than any syntax theme. */
+    styles: SyntaxStyle[];
     /** Set when the run has no job log to show, with the reason. */
     unavailable?: string;
 }

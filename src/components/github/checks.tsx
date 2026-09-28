@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { HighlightedLine } from "@/components/diff/highlight-line";
 import { CustomMarkdown } from "@/components/github/markdown";
 import { SidebarBlock } from "@/components/github/thread-chrome";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ import type {
     GithubCheckRun,
     GithubCheckRunOutput,
     GithubWorkflowRun,
+    SyntaxStyle,
 } from "@/lib/backend/protocol";
 import { cn } from "@/lib/utils";
 
@@ -415,7 +417,7 @@ function logBlock(log: ReturnType<typeof useCheckRunLog>) {
             </Frame>
         );
     }
-    return <StepList steps={log.data.steps} />;
+    return <StepList steps={log.data.steps} styles={log.data.styles} />;
 }
 
 /** Step-shaped placeholders, so the dialog does not jump when the log
@@ -425,7 +427,7 @@ function JobLogSkeleton() {
         <div className="flex flex-col gap-2" aria-busy="true">
             {[0, 1, 2, 3].map((index) => (
                 <Frame key={index}>
-                    <FrameHeader className="flex flex-row items-center gap-1.5 px-2 py-1">
+                    <FrameHeader className="flex h-8 flex-row items-center gap-1.5 px-2 py-1">
                         <Skeleton className="size-4 rounded-full" />
                         <Skeleton
                             className={`h-3.5 ${index % 2 === 0 ? "w-2/5" : "w-1/3"}`}
@@ -437,7 +439,13 @@ function JobLogSkeleton() {
     );
 }
 
-function StepList({ steps }: { steps: GithubActionStep[] }) {
+function StepList({
+    steps,
+    styles,
+}: {
+    steps: GithubActionStep[];
+    styles: SyntaxStyle[];
+}) {
     return (
         <div className="flex flex-col gap-2">
             {steps.map((step) => (
@@ -447,6 +455,8 @@ function StepList({ steps }: { steps: GithubActionStep[] }) {
                     status={step.status}
                     conclusion={step.conclusion}
                     log={step.log}
+                    spansByLine={step.spansByLine}
+                    styles={styles}
                     open={step.conclusion !== "success"}
                 />
             ))}
@@ -461,12 +471,16 @@ function StepRow({
     status,
     conclusion,
     log,
+    spansByLine,
+    styles,
     open,
 }: {
     name: string;
     status: string;
     conclusion: string | undefined;
     log: string;
+    spansByLine: number[][];
+    styles: SyntaxStyle[];
     open: boolean;
 }) {
     const appearance = stepAppearance(status, conclusion);
@@ -483,11 +497,33 @@ function StepRow({
                     </CollapsibleTrigger>
                 </FrameHeader>
                 <CollapsiblePanel>
-                    <FramePanel className="px-3 py-2 empty:hidden">
+                    <FramePanel className="code-hl px-3 py-2 empty:hidden">
                         {log.trim().length > 0 ? (
-                            <pre className="font-mono text-xs whitespace-pre-wrap">
-                                {log}
-                            </pre>
+                            <div className="ui-selectable font-mono text-xs">
+                                {log.split("\n").map((line, index) => {
+                                    const spans = spansByLine[index] ?? [];
+                                    return (
+                                        <div
+                                            key={index}
+                                            className="whitespace-pre-wrap"
+                                        >
+                                            <HighlightedLine
+                                                code={line}
+                                                row={
+                                                    spans.length > 0
+                                                        ? {
+                                                              kind: "context",
+                                                              content: line,
+                                                              spans,
+                                                          }
+                                                        : undefined
+                                                }
+                                                styles={styles}
+                                            />
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         ) : (
                             <p className="text-muted-foreground">No output.</p>
                         )}

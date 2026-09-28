@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::api::highlight::SnippetStyle;
+
 /// Public identity of the connected GitHub account. Never carries the
 /// access token; the token lives only in the OS keychain.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -267,8 +269,10 @@ pub struct GithubActionStep {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completed_at: Option<String>,
     /// The log lines this step produced, sliced out of the job log by
-    /// timestamp.
+    /// timestamp, with any ANSI colour escapes removed.
     pub log: String,
+    /// Span triples per line of `log`, indexing `GithubCheckRunLog::styles`.
+    pub spans_by_line: Vec<Vec<u32>>,
 }
 
 /// A run's job log, split the way GitHub's job view splits it. The check run
@@ -278,6 +282,9 @@ pub struct GithubActionStep {
 #[serde(rename_all = "camelCase", default)]
 pub struct GithubCheckRunLog {
     pub steps: Vec<GithubActionStep>,
+    /// The 1-based table every step's spans index into, carrying the log's
+    /// own colours rather than any syntax theme.
+    pub styles: Vec<SnippetStyle>,
     /// Set when the run has no job log to show, with the reason.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unavailable: Option<String>,
