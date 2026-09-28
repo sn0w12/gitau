@@ -16,10 +16,14 @@ import {
     type IssueStateFilter,
 } from "@/lib/backend/queries/github-issues-queries";
 import {
+    checkRunLogQuery,
+    checkRunQuery,
+    checkRunsQuery,
     infiniteRepoPullsQuery,
     pullRequestQuery,
     pullReviewCommentsQuery,
     pullReviewsQuery,
+    workflowRunsQuery,
 } from "@/lib/backend/queries/github-pulls-queries";
 import { githubKeys } from "@/lib/backend/queries/query-keys";
 import { expectOk } from "@/lib/backend/transport/result";
@@ -79,7 +83,63 @@ export function usePullRequest(
     const reviewComments = useQuery(
         pullReviewCommentsQuery({ backend }, owner, repo, number, enabled)
     );
-    return { detail, comments, events, reviews, reviewComments };
+    // CI reports against a commit, so these wait for the detail to name the
+    // head sha.
+    const sha = detail.data?.head.sha ?? null;
+    const checks = useQuery(
+        checkRunsQuery({ backend }, owner, repo, sha, enabled)
+    );
+    const workflows = useQuery(
+        workflowRunsQuery({ backend }, owner, repo, sha, enabled)
+    );
+    return {
+        detail,
+        comments,
+        events,
+        reviews,
+        reviewComments,
+        checks,
+        workflows,
+    };
+}
+
+/** One check run's output, read when its results are opened. */
+export function useCheckRun(
+    owner: string | null,
+    repo: string | null,
+    checkRunId: number | null
+) {
+    const { backend } = useAppServices();
+    const account = useGithubAccount();
+    return useQuery(
+        checkRunQuery(
+            { backend },
+            owner,
+            repo,
+            account.data == null ? null : checkRunId
+        )
+    );
+}
+
+/** A run's job log, split per step. Only fetched once `enabled`, so opening
+ * the dialog does not pull megabytes of log text. */
+export function useCheckRunLog(
+    owner: string | null,
+    repo: string | null,
+    checkRunId: number | null,
+    enabled: boolean
+) {
+    const { backend } = useAppServices();
+    const account = useGithubAccount();
+    return useQuery(
+        checkRunLogQuery(
+            { backend },
+            owner,
+            repo,
+            account.data == null ? null : checkRunId,
+            enabled
+        )
+    );
 }
 
 type PullInput = { owner: string; repo: string; number: number };

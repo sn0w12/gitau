@@ -16,10 +16,11 @@ pub mod worktrees;
 
 pub use changes::{DiscardRequest, StageHunkRequest, StageRequest, StatusOptions};
 pub use github::{
-    AccountProfile, DeviceFlowStart, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
-    GithubIssueListItem, GithubLabel, GithubNotification, GithubOrg, GithubPullRequestDetail,
-    GithubPullRequestListItem, GithubPullRequestRef, GithubPullRequestReview,
-    GithubPullRequestReviewComment, GithubRepoPermissions, GithubUser, MergePullRequestBody,
+    AccountProfile, DeviceFlowStart, GithubCheckRun, GithubCheckRunDetail, GithubCheckRunOutput,
+    GithubIssueComment, GithubIssueDetail, GithubIssueEvent, GithubIssueListItem, GithubLabel,
+    GithubNotification, GithubOrg, GithubPullRequestDetail, GithubPullRequestListItem,
+    GithubPullRequestRef, GithubPullRequestReview, GithubPullRequestReviewComment,
+    GithubRepoPermissions, GithubUser, GithubWorkflowRun, MergePullRequestBody,
     MergePullRequestResult, NotificationPage, PublishRepositoryRequest, PublishResult,
     PullRequestMergeMethod, SearchIssueItem, SearchIssuePage, SearchPullRequestPage,
     UpdateIssueBody, UpdatePullRequestBody,

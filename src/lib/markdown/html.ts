@@ -160,6 +160,11 @@ const TAG_PATTERN =
 const TAG_SCAN =
     /<\/?[A-Za-z][A-Za-z0-9-]*(?:\s+[^\s"'>/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'>`]+))?)*\s*\/?>/g;
 
+/** Html comments, which carry no content but reach us as literal text from
+ * bots that tag their output, for example `<!-- finishing_touch_suggestion
+ * :docstrings -->`. */
+const COMMENT_SCAN = /<!--[\s\S]*?-->/g;
+
 interface ParsedTag {
     closing: boolean;
     selfClosing: boolean;
@@ -249,16 +254,28 @@ function textToTokens(value: string): Token[] {
     for (const match of value.matchAll(TAG_SCAN)) {
         const start = match.index;
         if (start > cursor) {
-            tokens.push({ kind: "text", value: value.slice(cursor, start) });
+            pushText(tokens, value.slice(cursor, start));
         }
         const tag = parseTag(match[0]);
         if (tag !== undefined) tokens.push({ kind: "tag", tag });
         cursor = start + match[0].length;
     }
     if (cursor < value.length) {
-        tokens.push({ kind: "text", value: value.slice(cursor) });
+        pushText(tokens, value.slice(cursor));
     }
     return tokens;
+}
+
+/** Pushes text with any html comments removed, so a comment leaves nothing
+ * behind. */
+function pushText(tokens: Token[], value: string) {
+    for (const piece of value.split(COMMENT_SCAN)) {
+        if (piece.length > 0) tokens.push({ kind: "text", value: piece });
+    }
+}
+
+function isHtmlComment(value: string): boolean {
+    return value.startsWith("<!--") && value.endsWith("-->");
 }
 
 function inlineNodesToTokens(nodes: InlineNode[]): Token[] {
@@ -269,14 +286,16 @@ function inlineNodesToTokens(nodes: InlineNode[]): Token[] {
             continue;
         }
         if (node.type === "inlineHtml") {
+            // A comment is neither markup nor prose, so it is dropped whole.
+            if (isHtmlComment(node.value)) continue;
             const tag = parseTag(node.value);
             // Not markup at all, for example a bare "<" in prose. Keeping it
             // as text is inert.
-            tokens.push(
-                tag === undefined
-                    ? { kind: "text", value: node.value }
-                    : { kind: "tag", tag }
-            );
+            if (tag === undefined) {
+                tokens.push({ kind: "text", value: node.value });
+            } else {
+                tokens.push({ kind: "tag", tag });
+            }
             continue;
         }
         if ("children" in node && Array.isArray(node.children)) {

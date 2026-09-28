@@ -333,5 +333,14 @@ describe("safeHtmlExtension", () => {
             const nodes = inline("a < b and 3<4");
             expect(JSON.stringify(nodes)).toContain("<");
         });
+
+        it("drops html comments bots leave in the body", () => {
+            const nodes = inline(
+                "Bumps the crate. <!-- finishing_touch_suggestion:docstrings -->"
+            );
+            const text = JSON.stringify(nodes);
+            expect(text).not.toContain("finishing_touch");
+            expect(text).toContain("Bumps the crate.");
+        });
     });
 });

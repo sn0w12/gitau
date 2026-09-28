@@ -145,10 +145,7 @@ const components = {
     },
     code(props) {
         return (
-            <code
-                {...props}
-                className="rounded bg-muted px-1 py-0.5 font-mono"
-            />
+            <code {...props} className="rounded bg-muted px-0.5 font-mono" />
         );
     },
     table({ children }) {

@@ -3,6 +3,7 @@ import { useSelector } from "@tanstack/react-store";
 import { X } from "lucide-react";
 import { Fragment, useRef } from "react";
 
+import { ChecksSection } from "@/components/github/checks";
 import { TimelineEvent } from "@/components/github/event";
 import {
     ConversationInput,
@@ -27,10 +28,11 @@ import {
 import {
     AvatarStack,
     ComposerSkeleton,
+    EventSkeleton,
     LabelList,
     MessageSkeleton,
+    PullSidebarSkeleton,
     SidebarBlock,
-    SidebarSkeleton,
 } from "@/components/github/thread-chrome";
 import { Button } from "@/components/ui/button";
 import {
@@ -62,11 +64,13 @@ import {
     useActiveTabRouter,
 } from "@/hooks/tabs/use-active-tab-router";
 import type {
+    GithubCheckRun,
     GithubIssueComment,
     GithubIssueEvent,
     GithubPullRequestDetail,
     GithubPullRequestReview,
     GithubPullRequestReviewComment,
+    GithubWorkflowRun,
     MergePullRequestBody,
     PullRequestMergeMethod,
 } from "@/lib/backend/protocol";
@@ -146,6 +150,7 @@ function TimelineRow({
         return (
             <TimelineReview
                 review={item.review}
+                comments={item.comments}
                 owner={owner}
                 repo={repo}
                 canQuote={actions.canQuote}
@@ -180,13 +185,23 @@ function TimelineRow({
 }
 
 function PullSidebar({
+    owner,
+    repo,
     pull,
     participants,
     reviews,
+    checks,
+    workflows,
+    checksLoading,
 }: {
+    owner: string;
+    repo: string;
     pull: GithubPullRequestDetail;
     participants: ReturnType<typeof timelineParticipants>;
     reviews: GithubPullRequestReview[];
+    checks: GithubCheckRun[];
+    workflows: GithubWorkflowRun[];
+    checksLoading: boolean;
 }) {
     return (
         <Frame
@@ -194,6 +209,13 @@ function PullSidebar({
             data-testid="pull-sidebar"
         >
             <PullChangesBlock pull={pull} />
+            <ChecksSection
+                owner={owner}
+                repo={repo}
+                checks={checks}
+                workflows={workflows}
+                isLoading={checksLoading}
+            />
             <SidebarBlock label="Reviewers">
                 <AvatarStack users={pull.assignees} />
             </SidebarBlock>
@@ -218,6 +240,9 @@ function PullRequestContent({
     events,
     reviews,
     reviewComments,
+    checks,
+    workflows,
+    checksLoading,
     signedIn,
     viewerLogin,
     canPush,
@@ -230,6 +255,9 @@ function PullRequestContent({
     events: GithubIssueEvent[];
     reviews: GithubPullRequestReview[];
     reviewComments: GithubPullRequestReviewComment[];
+    checks?: GithubCheckRun[];
+    workflows?: GithubWorkflowRun[];
+    checksLoading: boolean;
     signedIn: boolean;
     viewerLogin: string | null;
     canPush: boolean;
@@ -430,9 +458,14 @@ function PullRequestContent({
                 </div>
                 <div className="flex flex-col gap-1">
                     <PullSidebar
+                        owner={owner}
+                        repo={repo}
                         pull={pull}
                         participants={participants}
                         reviews={reviews}
+                        checks={checks ?? []}
+                        workflows={workflows ?? []}
+                        checksLoading={checksLoading}
                     />
                 </div>
             </div>
@@ -484,7 +517,15 @@ export function PullRequestPage() {
         pullNumber,
         valid
     );
-    const { detail, comments, events, reviews, reviewComments } = thread;
+    const {
+        detail,
+        comments,
+        events,
+        reviews,
+        reviewComments,
+        checks,
+        workflows,
+    } = thread;
 
     const goBack = () => {
         if (history.canGoBack) {
@@ -509,34 +550,34 @@ export function PullRequestPage() {
 
     if (account.isLoading || detail.isLoading) {
         return (
-            <div className="container flex h-full min-h-0 flex-col p-1 pt-2">
+            <div className="container flex h-full min-h-0 flex-col px-1 py-2">
                 <header className="ui-selectable flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <Skeleton className="h-8 w-72" />
                         <Skeleton className="h-5 w-12 self-end" />
                         <Skeleton className="mb-1.5 h-5 w-16 self-end rounded-full" />
                     </div>
-                    <Button variant="outline" size="icon" onClick={goBack}>
-                        <X />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Skeleton className="h-8 w-28 rounded-lg" />
+                        <Skeleton className="h-8 w-24 rounded-lg" />
+                        <Button variant="outline" size="icon" onClick={goBack}>
+                            <X />
+                        </Button>
+                    </div>
                 </header>
-                <div className="mt-2 grid min-h-0 flex-1 grid-cols-3 gap-2">
+                <div className="mt-2 grid min-h-0 flex-1 grid-cols-3">
                     <div className="col-span-2 flex min-h-0 w-full flex-col">
-                        <ScrollArea>
+                        <ScrollArea scrollFade scrollbarGutter className="pr-1">
                             <MessageSkeleton lines={3} />
-                            <div className="ml-4 h-1.5 w-0.5 bg-muted" />
-                            <div className="ui-selectable flex items-center gap-1 px-1.5 py-1">
-                                <Skeleton className="size-6 rounded-full" />
-                                <Skeleton className="size-6 rounded-full" />
-                                <Skeleton className="h-4 w-48" />
-                            </div>
-                            <div className="ml-4 h-1.5 w-0.5 bg-muted" />
+                            <EventSkeleton />
                             <MessageSkeleton lines={2} />
                             <MessageSpacer />
                             <ComposerSkeleton />
                         </ScrollArea>
                     </div>
-                    <SidebarSkeleton />
+                    <div className="flex flex-col gap-1">
+                        <PullSidebarSkeleton />
+                    </div>
                 </div>
             </div>
         );
@@ -571,6 +612,9 @@ export function PullRequestPage() {
             events={events.data ?? []}
             reviews={reviews.data ?? []}
             reviewComments={reviewComments.data ?? []}
+            checks={checks.data}
+            workflows={workflows.data}
+            checksLoading={checks.isLoading}
             signedIn={account.data != null}
             viewerLogin={account.data?.login ?? null}
             canPush={permissions.data?.push === true}

@@ -19,6 +19,9 @@ import type {
     DiffRequest,
     FileContent,
     GithubIssueComment,
+    GithubCheckRun,
+    GithubCheckRunDetail,
+    GithubCheckRunLog,
     GithubIssueDetail,
     GithubIssueEvent,
     GithubOrg,
@@ -38,6 +41,7 @@ import type {
     HistoryPageQuery,
     HookContent,
     HookRunResult,
+    GithubWorkflowRun,
     LicenseTemplateInfo,
     MergePullRequestBody,
     MergePullRequestResult,
@@ -709,6 +713,23 @@ function createRawBackendClient() {
                 invokeCommand<MergePullRequestResult>("github_merge_pull", {
                     args: { owner, repo, number, body },
                 }),
+            getCheckRun: (owner: string, repo: string, checkRunId: number) =>
+                invokeCommand<GithubCheckRunDetail>("github_get_check_run", {
+                    args: { owner, repo, checkRunId },
+                }),
+            getCheckRunLog: (owner: string, repo: string, checkRunId: number) =>
+                invokeCommand<GithubCheckRunLog>("github_get_check_run_log", {
+                    args: { owner, repo, checkRunId },
+                }),
+            listCheckRuns: (owner: string, repo: string, sha: string) =>
+                invokeCommand<GithubCheckRun[]>("github_list_check_runs", {
+                    args: { owner, repo, sha },
+                }),
+            listWorkflowRuns: (owner: string, repo: string, sha: string) =>
+                invokeCommand<GithubWorkflowRun[]>(
+                    "github_list_workflow_runs",
+                    { args: { owner, repo, sha } }
+                ),
             searchIssues: (page?: number) =>
                 invokeCommand<SearchIssuePage>("github_search_issues", {
                     args: { page },

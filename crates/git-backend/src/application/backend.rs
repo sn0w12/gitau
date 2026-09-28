@@ -9,9 +9,10 @@ use tokio::sync::mpsc;
 
 use crate::api::changes::{DiscardRequest, StageRequest, StatusOptions};
 use crate::api::github::{
-    AccountProfile, DeviceFlowStart, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
-    GithubOrg, GithubPullRequestDetail, GithubPullRequestReview, GithubPullRequestReviewComment,
-    GithubRepoPermissions, MergePullRequestBody, MergePullRequestResult, NotificationPage,
+    AccountProfile, DeviceFlowStart, GithubCheckRun, GithubCheckRunDetail, GithubCheckRunLog,
+    GithubIssueComment, GithubIssueDetail, GithubIssueEvent, GithubOrg, GithubPullRequestDetail,
+    GithubPullRequestReview, GithubPullRequestReviewComment, GithubRepoPermissions,
+    GithubWorkflowRun, MergePullRequestBody, MergePullRequestResult, NotificationPage,
     PublishRepositoryRequest, PublishResult, SearchIssuePage, SearchPullRequestPage,
     UpdateIssueBody, UpdatePullRequestBody,
 };
@@ -1968,6 +1969,48 @@ impl Backend {
         body: MergePullRequestBody,
     ) -> Result<MergePullRequestResult> {
         self.github.merge_pull(&owner, &repo, number, &body).await
+    }
+
+    /// CI check runs for a commit, which is a pull request's head sha.
+    pub async fn github_list_check_runs(
+        &self,
+        owner: String,
+        repo: String,
+        sha: String,
+    ) -> Result<Vec<GithubCheckRun>> {
+        self.github.list_check_runs(&owner, &repo, &sha).await
+    }
+
+    /// One check run with its output, for the results dialog.
+    pub async fn github_get_check_run(
+        &self,
+        owner: String,
+        repo: String,
+        check_run_id: u64,
+    ) -> Result<GithubCheckRunDetail> {
+        self.github.get_check_run(&owner, &repo, check_run_id).await
+    }
+
+    /// A run's job log, split per step, mirroring GitHub's job view.
+    pub async fn github_get_check_run_log(
+        &self,
+        owner: String,
+        repo: String,
+        check_run_id: u64,
+    ) -> Result<GithubCheckRunLog> {
+        self.github
+            .get_check_run_log(&owner, &repo, check_run_id)
+            .await
+    }
+
+    /// Workflow runs for a commit, newest first.
+    pub async fn github_list_workflow_runs(
+        &self,
+        owner: String,
+        repo: String,
+        sha: String,
+    ) -> Result<Vec<GithubWorkflowRun>> {
+        self.github.list_workflow_runs(&owner, &repo, &sha).await
     }
 
     pub async fn github_get_issue(

@@ -926,6 +926,87 @@ export interface GithubPullRequestReviewComment {
     createdAt: string;
     htmlUrl: string;
     inReplyToId?: number;
+    /** The review this comment belongs to. A reviewer writes inline comments
+     * before submitting, so timestamps alone place them before their own
+     * review. */
+    pullRequestReviewId?: number;
+}
+
+/** The output a check run produced. Only the single-run read reports this. */
+export interface GithubCheckRunOutput {
+    title: string;
+    summary: string;
+    /** Raw log text, which can be very large. */
+    text: string;
+    annotationsCount: number;
+}
+
+/** One annotation on a check run. Test runners report failures here, so
+ * this is where the reason a run failed actually lives. */
+export interface GithubCheckAnnotation {
+    path: string;
+    startLine?: number;
+    endLine?: number;
+    startColumn?: number;
+    annotationLevel: string;
+    message: string;
+    title: string;
+}
+
+/** One step of a run's job, in the order it ran. */
+export interface GithubActionStep {
+    number: number;
+    name: string;
+    status: string;
+    conclusion?: string;
+    startedAt?: string;
+    completedAt?: string;
+    /** The log lines this step produced, sliced out of the job log by
+     * timestamp. */
+    log: string;
+}
+
+/** A run's job log, split the way GitHub's job view splits it. The check run
+ * endpoint does not carry log text: `output.text` is null for Actions jobs and
+ * the real log only exists on the job. */
+export interface GithubCheckRunLog {
+    steps: GithubActionStep[];
+    /** Lines outside every step's window, so nothing is dropped. */
+    log: string;
+    /** Set when the run has no job log to show, with the reason. */
+    unavailable?: string;
+}
+
+/** One check run with its output and annotations, for the results dialog. */
+export interface GithubCheckRunDetail extends GithubCheckRun {
+    output: GithubCheckRunOutput;
+    annotations: GithubCheckAnnotation[];
+}
+
+/** One CI check run on a commit. `status` is the progress
+ * (`queued`, `in_progress`, `completed`); `conclusion` is absent until it
+ * completes. */
+export interface GithubCheckRun {
+    id: number;
+    name: string;
+    status: string;
+    conclusion?: string | null;
+    detailsUrl?: string | null;
+    startedAt: string;
+    completedAt?: string | null;
+}
+
+/** One workflow run for a commit. */
+export interface GithubWorkflowRun {
+    id: number;
+    name: string;
+    event: string;
+    status: string;
+    conclusion?: string | null;
+    runNumber: number;
+    headBranch: string;
+    htmlUrl: string;
+    createdAt: string;
 }
 
 /** Partial pull request update: fields left out are untouched. */

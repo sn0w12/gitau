@@ -15,7 +15,13 @@ export type TimelineItem =
     | { kind: "body"; createdAt: string }
     | { kind: "comment"; createdAt: string; comment: GithubIssueComment }
     | { kind: "event"; createdAt: string; event: GithubIssueEvent }
-    | { kind: "review"; createdAt: string; review: GithubPullRequestReview }
+    | {
+          kind: "review";
+          createdAt: string;
+          review: GithubPullRequestReview;
+          /** The reviewer's inline comments, nested under their review. */
+          comments: GithubPullRequestReviewComment[];
+      }
     | {
           kind: "reviewComment";
           createdAt: string;
@@ -77,8 +83,13 @@ export function buildIssueTimeline(
 }
 
 /** One chronological stream of a pull request: the opening body, then
- * comments, timeline events, submitted reviews, and the inline diff
- * comments, all ordered by timestamp. */
+ * comments, timeline events, and submitted reviews. A review carries its own
+ * inline comments.
+ *
+ * Inline comments are nested under their review rather than merged into the
+ * stream: a reviewer creates them before submitting, so their timestamps
+ * precede the review and a flat sort puts every suggestion above the summary
+ * that introduces it. */
 export function buildPullTimeline(
     thread: TimelineThread,
     parts: TimelineParts & {
@@ -86,31 +97,54 @@ export function buildPullTimeline(
         reviewComments: GithubPullRequestReviewComment[];
     }
 ): TimelineItem[] {
-    return mergeTimeline([
-        [{ kind: "body", createdAt: thread.createdAt }],
-        parts.comments.map((comment): TimelineItem => ({
+    const byCreatedAt = (a: { createdAt: string }, b: { createdAt: string }) =>
+        a.createdAt.localeCompare(b.createdAt);
+
+    const orphaned: GithubPullRequestReviewComment[] = [];
+    const nested = new Map<number, GithubPullRequestReviewComment[]>();
+    for (const comment of [...parts.reviewComments].sort(byCreatedAt)) {
+        const reviewId = comment.pullRequestReviewId;
+        if (reviewId == null) {
+            orphaned.push(comment);
+            continue;
+        }
+        const bucket = nested.get(reviewId);
+        if (bucket === undefined) {
+            nested.set(reviewId, [comment]);
+        } else {
+            bucket.push(comment);
+        }
+    }
+
+    const items: TimelineItem[] = [
+        ...parts.comments.map((comment): TimelineItem => ({
             kind: "comment",
             createdAt: comment.createdAt,
             comment,
         })),
-        parts.events
+        ...parts.events
             .filter((event) => !HIDDEN_EVENT_KINDS.has(event.kind))
             .map((event): TimelineItem => ({
                 kind: "event",
                 createdAt: event.createdAt,
                 event,
             })),
-        parts.reviews.map((review): TimelineItem => ({
+        ...parts.reviews.map((review): TimelineItem => ({
             kind: "review",
             createdAt: review.submittedAt,
             review,
+            comments: nested.get(review.id) ?? [],
         })),
-        parts.reviewComments.map((comment): TimelineItem => ({
+        { kind: "body", createdAt: thread.createdAt },
+    ];
+    for (const comment of orphaned) {
+        items.push({
             kind: "reviewComment",
             createdAt: comment.createdAt,
             comment,
-        })),
-    ]);
+        });
+    }
+    return items.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
 export function isTimelineMessage(item: TimelineItem): boolean {

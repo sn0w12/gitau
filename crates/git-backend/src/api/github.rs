@@ -241,6 +241,110 @@ pub struct UpdateIssueBody {
     pub assignees: Option<Vec<String>>,
 }
 
+/// The output a check run produced. Only the single-run read reports this;
+/// the list omits it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct GithubCheckRunOutput {
+    pub title: String,
+    pub summary: String,
+    /// The raw log text, which can be very large.
+    pub text: String,
+    pub annotations_count: u64,
+}
+
+/// One step of a run's job, in the order it ran.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubActionStep {
+    pub number: u64,
+    pub name: String,
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conclusion: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<String>,
+    /// The log lines this step produced, sliced out of the job log by
+    /// timestamp.
+    pub log: String,
+}
+
+/// A run's job log, split the way GitHub's job view splits it. The check run
+/// endpoint does not carry log text: `output.text` is null for Actions jobs
+/// and the real log only exists on the job.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct GithubCheckRunLog {
+    pub steps: Vec<GithubActionStep>,
+    /// Set when the run has no job log to show, with the reason.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unavailable: Option<String>,
+}
+
+/// One annotation on a check run. Test runners report failures here, so this
+/// is where the reason a run failed actually lives.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubCheckAnnotation {
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_line: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_line: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_column: Option<u64>,
+    pub annotation_level: String,
+    pub message: String,
+    pub title: String,
+}
+
+/// One check run with its output and annotations, for the results dialog.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubCheckRunDetail {
+    #[serde(flatten)]
+    pub run: GithubCheckRun,
+    pub output: GithubCheckRunOutput,
+    pub annotations: Vec<GithubCheckAnnotation>,
+}
+
+/// One CI check run on a commit. `status` is GitHub's progress
+/// (`queued`, `in_progress`, `completed`); `conclusion` stays absent until
+/// the run completes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubCheckRun {
+    pub id: u64,
+    pub name: String,
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conclusion: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details_url: Option<String>,
+    pub started_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<String>,
+}
+
+/// One workflow run for a commit. Runs are started from GitHub or the app's
+/// own CI, not from here, so this is a read model.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubWorkflowRun {
+    pub id: u64,
+    pub name: String,
+    pub event: String,
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conclusion: Option<String>,
+    pub run_number: u64,
+    pub head_branch: String,
+    pub html_url: String,
+    pub created_at: String,
+}
+
 /// The signed-in user's access level on a repository. The UI gates
 /// editing and deleting other people's comments on `push`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -330,6 +434,11 @@ pub struct GithubPullRequestReviewComment {
     /// Set when this comment replies to another review comment.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub in_reply_to_id: Option<u64>,
+    /// The review this comment belongs to. A reviewer writes inline comments
+    /// before submitting, so timestamps alone place them before their own
+    /// review.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pull_request_review_id: Option<u64>,
 }
 
 /// Partial update to a pull request: every field left `None` is untouched.

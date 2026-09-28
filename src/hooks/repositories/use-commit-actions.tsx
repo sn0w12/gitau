@@ -2,6 +2,7 @@ import type * as React from "react";
 
 import { toastManager } from "@/components/ui/toast";
 import { useConfirm } from "@/contexts/confirm-context";
+import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
 import {
     useAmendMutation,
     useCherryPickMutation,
@@ -91,20 +92,12 @@ export function useCommitActions(repoId: number | undefined) {
     const createBranch = useCreateBranchMutation(repoId ?? 0);
     const { confirm } = useConfirm();
 
-    const copyText = async (text: string, title: string) => {
-        try {
-            await navigator.clipboard.writeText(text);
-            toastManager.add({ title, type: "success" });
-        } catch (error) {
-            toastError("Could not copy", error);
-        }
-    };
+    const { copyToClipboard } = useCopyToClipboard();
 
-    const copySha = (commit: CommitSummary) =>
-        void copyText(commit.id, "Copied commit SHA");
+    const copySha = (commit: CommitSummary) => copyToClipboard(commit.id);
 
     const copyMessage = (commit: CommitSummary) =>
-        void copyText(commit.message, "Copied commit message");
+        copyToClipboard(commit.message);
 
     const resetTo = async (commit: CommitSummary, kind: ResetKind) => {
         const copy = resetConfirmCopy(kind, shortSha(commit));

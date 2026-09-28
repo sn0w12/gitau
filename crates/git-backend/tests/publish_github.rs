@@ -6,8 +6,9 @@ use std::sync::{Arc, Mutex};
 
 use git_backend::Backend;
 use git_backend::api::github::{
-    AccountProfile, DeviceFlowStart, GithubOrg, GithubPullRequestDetail, GithubPullRequestReview,
-    GithubPullRequestReviewComment, MergePullRequestBody, MergePullRequestResult, NotificationPage,
+    AccountProfile, DeviceFlowStart, GithubCheckRun, GithubCheckRunDetail, GithubCheckRunLog,
+    GithubOrg, GithubPullRequestDetail, GithubPullRequestReview, GithubPullRequestReviewComment,
+    GithubWorkflowRun, MergePullRequestBody, MergePullRequestResult, NotificationPage,
     SearchIssuePage, SearchPullRequestPage, UpdatePullRequestBody,
 };
 use git_backend::github::api::{GithubApi, GithubFuture};
@@ -240,6 +241,54 @@ impl GithubApi for FakeApi {
                 message: "not implemented in fake".into(),
             })
         })
+    }
+
+    fn list_check_runs(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _sha: &str,
+    ) -> GithubFuture<Vec<GithubCheckRun>> {
+        Box::pin(async { Ok(vec![]) })
+    }
+
+    fn get_check_run(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _check_run_id: u64,
+    ) -> GithubFuture<GithubCheckRunDetail> {
+        Box::pin(async {
+            Err(git_backend::github::GitHubError::NotFound {
+                message: "not implemented in fake".into(),
+            })
+        })
+    }
+
+    fn get_check_run_log(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _check_run_id: u64,
+    ) -> GithubFuture<GithubCheckRunLog> {
+        Box::pin(async {
+            Err(git_backend::github::GitHubError::NotFound {
+                message: "not implemented in fake".into(),
+            })
+        })
+    }
+
+    fn list_workflow_runs(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _sha: &str,
+    ) -> GithubFuture<Vec<GithubWorkflowRun>> {
+        Box::pin(async { Ok(vec![]) })
     }
 
     fn get_issue(

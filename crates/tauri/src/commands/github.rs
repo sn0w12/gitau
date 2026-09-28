@@ -1,9 +1,10 @@
 use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
 use git_backend::api::github::{
-    AccountProfile, DeviceFlowStart, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
-    GithubOrg, GithubPullRequestDetail, GithubPullRequestReview, GithubPullRequestReviewComment,
-    GithubRepoPermissions, MergePullRequestBody, MergePullRequestResult, NotificationPage,
+    AccountProfile, DeviceFlowStart, GithubCheckRun, GithubCheckRunDetail, GithubCheckRunLog,
+    GithubIssueComment, GithubIssueDetail, GithubIssueEvent, GithubOrg, GithubPullRequestDetail,
+    GithubPullRequestReview, GithubPullRequestReviewComment, GithubRepoPermissions,
+    GithubWorkflowRun, MergePullRequestBody, MergePullRequestResult, NotificationPage,
     PublishRepositoryRequest, PublishResult, SearchIssuePage, SearchPullRequestPage,
     UpdateIssueBody, UpdatePullRequestBody,
 };
@@ -268,6 +269,66 @@ pub async fn github_merge_pull(
     state
         .backend
         .github_merge_pull(owner, repo, number, body)
+        .await
+        .map_err(to_serialized)
+}
+
+/// CI check runs for a commit, which is a pull request's head sha.
+#[tauri::command]
+pub async fn github_list_check_runs(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    sha: String,
+) -> CommandResult<Vec<GithubCheckRun>> {
+    state
+        .backend
+        .github_list_check_runs(owner, repo, sha)
+        .await
+        .map_err(to_serialized)
+}
+
+/// One check run with its output, for the results dialog.
+#[tauri::command]
+pub async fn github_get_check_run(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    check_run_id: u64,
+) -> CommandResult<GithubCheckRunDetail> {
+    state
+        .backend
+        .github_get_check_run(owner, repo, check_run_id)
+        .await
+        .map_err(to_serialized)
+}
+
+/// A run's job log, split per step, mirroring GitHub's job view.
+#[tauri::command]
+pub async fn github_get_check_run_log(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    check_run_id: u64,
+) -> CommandResult<GithubCheckRunLog> {
+    state
+        .backend
+        .github_get_check_run_log(owner, repo, check_run_id)
+        .await
+        .map_err(to_serialized)
+}
+
+/// Workflow runs for a commit, newest first.
+#[tauri::command]
+pub async fn github_list_workflow_runs(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    sha: String,
+) -> CommandResult<Vec<GithubWorkflowRun>> {
+    state
+        .backend
+        .github_list_workflow_runs(owner, repo, sha)
         .await
         .map_err(to_serialized)
 }

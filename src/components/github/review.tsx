@@ -1,9 +1,18 @@
-import { CheckCheck, MessageSquareWarning, X } from "lucide-react";
+import {
+    CheckCheck,
+    ChevronRight,
+    MessageSquareWarning,
+    X,
+} from "lucide-react";
 
 import { CodeBlock } from "@/components/github/code-block";
 import { TimelineMessage } from "@/components/github/message";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Frame, FramePanel } from "@/components/ui/frame";
+import {
+    Collapsible,
+    CollapsiblePanel,
+    CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import type {
     GithubPullRequestReview,
     GithubPullRequestReviewComment,
@@ -51,12 +60,16 @@ function reviewAppearance(state: string): {
 
 export function TimelineReview({
     review,
+    comments,
     owner,
     repo,
     canQuote,
     onQuote,
 }: {
     review: GithubPullRequestReview;
+    /** The reviewer's inline comments, nested under the review that
+     * introduced them. */
+    comments: GithubPullRequestReviewComment[];
     owner: string;
     repo: string;
     canQuote: boolean;
@@ -95,8 +108,26 @@ export function TimelineReview({
                     link={review.htmlUrl || undefined}
                 />
             ) : null}
+            {comments.map((comment) => (
+                <TimelineReviewComment
+                    key={comment.id}
+                    comment={comment}
+                    owner={owner}
+                    repo={repo}
+                    canQuote={canQuote}
+                    onQuote={onQuote}
+                />
+            ))}
         </div>
     );
+}
+
+/** The fence language for a file path, so a review comment's hunk is
+ * highlighted as the language it is written in rather than as a diff. */
+function languageFromPath(path: string): string {
+    const name = path.split("/").pop() ?? "";
+    const dot = name.lastIndexOf(".");
+    return dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
 }
 
 /** An inline comment, with the diff hunk it was written against so the
@@ -115,39 +146,53 @@ export function TimelineReviewComment({
     onQuote: (text: string) => void;
 }) {
     return (
-        <div className="w-full">
-            <div className="ui-selectable flex items-center gap-1.5 px-1.5 py-1 text-sm">
-                <Avatar className="size-5">
-                    <AvatarImage src={comment.author.avatarUrl || undefined} />
-                    <AvatarFallback>
-                        {initials(comment.author.login)}
-                    </AvatarFallback>
-                </Avatar>
-                <span className="font-mono text-xs text-muted-foreground">
-                    {comment.path}
-                    {comment.line != null ? `:${comment.line}` : ""}
-                </span>
-                <span className="truncate text-xs text-muted-foreground">
-                    {comment.author.login}{" "}
-                    {formatRelativeDate(comment.createdAt)}
-                </span>
+        <div className="flex flex-col gap-2">
+            <div className="w-full">
+                <div className="ui-selectable flex items-center gap-1.5 px-1.5 pt-2 pb-1.5 text-sm">
+                    <Avatar className="size-5">
+                        <AvatarImage
+                            src={comment.author.avatarUrl || undefined}
+                        />
+                        <AvatarFallback>
+                            {initials(comment.author.login)}
+                        </AvatarFallback>
+                    </Avatar>
+                    <span className="font-mono text-xs text-muted-foreground">
+                        {comment.path}
+                        {comment.line != null ? `:${comment.line}` : ""}
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">
+                        {comment.author.login}{" "}
+                        {formatRelativeDate(comment.createdAt)}
+                    </span>
+                </div>
+                <TimelineMessage
+                    text={comment.body}
+                    owner={owner}
+                    repo={repo}
+                    canQuote={canQuote}
+                    onQuote={onQuote}
+                    link={comment.htmlUrl || undefined}
+                    showAuthor={false}
+                />
+                {comment.diffHunk ? (
+                    <div className="mt-2 ml-4 w-auto">
+                        <Collapsible>
+                            <CollapsibleTrigger className="flex items-center gap-1.5 rounded-sm px-0.5 py-0.5 text-xs text-muted-foreground hover:text-foreground [&[data-panel-open]>svg]:rotate-90">
+                                <ChevronRight className="size-3.5 shrink-0 transition-transform" />
+                                Show the diff for this comment
+                            </CollapsibleTrigger>
+                            <CollapsiblePanel>
+                                <CodeBlock
+                                    language={languageFromPath(comment.path)}
+                                    text={comment.diffHunk}
+                                    diff
+                                />
+                            </CollapsiblePanel>
+                        </Collapsible>
+                    </div>
+                ) : null}
             </div>
-            {comment.diffHunk ? (
-                <Frame className="mx-4 w-auto">
-                    <FramePanel className="px-0 py-0">
-                        <CodeBlock language="diff" text={comment.diffHunk} />
-                    </FramePanel>
-                </Frame>
-            ) : null}
-            <TimelineMessage
-                text={comment.body}
-                owner={owner}
-                repo={repo}
-                canQuote={canQuote}
-                onQuote={onQuote}
-                link={comment.htmlUrl || undefined}
-                actionLabel="commented on"
-            />
         </div>
     );
 }

@@ -53,14 +53,68 @@ export function LabelList({ labels }: { labels: GithubLabel[] }) {
     );
 }
 
-export function SidebarSkeleton() {
+/** Avatar-stack placeholder, matching AvatarStack's overlap and ring. */
+export function AvatarStackSkeleton({ count = 2 }: { count?: number }) {
+    return (
+        <div className="flex -space-x-[0.4rem]">
+            {Array.from({ length: count }, (_, index) => (
+                <Skeleton
+                    key={index}
+                    className="size-6 rounded-full ring-2 ring-card"
+                />
+            ))}
+        </div>
+    );
+}
+
+/** Blocks in the order PullSidebar renders them, so loading does not
+ * rearrange the sidebar. */
+export function PullSidebarSkeleton() {
+    return (
+        <Frame className="flex h-fit w-full flex-col">
+            <SidebarBlock label="Changes">
+                <div className="flex flex-col gap-1.5">
+                    <Skeleton className="h-4 w-16" />
+                    <div className="flex gap-1.5">
+                        <Skeleton className="h-4 w-10" />
+                        <Skeleton className="h-4 w-10" />
+                    </div>
+                </div>
+            </SidebarBlock>
+            <SidebarBlock label="Checks">
+                <div className="flex flex-col gap-1.5">
+                    <Skeleton className="h-4 w-4/5" />
+                    <Skeleton className="h-4 w-3/5" />
+                </div>
+            </SidebarBlock>
+            <SidebarBlock label="Reviewers">
+                <AvatarStackSkeleton />
+            </SidebarBlock>
+            <SidebarBlock label="Labels">
+                <div className="flex gap-1">
+                    <Skeleton className="h-5 w-14 rounded-full" />
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                </div>
+            </SidebarBlock>
+            <SidebarBlock label="Reviews">
+                <div className="flex flex-col gap-1.5">
+                    <Skeleton className="h-4 w-2/3" />
+                    <Skeleton className="h-4 w-1/2" />
+                </div>
+            </SidebarBlock>
+            <SidebarBlock label="Participants">
+                <AvatarStackSkeleton />
+            </SidebarBlock>
+        </Frame>
+    );
+}
+
+/** Blocks in the order IssueSidebar renders them. */
+export function IssueSidebarSkeleton() {
     return (
         <Frame className="flex h-fit w-full flex-col">
             <SidebarBlock label="Assignees">
-                <div className="flex -space-x-[0.4rem]">
-                    <Skeleton className="size-6 rounded-full ring-2 ring-card" />
-                    <Skeleton className="size-6 rounded-full ring-2 ring-card" />
-                </div>
+                <AvatarStackSkeleton />
             </SidebarBlock>
             <SidebarBlock label="Labels">
                 <div className="flex gap-1">
@@ -69,12 +123,24 @@ export function SidebarSkeleton() {
                 </div>
             </SidebarBlock>
             <SidebarBlock label="Participants">
-                <div className="flex -space-x-[0.4rem]">
-                    <Skeleton className="size-6 rounded-full ring-2 ring-card" />
-                    <Skeleton className="size-6 rounded-full ring-2 ring-card" />
-                </div>
+                <AvatarStackSkeleton />
             </SidebarBlock>
         </Frame>
+    );
+}
+
+/** Event-row placeholder mirroring TimelineEvent's two leading circles. */
+export function EventSkeleton() {
+    return (
+        <>
+            <div className="ml-4 h-1.5 w-0.5 bg-muted" />
+            <div className="ui-selectable flex items-center gap-1 px-1.5 py-1">
+                <Skeleton className="size-6 rounded-full" />
+                <Skeleton className="size-6 rounded-full" />
+                <Skeleton className="h-4 w-48" />
+            </div>
+            <div className="ml-4 h-1.5 w-0.5 bg-muted" />
+        </>
     );
 }
 
@@ -101,21 +167,22 @@ export function MessageSkeleton({ lines }: { lines: number }) {
     );
 }
 
-/** Composer-shaped placeholder mirroring ConversationInput's layout. */
+/** Composer-shaped placeholder mirroring ConversationInput: a Write/Preview
+ * tab list, nine toolbar buttons, the text area, then the action row. */
 export function ComposerSkeleton() {
     return (
         <div className="w-full">
             <Frame>
-                <FrameHeader className="flex flex-row justify-between px-2 py-2">
+                <FrameHeader className="flex flex-row justify-between px-2 py-0">
                     <div className="flex gap-3">
                         <Skeleton className="h-4 w-12" />
                         <Skeleton className="h-4 w-14" />
                     </div>
                     <div className="flex gap-1">
-                        {[0, 1, 2, 3, 4].map((index) => (
+                        {Array.from({ length: 9 }, (_, index) => (
                             <Skeleton
                                 key={index}
-                                className="size-6 rounded-md"
+                                className="size-8 rounded-md"
                             />
                         ))}
                     </div>
@@ -125,8 +192,8 @@ export function ComposerSkeleton() {
                 </FramePanel>
             </Frame>
             <div className="flex justify-end gap-1 pt-2">
+                <Skeleton className="h-8 w-32 rounded-lg" />
                 <Skeleton className="h-8 w-24 rounded-lg" />
-                <Skeleton className="h-8 w-20 rounded-lg" />
             </div>
         </div>
     );

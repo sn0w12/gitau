@@ -19,13 +19,14 @@ pub mod device_flow;
 pub mod token_store;
 
 pub use crate::api::github::{
-    AccountProfile, DeviceFlowStart, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
-    GithubIssueListItem, GithubLabel, GithubNotification, GithubOrg, GithubPullRequestDetail,
-    GithubPullRequestListItem, GithubPullRequestRef, GithubPullRequestReview,
-    GithubPullRequestReviewComment, GithubRepoPermissions, GithubUser, MergePullRequestBody,
-    MergePullRequestResult, NotificationPage, PublishRepositoryRequest, PublishResult,
-    PullRequestMergeMethod, SearchIssueItem, SearchIssuePage, SearchPullRequestPage,
-    UpdateIssueBody, UpdatePullRequestBody,
+    AccountProfile, DeviceFlowStart, GithubActionStep, GithubCheckAnnotation, GithubCheckRun,
+    GithubCheckRunDetail, GithubCheckRunLog, GithubCheckRunOutput, GithubIssueComment,
+    GithubIssueDetail, GithubIssueEvent, GithubIssueListItem, GithubLabel, GithubNotification,
+    GithubOrg, GithubPullRequestDetail, GithubPullRequestListItem, GithubPullRequestRef,
+    GithubPullRequestReview, GithubPullRequestReviewComment, GithubRepoPermissions, GithubUser,
+    GithubWorkflowRun, MergePullRequestBody, MergePullRequestResult, NotificationPage,
+    PublishRepositoryRequest, PublishResult, PullRequestMergeMethod, SearchIssueItem,
+    SearchIssuePage, SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody,
 };
 pub use api::{CreateRepoBody, CreatedRepository, GithubApi, HttpGithubApi};
 pub use token_store::{KeyringTokenStore, MemoryTokenStore, TokenStore};
@@ -517,6 +518,64 @@ impl GitHubAuth {
             .await?)
     }
 
+    pub async fn list_check_runs(
+        &self,
+        owner: &str,
+        repo: &str,
+        sha: &str,
+    ) -> Result<Vec<GithubCheckRun>> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self.api.list_check_runs(&token, owner, repo, sha).await?)
+    }
+
+    pub async fn get_check_run(
+        &self,
+        owner: &str,
+        repo: &str,
+        check_run_id: u64,
+    ) -> Result<GithubCheckRunDetail> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .get_check_run(&token, owner, repo, check_run_id)
+            .await?)
+    }
+
+    /// A run's job log, split per step, mirroring GitHub's job view.
+    pub async fn get_check_run_log(
+        &self,
+        owner: &str,
+        repo: &str,
+        check_run_id: u64,
+    ) -> Result<GithubCheckRunLog> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .get_check_run_log(&token, owner, repo, check_run_id)
+            .await?)
+    }
+
+    pub async fn list_workflow_runs(
+        &self,
+        owner: &str,
+        repo: &str,
+        sha: &str,
+    ) -> Result<Vec<GithubWorkflowRun>> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .list_workflow_runs(&token, owner, repo, sha)
+            .await?)
+    }
+
     pub async fn get_issue(
         &self,
         owner: &str,
@@ -1004,6 +1063,46 @@ mod tests {
                 _number: u64,
                 _body: &MergePullRequestBody,
             ) -> api::GithubFuture<MergePullRequestResult> {
+                unreachable!()
+            }
+
+            fn list_check_runs(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _sha: &str,
+            ) -> api::GithubFuture<Vec<GithubCheckRun>> {
+                unreachable!()
+            }
+
+            fn get_check_run(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _check_run_id: u64,
+            ) -> api::GithubFuture<GithubCheckRunDetail> {
+                unreachable!()
+            }
+
+            fn get_check_run_log(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _check_run_id: u64,
+            ) -> api::GithubFuture<GithubCheckRunLog> {
+                unreachable!()
+            }
+
+            fn list_workflow_runs(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _sha: &str,
+            ) -> api::GithubFuture<Vec<GithubWorkflowRun>> {
                 unreachable!()
             }
 

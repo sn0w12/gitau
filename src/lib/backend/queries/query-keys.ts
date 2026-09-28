@@ -87,6 +87,15 @@ export const githubKeys = {
         ["github", "pull", owner, repo, number, "reviews"] as const,
     pullReviewComments: (owner: string, repo: string, number: number) =>
         ["github", "pull", owner, repo, number, "review-comments"] as const,
+    /** Keyed by the head commit, since that is what CI reports against. */
+    checkRuns: (owner: string, repo: string, sha: string) =>
+        ["github", "commit", owner, repo, sha, "checks"] as const,
+    checkRun: (owner: string, repo: string, checkRunId: number) =>
+        ["github", "check-run", owner, repo, checkRunId] as const,
+    checkRunLog: (owner: string, repo: string, checkRunId: number) =>
+        ["github", "check-run-log", owner, repo, checkRunId] as const,
+    workflowRuns: (owner: string, repo: string, sha: string) =>
+        ["github", "commit", owner, repo, sha, "workflows"] as const,
     issueDetail: (owner: string, repo: string, number: number) =>
         ["github", "issue", owner, repo, number] as const,
     issueComments: (owner: string, repo: string, number: number) =>

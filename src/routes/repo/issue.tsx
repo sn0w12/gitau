@@ -13,10 +13,11 @@ import { issueStatusOf, StatusBadge } from "@/components/github/status-badge";
 import {
     AvatarStack,
     ComposerSkeleton,
+    EventSkeleton,
+    IssueSidebarSkeleton,
     LabelList,
     MessageSkeleton,
     SidebarBlock,
-    SidebarSkeleton,
 } from "@/components/github/thread-chrome";
 import { Button } from "@/components/ui/button";
 import {
@@ -376,7 +377,7 @@ export function IssuePage() {
 
     if (account.isLoading || detail.isLoading) {
         return (
-            <div className="container flex h-full min-h-0 flex-col p-1 pt-2">
+            <div className="container flex h-full min-h-0 flex-col px-1 py-2">
                 <header className="ui-selectable flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <Skeleton className="h-8 w-72" />
@@ -387,23 +388,19 @@ export function IssuePage() {
                         <X />
                     </Button>
                 </header>
-                <div className="mt-2 grid min-h-0 flex-1 grid-cols-3 gap-2">
+                <div className="mt-2 grid min-h-0 flex-1 grid-cols-3">
                     <div className="col-span-2 flex min-h-0 w-full flex-col">
-                        <ScrollArea>
+                        <ScrollArea scrollFade scrollbarGutter className="pr-1">
                             <MessageSkeleton lines={3} />
-                            <div className="ml-4 h-1.5 w-0.5 bg-muted" />
-                            <div className="ui-selectable flex items-center gap-1 px-1.5 py-1">
-                                <Skeleton className="size-6 rounded-full" />
-                                <Skeleton className="size-6 rounded-full" />
-                                <Skeleton className="h-4 w-48" />
-                            </div>
-                            <div className="ml-4 h-1.5 w-0.5 bg-muted" />
+                            <EventSkeleton />
                             <MessageSkeleton lines={2} />
                             <MessageSpacer />
                             <ComposerSkeleton />
                         </ScrollArea>
                     </div>
-                    <SidebarSkeleton />
+                    <div className="flex flex-col gap-1">
+                        <IssueSidebarSkeleton />
+                    </div>
                 </div>
             </div>
         );

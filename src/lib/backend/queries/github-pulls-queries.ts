@@ -71,6 +71,104 @@ export function pullRequestQuery(
     });
 }
 
+export function checkRunsQuery(
+    deps: GithubPullsDeps,
+    owner: string | null,
+    repo: string | null,
+    sha: string | null,
+    enabled: boolean
+) {
+    return queryOptions({
+        queryKey: githubKeys.checkRuns(owner ?? "", repo ?? "", sha ?? ""),
+        queryFn: async () =>
+            expectOk(
+                await deps.backend.github.listCheckRuns(
+                    owner ?? "",
+                    repo ?? "",
+                    sha ?? ""
+                )
+            ),
+        staleTime: 15_000,
+        retry: false,
+        enabled: enabled && owner != null && repo != null && !!sha,
+    });
+}
+
+/** A single check run's output, fetched only when its results are opened. */
+export function checkRunQuery(
+    deps: GithubPullsDeps,
+    owner: string | null,
+    repo: string | null,
+    checkRunId: number | null
+) {
+    return queryOptions({
+        queryKey: githubKeys.checkRun(owner ?? "", repo ?? "", checkRunId ?? 0),
+        queryFn: async () =>
+            expectOk(
+                await deps.backend.github.getCheckRun(
+                    owner ?? "",
+                    repo ?? "",
+                    checkRunId ?? 0
+                )
+            ),
+        staleTime: 60_000,
+        retry: false,
+        enabled: owner != null && repo != null && checkRunId != null,
+    });
+}
+
+/** A run's job log, split per step. Fetched when the log is first opened,
+ * since it is the largest payload in the dialog. */
+export function checkRunLogQuery(
+    deps: GithubPullsDeps,
+    owner: string | null,
+    repo: string | null,
+    checkRunId: number | null,
+    enabled: boolean
+) {
+    return queryOptions({
+        queryKey: githubKeys.checkRunLog(
+            owner ?? "",
+            repo ?? "",
+            checkRunId ?? 0
+        ),
+        queryFn: async () =>
+            expectOk(
+                await deps.backend.github.getCheckRunLog(
+                    owner ?? "",
+                    repo ?? "",
+                    checkRunId ?? 0
+                )
+            ),
+        staleTime: 60_000,
+        retry: false,
+        enabled: enabled && owner != null && repo != null && checkRunId != null,
+    });
+}
+
+export function workflowRunsQuery(
+    deps: GithubPullsDeps,
+    owner: string | null,
+    repo: string | null,
+    sha: string | null,
+    enabled: boolean
+) {
+    return queryOptions({
+        queryKey: githubKeys.workflowRuns(owner ?? "", repo ?? "", sha ?? ""),
+        queryFn: async () =>
+            expectOk(
+                await deps.backend.github.listWorkflowRuns(
+                    owner ?? "",
+                    repo ?? "",
+                    sha ?? ""
+                )
+            ),
+        staleTime: 15_000,
+        retry: false,
+        enabled: enabled && owner != null && repo != null && !!sha,
+    });
+}
+
 export function pullReviewsQuery(
     deps: GithubPullsDeps,
     owner: string | null,

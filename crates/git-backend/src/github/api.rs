@@ -6,12 +6,14 @@ use serde::{Deserialize, Serialize};
 
 use super::device_flow::{DeviceCodeResponse, TokenPoll, parse_device_code, parse_token_poll};
 use super::{
-    AccountProfile, GitHubError, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
-    GithubLabel, GithubNotification, GithubOrg, GithubPullRequestDetail, GithubPullRequestListItem,
-    GithubPullRequestRef, GithubPullRequestReview, GithubPullRequestReviewComment,
-    GithubRepoPermissions, GithubUser, MergePullRequestBody, MergePullRequestResult,
-    NotificationPage, PullRequestMergeMethod, SearchIssueItem, SearchIssuePage,
-    SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody,
+    AccountProfile, GitHubError, GithubActionStep, GithubCheckAnnotation, GithubCheckRun,
+    GithubCheckRunDetail, GithubCheckRunLog, GithubCheckRunOutput, GithubIssueComment,
+    GithubIssueDetail, GithubIssueEvent, GithubLabel, GithubNotification, GithubOrg,
+    GithubPullRequestDetail, GithubPullRequestListItem, GithubPullRequestRef,
+    GithubPullRequestReview, GithubPullRequestReviewComment, GithubRepoPermissions, GithubUser,
+    GithubWorkflowRun, MergePullRequestBody, MergePullRequestResult, NotificationPage,
+    PullRequestMergeMethod, SearchIssueItem, SearchIssuePage, SearchPullRequestPage,
+    UpdateIssueBody, UpdatePullRequestBody,
 };
 
 /// Object-safe async surface: boxed futures let tests inject fakes without
@@ -116,6 +118,38 @@ pub trait GithubApi: Send + Sync {
         number: u64,
         body: &MergePullRequestBody,
     ) -> GithubFuture<MergePullRequestResult>;
+    /// CI check runs for a commit, which is the pull request's head sha.
+    fn list_check_runs(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        sha: &str,
+    ) -> GithubFuture<Vec<GithubCheckRun>>;
+    /// One check run with its output, for the results dialog.
+    fn get_check_run(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        check_run_id: u64,
+    ) -> GithubFuture<GithubCheckRunDetail>;
+    /// A run's job log, split per step, mirroring GitHub's job view.
+    fn get_check_run_log(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        check_run_id: u64,
+    ) -> GithubFuture<GithubCheckRunLog>;
+    /// Workflow runs for a commit, newest first.
+    fn list_workflow_runs(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        sha: &str,
+    ) -> GithubFuture<Vec<GithubWorkflowRun>>;
     fn get_issue(
         &self,
         token: &str,
@@ -515,6 +549,7 @@ struct RawPullReviewComment {
     html_url: Option<String>,
     #[serde(default)]
     in_reply_to_id: Option<u64>,
+    pull_request_review_id: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -525,6 +560,273 @@ struct RawMergeResult {
     merged: bool,
     #[serde(default)]
     message: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawCheckRun {
+    #[serde(default)]
+    id: u64,
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    status: String,
+    #[serde(default)]
+    conclusion: Option<String>,
+    #[serde(default)]
+    details_url: Option<String>,
+    #[serde(default)]
+    started_at: Option<String>,
+    #[serde(default)]
+    completed_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawCheckRunOutput {
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(default)]
+    summary: Option<String>,
+    #[serde(default)]
+    text: Option<String>,
+    #[serde(default)]
+    annotations_count: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawCheckAnnotation {
+    #[serde(default)]
+    path: Option<String>,
+    #[serde(default)]
+    start_line: Option<u64>,
+    #[serde(default)]
+    end_line: Option<u64>,
+    #[serde(default)]
+    start_column: Option<u64>,
+    #[serde(default)]
+    annotation_level: Option<String>,
+    #[serde(default)]
+    message: Option<String>,
+    #[serde(default)]
+    title: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawActionStep {
+    #[serde(default)]
+    number: u64,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    status: Option<String>,
+    #[serde(default)]
+    conclusion: Option<String>,
+    #[serde(default)]
+    started_at: Option<String>,
+    #[serde(default)]
+    completed_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawActionJob {
+    #[serde(default)]
+    steps: Vec<RawActionStep>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawCheckRunDetail {
+    #[serde(flatten)]
+    run: RawCheckRun,
+    #[serde(default)]
+    output: Option<RawCheckRunOutput>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawCheckRunsResponse {
+    #[serde(default)]
+    check_runs: Vec<RawCheckRun>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawWorkflowRun {
+    #[serde(default)]
+    id: u64,
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    event: String,
+    #[serde(default)]
+    status: String,
+    #[serde(default)]
+    conclusion: Option<String>,
+    #[serde(default)]
+    run_number: u64,
+    #[serde(default)]
+    head_branch: String,
+    #[serde(default)]
+    html_url: String,
+    #[serde(default)]
+    created_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawWorkflowRunsResponse {
+    #[serde(default)]
+    workflow_runs: Vec<RawWorkflowRun>,
+}
+
+fn map_check_run(raw: RawCheckRun) -> GithubCheckRun {
+    GithubCheckRun {
+        id: raw.id,
+        name: raw.name,
+        status: raw.status,
+        conclusion: raw.conclusion,
+        details_url: raw.details_url,
+        started_at: raw.started_at.unwrap_or_default(),
+        completed_at: raw.completed_at,
+    }
+}
+
+/// The timestamp a log line was emitted at. GitHub prefixes each line with an
+/// RFC 3339 stamp, and there is no other separator, so splitting on the first
+/// space is unambiguous.
+fn log_line_time(line: &str) -> Option<Timestamp> {
+    let (stamp, _) = line.split_once(' ')?;
+    chrono::DateTime::parse_from_rfc3339(stamp)
+        .ok()
+        .map(|parsed| parsed.with_timezone(&chrono::Utc))
+}
+
+/// A step's start and end, absent when GitHub did not report them.
+type StepWindow = (Option<Timestamp>, Option<Timestamp>);
+type Timestamp = chrono::DateTime<chrono::Utc>;
+
+/// Assigns each log line to the step that was running when it was emitted. A
+/// line that falls outside every window, which happens when a step has no
+/// timestamps, goes to the first step rather than being dropped.
+fn slice_log_by_steps(steps: &[GithubActionStep], log: &str) -> Vec<String> {
+    let mut buckets: Vec<String> = vec![String::new(); steps.len()];
+    let windows: Vec<StepWindow> = steps
+        .iter()
+        .map(|step| {
+            (
+                step.started_at
+                    .as_deref()
+                    .and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
+                    .map(|at| at.with_timezone(&chrono::Utc)),
+                step.completed_at
+                    .as_deref()
+                    .and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
+                    .map(|at| at.with_timezone(&chrono::Utc)),
+            )
+        })
+        .collect();
+
+    for line in log.lines() {
+        // The last step that had already started owns the line, so
+        // consecutive steps do not swallow each other's output. Once the
+        // newest started step has finished, the line is outside every window.
+        let owner = log_line_time(line)
+            .and_then(|when| {
+                windows
+                    .iter()
+                    .enumerate()
+                    .rfind(|(_, (start, _))| start.is_some_and(|start| when >= start))
+                    .and_then(|(index, (_, end))| {
+                        (!end.is_some_and(|end| when > end)).then_some(index)
+                    })
+            })
+            .or(Some(0));
+        if let Some(index) = owner {
+            buckets[index].push_str(line);
+            buckets[index].push('\n');
+        }
+    }
+    buckets
+}
+
+fn map_check_annotation(raw: RawCheckAnnotation) -> GithubCheckAnnotation {
+    GithubCheckAnnotation {
+        path: raw.path.unwrap_or_default(),
+        start_line: raw.start_line,
+        end_line: raw.end_line,
+        start_column: raw.start_column,
+        annotation_level: raw.annotation_level.unwrap_or_default(),
+        message: raw.message.unwrap_or_default(),
+        title: raw.title.unwrap_or_default(),
+    }
+}
+
+/// Annotations live on their own endpoint, not inside the check run, and are
+/// paginated. A run that fails a suite reports one annotation per failed test.
+async fn list_check_annotations(
+    client: &reqwest::Client,
+    authorization: &str,
+    owner: &str,
+    repo: &str,
+    check_run_id: u64,
+) -> Vec<RawCheckAnnotation> {
+    let mut collected = Vec::new();
+    for page in 1..=MAX_ISSUE_PAGES {
+        let url = format!(
+            "{API_ROOT}/repos/{owner}/{repo}/check-runs/{check_run_id}/annotations?per_page={ISSUES_PER_PAGE}&page={page}"
+        );
+        let Ok((body, headers)) = send_full(
+            client
+                .get(url)
+                .header("Authorization", authorization.to_string()),
+        )
+        .await
+        else {
+            // Annotations are supplementary; a failed read leaves the run
+            // readable rather than failing the whole detail call.
+            break;
+        };
+        let Ok(parsed) = serde_json::from_str::<Vec<RawCheckAnnotation>>(&body) else {
+            break;
+        };
+        let count = parsed.len();
+        collected.extend(parsed);
+        if !page_has_more(&headers, count) {
+            break;
+        }
+    }
+    collected
+}
+
+fn map_check_run_detail(
+    raw: RawCheckRunDetail,
+    annotations: Vec<RawCheckAnnotation>,
+) -> GithubCheckRunDetail {
+    let output = raw.output.unwrap_or(RawCheckRunOutput {
+        title: None,
+        summary: None,
+        text: None,
+        annotations_count: None,
+    });
+    GithubCheckRunDetail {
+        run: map_check_run(raw.run),
+        output: GithubCheckRunOutput {
+            title: output.title.unwrap_or_default(),
+            summary: output.summary.unwrap_or_default(),
+            text: output.text.unwrap_or_default(),
+            annotations_count: output.annotations_count.unwrap_or_default(),
+        },
+        annotations: annotations.into_iter().map(map_check_annotation).collect(),
+    }
+}
+
+fn map_workflow_run(raw: RawWorkflowRun) -> GithubWorkflowRun {
+    GithubWorkflowRun {
+        id: raw.id,
+        name: raw.name,
+        event: raw.event,
+        status: raw.status,
+        conclusion: raw.conclusion,
+        run_number: raw.run_number,
+        head_branch: raw.head_branch,
+        html_url: raw.html_url,
+        created_at: raw.created_at.unwrap_or_default(),
+    }
 }
 
 fn map_issue_user(raw: Option<RawIssueUser>) -> crate::api::github::GithubUser {
@@ -809,6 +1111,7 @@ fn map_pull_review_comment(raw: RawPullReviewComment) -> GithubPullRequestReview
         created_at: raw.created_at.unwrap_or_default(),
         html_url: raw.html_url.unwrap_or_default(),
         in_reply_to_id: raw.in_reply_to_id,
+        pull_request_review_id: raw.pull_request_review_id,
     }
 }
 
@@ -879,6 +1182,9 @@ const MAX_ISSUE_PAGES: u32 = 10;
 
 pub struct HttpGithubApi {
     client: reqwest::Client,
+    /// The job log endpoint answers with a 302 to a blob store that rejects
+    /// the API auth header, so the redirect is followed by hand.
+    no_redirect: reqwest::Client,
 }
 
 impl HttpGithubApi {
@@ -888,7 +1194,16 @@ impl HttpGithubApi {
             .user_agent(concat!("gitau/", env!("CARGO_PKG_VERSION")))
             .build()
             .expect("reqwest client builds with rustls-tls");
-        Self { client }
+        let no_redirect = reqwest::Client::builder()
+            .timeout(timeout)
+            .redirect(reqwest::redirect::Policy::none())
+            .user_agent(concat!("gitau/", env!("CARGO_PKG_VERSION")))
+            .build()
+            .expect("reqwest client builds with rustls-tls");
+        Self {
+            client,
+            no_redirect,
+        }
     }
 }
 
@@ -896,6 +1211,43 @@ impl Default for HttpGithubApi {
     fn default() -> Self {
         Self::new(Duration::from_secs(30))
     }
+}
+
+/// Fetches a job's log. The endpoint answers a 302 to a blob store holding
+/// plain text: it rejects a `text/plain` accept header with 415, and the
+/// redirect target rejects the API auth header, so the hop is made by hand.
+async fn fetch_job_log(
+    no_redirect: &reqwest::Client,
+    token: &str,
+    owner: &str,
+    repo: &str,
+    job_id: u64,
+) -> std::result::Result<String, GitHubError> {
+    let api_url = format!("{API_ROOT}/repos/{owner}/{repo}/actions/jobs/{job_id}/logs");
+    let redirect = no_redirect
+        .get(&api_url)
+        .header("Accept", "application/vnd.github+json")
+        .header("Authorization", bearer(token))
+        .header("X-GitHub-Api-Version", API_VERSION)
+        .send()
+        .await?;
+    let status = redirect.status();
+    let location = redirect
+        .headers()
+        .get(reqwest::header::LOCATION)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string);
+    let Some(location) = location else {
+        let body = redirect.text().await.unwrap_or_default();
+        return Err(api_error(status.as_u16(), &body));
+    };
+    let blob = no_redirect.get(location).send().await?;
+    let blob_status = blob.status();
+    if !blob_status.is_success() {
+        let body = blob.text().await.unwrap_or_default();
+        return Err(api_error(blob_status.as_u16(), &body));
+    }
+    Ok(blob.text().await?)
 }
 
 async fn send(request: reqwest::RequestBuilder) -> std::result::Result<String, GitHubError> {
@@ -1424,6 +1776,139 @@ impl GithubApi for HttpGithubApi {
         })
     }
 
+    fn list_check_runs(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        sha: &str,
+    ) -> GithubFuture<Vec<GithubCheckRun>> {
+        let client = self.client.clone();
+        let authorization = bearer(token);
+        let sha = sha.to_owned();
+        let url = format!("{API_ROOT}/repos/{owner}/{repo}/commits/{sha}/check-runs");
+        Box::pin(async move {
+            let body = send(
+                client
+                    .get(url)
+                    .header("Authorization", authorization)
+                    .query(&[("per_page", ISSUES_PER_PAGE.to_string())]),
+            )
+            .await?;
+            let raw: RawCheckRunsResponse = serde_json::from_str(&body).map_err(malformed)?;
+            Ok(raw.check_runs.into_iter().map(map_check_run).collect())
+        })
+    }
+
+    fn get_check_run(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        check_run_id: u64,
+    ) -> GithubFuture<GithubCheckRunDetail> {
+        let client = self.client.clone();
+        let authorization = bearer(token);
+        let url = format!("{API_ROOT}/repos/{owner}/{repo}/check-runs/{check_run_id}");
+        let owner = owner.to_string();
+        let repo = repo.to_string();
+        Box::pin(async move {
+            let body = send(
+                client
+                    .get(url)
+                    .header("Authorization", authorization.clone()),
+            )
+            .await?;
+            let raw: RawCheckRunDetail = serde_json::from_str(&body).map_err(malformed)?;
+            let annotations =
+                list_check_annotations(&client, &authorization, &owner, &repo, check_run_id).await;
+            Ok(map_check_run_detail(raw, annotations))
+        })
+    }
+
+    fn get_check_run_log(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        check_run_id: u64,
+    ) -> GithubFuture<GithubCheckRunLog> {
+        let client = self.client.clone();
+        let no_redirect = self.no_redirect.clone();
+        let token = token.to_string();
+        let owner = owner.to_string();
+        let repo = repo.to_string();
+        Box::pin(async move {
+            // A GitHub Actions check run and its job share one id, so the
+            // check run id addresses the job directly.
+            let job_id = check_run_id;
+            let job_url = format!("{API_ROOT}/repos/{owner}/{repo}/actions/jobs/{job_id}");
+            let job_body =
+                send(client.get(job_url).header("Authorization", bearer(&token))).await?;
+            let job: RawActionJob = serde_json::from_str(&job_body).map_err(malformed)?;
+
+            let log = match fetch_job_log(&no_redirect, &token, &owner, &repo, job_id).await {
+                Ok(text) => text,
+                Err(error) => {
+                    return Ok(GithubCheckRunLog {
+                        unavailable: Some(error.to_string()),
+                        ..Default::default()
+                    });
+                }
+            };
+
+            let mut steps: Vec<GithubActionStep> = job
+                .steps
+                .into_iter()
+                .map(|step| GithubActionStep {
+                    number: step.number,
+                    name: step.name.unwrap_or_default(),
+                    status: step.status.unwrap_or_default(),
+                    conclusion: step.conclusion,
+                    started_at: step.started_at,
+                    completed_at: step.completed_at,
+                    log: String::new(),
+                })
+                .collect();
+            let buckets = slice_log_by_steps(&steps, &log);
+            for (step, bucket) in steps.iter_mut().zip(buckets) {
+                step.log = bucket;
+            }
+            Ok(GithubCheckRunLog {
+                steps,
+                unavailable: None,
+            })
+        })
+    }
+
+    fn list_workflow_runs(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        sha: &str,
+    ) -> GithubFuture<Vec<GithubWorkflowRun>> {
+        let client = self.client.clone();
+        let authorization = bearer(token);
+        let sha = sha.to_owned();
+        let url = format!("{API_ROOT}/repos/{owner}/{repo}/actions/runs");
+        Box::pin(async move {
+            let body = send(
+                client
+                    .get(url)
+                    .header("Authorization", authorization)
+                    .query(&[("head_sha", sha), ("per_page", "50".to_owned())]),
+            )
+            .await?;
+            let raw: RawWorkflowRunsResponse = serde_json::from_str(&body).map_err(malformed)?;
+            Ok(raw
+                .workflow_runs
+                .into_iter()
+                .map(map_workflow_run)
+                .collect())
+        })
+    }
+
     fn get_issue(
         &self,
         token: &str,
@@ -1719,6 +2204,62 @@ fn civil_from_days(z: i64) -> (i64, i64, i64) {
 mod tests {
     use super::*;
 
+    fn step(name: &str, start: &str, end: &str) -> GithubActionStep {
+        GithubActionStep {
+            number: 1,
+            name: name.to_string(),
+            status: "completed".into(),
+            conclusion: Some("success".into()),
+            started_at: Some(start.to_string()),
+            completed_at: Some(end.to_string()),
+            log: String::new(),
+        }
+    }
+
+    #[test]
+    fn log_lines_land_in_the_step_that_was_running() {
+        let steps = vec![
+            step("checkout", "2024-01-01T00:00:00Z", "2024-01-01T00:00:10Z"),
+            step("test", "2024-01-01T00:00:10Z", "2024-01-01T00:00:20Z"),
+        ];
+        let log = concat!(
+            "2024-01-01T00:00:01Z fetching\n",
+            "2024-01-01T00:00:11Z running tests\n",
+            "2024-01-01T00:00:19Z 3 passed\n",
+        );
+        let buckets = slice_log_by_steps(&steps, log);
+        assert_eq!(buckets[0], "2024-01-01T00:00:01Z fetching\n");
+        assert_eq!(
+            buckets[1],
+            "2024-01-01T00:00:11Z running tests\n2024-01-01T00:00:19Z 3 passed\n"
+        );
+    }
+
+    #[test]
+    fn lines_outside_every_window_go_to_the_first_step() {
+        let steps = vec![step(
+            "build",
+            "2024-01-01T00:00:10Z",
+            "2024-01-01T00:00:20Z",
+        )];
+        let log = concat!(
+            "2024-01-01T00:00:01Z before setup\n",
+            "2024-01-01T00:00:11Z compiling\n",
+            "2024-01-01T00:00:30Z after teardown\n",
+            "no timestamp on this line\n",
+        );
+        let buckets = slice_log_by_steps(&steps, log);
+        assert_eq!(
+            buckets[0],
+            concat!(
+                "2024-01-01T00:00:01Z before setup\n",
+                "2024-01-01T00:00:11Z compiling\n",
+                "2024-01-01T00:00:30Z after teardown\n",
+                "no timestamp on this line\n",
+            )
+        );
+    }
+
     #[test]
     fn maps_status_codes_to_error_kinds() {
         assert_eq!(
@@ -1910,13 +2451,15 @@ mod tests {
             "diff_hunk": "@@ -1 +1 @@\n-old\n+new",
             "created_at": "2026-09-03T12:00:00Z",
             "html_url": "https://github.com/octocat/repo/pull/42#discussion_r77",
-            "in_reply_to_id": 70
+            "in_reply_to_id": 70,
+            "pull_request_review_id": 80
         }))
         .unwrap();
         let mapped = map_pull_review_comment(raw);
         assert_eq!(mapped.path, "src/lib.rs");
         assert_eq!(mapped.line, Some(42));
         assert_eq!(mapped.in_reply_to_id, Some(70));
+        assert_eq!(mapped.pull_request_review_id, Some(80));
         assert!(mapped.diff_hunk.contains("+new"));
     }
 
