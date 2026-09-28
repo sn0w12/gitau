@@ -157,7 +157,7 @@ function MessageEditor({
     );
 }
 
-export function IssueMessage({
+export function TimelineMessage({
     text,
     author,
     avatarUrl,
@@ -173,7 +173,7 @@ export function IssueMessage({
     canDelete = false,
     onDelete,
     deleteTitle = "Delete this comment?",
-    deleteDescription = "The comment is removed from the issue. This cannot be undone.",
+    deleteDescription = "The comment is removed from the thread. This cannot be undone.",
 }: {
     text: string;
     author?: string;
@@ -182,7 +182,7 @@ export function IssueMessage({
     actionLabel?: string;
     /** Web URL of the message; hides Copy Link when absent. */
     link?: string;
-    /** Repository of the issue, so `#123` references link out. */
+    /** Repository of the thread, so `#123` references link out. */
     owner?: string;
     repo?: string;
     canQuote?: boolean;

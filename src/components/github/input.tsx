@@ -77,12 +77,12 @@ function prefixLines(
     });
 }
 
-export interface IssueInputHandle {
+export interface ConversationInputHandle {
     /** Appends a `> ` quoted block and focuses the composer. */
     insertQuote: (text: string) => void;
 }
 
-export function IssueInput({
+export function ConversationInput({
     pending = false,
     stateLabel,
     onSubmit,
@@ -90,16 +90,20 @@ export function IssueInput({
     inputRef,
     owner,
     repo,
+    placeholder = "Leave a comment",
+    submitLabel = "Comment",
 }: {
     pending?: boolean;
     /** Label for the close/reopen button; hides it when absent. */
     stateLabel?: string;
     onSubmit: (body: string) => Promise<void>;
     onToggleState?: () => void;
-    inputRef?: React.Ref<IssueInputHandle>;
+    inputRef?: React.Ref<ConversationInputHandle>;
     /** Repository the draft is posted to, so `#123` references link out. */
     owner?: string;
     repo?: string;
+    placeholder?: string;
+    submitLabel?: string;
 }) {
     const [value, setValue] = useState("");
     const areaRef = useRef<HTMLTextAreaElement>(null);
@@ -264,7 +268,7 @@ export function IssueInput({
                     <Textarea
                         ref={areaRef}
                         value={value}
-                        placeholder="Leave a comment"
+                        placeholder={placeholder}
                         onChange={(e) => setValue(e.target.value)}
                     />
                 </TabsContent>
@@ -301,7 +305,7 @@ export function IssueInput({
                         setValue("");
                     }}
                 >
-                    Comment
+                    {submitLabel}
                 </Button>
             </div>
         </Tabs>

@@ -249,3 +249,130 @@ pub struct GithubRepoPermissions {
     pub push: bool,
     pub admin: bool,
 }
+
+/// One side of a pull request, as reported by the pulls endpoint. Only the
+/// ref and owning repo are projected; the API also reports a full `repo`
+/// object per side.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestRef {
+    pub r#ref: String,
+    pub sha: String,
+    pub label: String,
+}
+
+/// Full pull request detail for the pull request page header and sidebar.
+/// Carries the issue projection plus everything only the pulls endpoint
+/// reports: draft state, mergeability, the two refs, and diff stats.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestDetail {
+    pub number: u64,
+    pub title: String,
+    pub state: String,
+    pub body: String,
+    pub author: GithubUser,
+    pub labels: Vec<GithubLabel>,
+    /// Reviewers requested on the pull request; GitHub returns them in the
+    /// same slot as issue assignees.
+    pub assignees: Vec<GithubUser>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub html_url: String,
+    pub draft: bool,
+    /// Merge commit SHA once merged. The only signal separating a merged
+    /// pull request from a closed one, since both report `state: "closed"`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub merged_at: Option<String>,
+    /// GitHub's mergeable verdict: null while the merge is still being
+    /// computed, so the UI must re-read before offering the merge button.
+    pub mergeable: Option<bool>,
+    /// Why the merge landed where it did, e.g. `clean`, `dirty`, or
+    /// `blocked`. Empty until the computation finishes.
+    pub mergeable_state: String,
+    pub head: GithubPullRequestRef,
+    pub base: GithubPullRequestRef,
+    pub additions: u64,
+    pub deletions: u64,
+    pub changed_files: u64,
+    pub commits: u64,
+}
+
+/// One submitted review. `state` is GitHub's raw verdict: `APPROVED`,
+/// `CHANGES_REQUESTED`, `COMMENTED`, or `DISMISSED`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestReview {
+    pub id: u64,
+    pub author: GithubUser,
+    pub state: String,
+    pub body: String,
+    pub submitted_at: String,
+    pub html_url: String,
+}
+
+/// One inline comment anchored to a line in the diff.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestReviewComment {
+    pub id: u64,
+    pub author: GithubUser,
+    pub body: String,
+    /// Repository-relative path the comment is anchored to.
+    pub path: String,
+    /// Line in the new file, absent once the comment is outdated.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line: Option<u64>,
+    /// The diff hunk the comment was written against.
+    pub diff_hunk: String,
+    pub created_at: String,
+    pub html_url: String,
+    /// Set when this comment replies to another review comment.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub in_reply_to_id: Option<u64>,
+}
+
+/// Partial update to a pull request: every field left `None` is untouched.
+/// The field names are single words, so the camelCase and snake_case wire
+/// conventions agree and this serializes as GitHub expects.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct UpdatePullRequestBody {
+    pub state: Option<String>,
+    pub body: Option<String>,
+    pub base: Option<String>,
+    pub draft: Option<bool>,
+}
+
+/// How GitHub should combine the branch. Anything but `merge` discards the
+/// branch's own commit structure, which is why the UI defaults to `merge`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PullRequestMergeMethod {
+    #[default]
+    Merge,
+    Squash,
+    Rebase,
+}
+
+/// Merge options. An empty `commit_title` or `commit_message` lets GitHub
+/// pick its own default, which is what an unset field means on the wire.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MergePullRequestBody {
+    pub merge_method: PullRequestMergeMethod,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commit_title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commit_message: Option<String>,
+}
+
+/// Outcome of a merge attempt. `merged` is false when GitHub accepted the
+/// call but declined to merge (a policy block, or the sha no longer matches).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MergePullRequestResult {
+    pub sha: String,
+    pub merged: bool,
+    pub message: String,
+}

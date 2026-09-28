@@ -4,7 +4,7 @@ import { CircleDot, Inbox, RotateCw } from "lucide-react";
 import { useMemo } from "react";
 
 import { ExternalLink } from "@/components/external-link";
-import { LabelBadge } from "@/components/repo/issues/issues-view";
+import { LabelBadge } from "@/components/github/label-badge";
 import { Button } from "@/components/ui/button";
 import {
     Empty,

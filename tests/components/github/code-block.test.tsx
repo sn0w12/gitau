@@ -5,7 +5,7 @@ import type { ReactElement } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { CustomMarkdown } from "@/components/issues/markdown";
+import { CustomMarkdown } from "@/components/github/markdown";
 import { AppServicesContext } from "@/contexts/services-context";
 import type { HighlightedSnippet, SyntaxStyle } from "@/lib/backend/protocol";
 import type { BackendClient } from "@/lib/backend/transport/client";

@@ -3,6 +3,7 @@ import type {
     BlockParseContext,
     InlineNode,
     LinkNode,
+    MarkdownDocument,
     MarkdownExtension,
 } from "@tanstack/markdown";
 
@@ -195,30 +196,51 @@ function splitReference(value: string): [[string, string], string] {
     return [[owner, repo], value.slice(hash + 1)];
 }
 
-/** Emphasis and friends are parsed without inline transforms, so nested runs
- * need the walk. Link labels, code spans and images are left untouched. */
-function transformInlines(
-    nodes: InlineNode[],
+const CHILD_KEYS = ["children", "items", "header", "rows"] as const;
+
+function isTextNode(value: unknown): value is { type: "text"; value: string } {
+    return (
+        typeof value === "object" &&
+        value !== null &&
+        (value as { type?: unknown }).type === "text" &&
+        typeof (value as { value?: unknown }).value === "string"
+    );
+}
+
+/**
+ * Applies the GitHub text rules across the whole tree rather than to a
+ * paragraph's inline nodes. A paragraph-only pass misses table cells,
+ * heading runs, and text that arrived inside an html block, all of which
+ * GitHub links too.
+ */
+function transformTextDeep(
+    value: unknown,
     coords: GithubCoords | undefined
-): InlineNode[] {
-    const result: InlineNode[] = [];
-    for (const node of nodes) {
-        if (node.type === "text") {
-            result.push(...splitInlineText(node.value, coords));
-        } else if (
-            node.type === "emphasis" ||
-            node.type === "strong" ||
-            node.type === "strike"
-        ) {
-            result.push({
-                ...node,
-                children: transformInlines(node.children, coords),
-            });
-        } else {
-            result.push(node);
+): unknown {
+    if (Array.isArray(value)) {
+        const out: unknown[] = [];
+        for (const item of value) {
+            if (isTextNode(item)) {
+                out.push(...splitInlineText(item.value, coords));
+            } else {
+                out.push(transformTextDeep(item, coords));
+            }
         }
+        return out;
     }
-    return result;
+    if (typeof value !== "object" || value === null) return value;
+    const next: Record<string, unknown> = { ...value };
+    // A link label is not re-linked, whether the link came from markdown or
+    // from html in the body. Rewriting one nests an anchor inside an anchor
+    // and, worse, repoints it: dependabot writes
+    // `<a href=".../facebook/react/pull/36236">#36236</a>`, whose label would
+    // otherwise become a link to this repository's issue 36236.
+    if (next.type === "link") return next;
+    if (next.type === "inlineComponent" && next.tagName === "a") return next;
+    for (const key of CHILD_KEYS) {
+        if (key in next) next[key] = transformTextDeep(next[key], coords);
+    }
+    return next;
 }
 
 const ALERT_KINDS = new Set(["note", "tip", "important", "warning", "caution"]);
@@ -308,6 +330,7 @@ export function githubMarkdownExtension(
         name: "github",
         parseBlock: (context) =>
             parseAlert(context) ?? parseSetextHeading(context),
-        transformInline: (nodes) => transformInlines(nodes, coords),
+        transformDocument: (document) =>
+            transformTextDeep(document, coords) as MarkdownDocument,
     };
 }

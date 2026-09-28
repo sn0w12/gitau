@@ -17,9 +17,12 @@ pub mod worktrees;
 pub use changes::{DiscardRequest, StageHunkRequest, StageRequest, StatusOptions};
 pub use github::{
     AccountProfile, DeviceFlowStart, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
-    GithubIssueListItem, GithubLabel, GithubNotification, GithubOrg, GithubPullRequestListItem,
-    GithubRepoPermissions, GithubUser, NotificationPage, PublishRepositoryRequest, PublishResult,
-    SearchIssueItem, SearchIssuePage, SearchPullRequestPage, UpdateIssueBody,
+    GithubIssueListItem, GithubLabel, GithubNotification, GithubOrg, GithubPullRequestDetail,
+    GithubPullRequestListItem, GithubPullRequestRef, GithubPullRequestReview,
+    GithubPullRequestReviewComment, GithubRepoPermissions, GithubUser, MergePullRequestBody,
+    MergePullRequestResult, NotificationPage, PublishRepositoryRequest, PublishResult,
+    PullRequestMergeMethod, SearchIssueItem, SearchIssuePage, SearchPullRequestPage,
+    UpdateIssueBody, UpdatePullRequestBody,
 };
 pub use highlight::{HighlightedSnippet, SnippetStyle, highlight_code};
 pub use history::{BlameQuery, CommitDetailQuery, FileAtRevisionQuery, HistoryPageQuery};

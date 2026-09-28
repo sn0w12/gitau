@@ -81,6 +81,12 @@ export const githubKeys = {
         ["github", "issues", owner, repo, state, labels] as const,
     pulls: (owner: string, repo: string, state: string, labels: string) =>
         ["github", "pulls", owner, repo, state, labels] as const,
+    pullRequest: (owner: string, repo: string, number: number) =>
+        ["github", "pull", owner, repo, number] as const,
+    pullReviews: (owner: string, repo: string, number: number) =>
+        ["github", "pull", owner, repo, number, "reviews"] as const,
+    pullReviewComments: (owner: string, repo: string, number: number) =>
+        ["github", "pull", owner, repo, number, "review-comments"] as const,
     issueDetail: (owner: string, repo: string, number: number) =>
         ["github", "issue", owner, repo, number] as const,
     issueComments: (owner: string, repo: string, number: number) =>

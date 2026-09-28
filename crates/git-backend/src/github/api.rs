@@ -7,9 +7,11 @@ use serde::{Deserialize, Serialize};
 use super::device_flow::{DeviceCodeResponse, TokenPoll, parse_device_code, parse_token_poll};
 use super::{
     AccountProfile, GitHubError, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
-    GithubLabel, GithubNotification, GithubOrg, GithubPullRequestListItem, GithubRepoPermissions,
-    GithubUser, NotificationPage, SearchIssueItem, SearchIssuePage, SearchPullRequestPage,
-    UpdateIssueBody,
+    GithubLabel, GithubNotification, GithubOrg, GithubPullRequestDetail, GithubPullRequestListItem,
+    GithubPullRequestRef, GithubPullRequestReview, GithubPullRequestReviewComment,
+    GithubRepoPermissions, GithubUser, MergePullRequestBody, MergePullRequestResult,
+    NotificationPage, PullRequestMergeMethod, SearchIssueItem, SearchIssuePage,
+    SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody,
 };
 
 /// Object-safe async surface: boxed futures let tests inject fakes without
@@ -71,6 +73,49 @@ pub trait GithubApi: Send + Sync {
         labels: &[String],
         page: u32,
     ) -> GithubFuture<SearchPullRequestPage>;
+    /// Full pull request detail, including draft, mergeability, refs, and
+    /// diff stats. The `mergeable` field is null while GitHub computes the
+    /// merge in the background, so the UI must re-read before offering merge.
+    fn get_pull(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> GithubFuture<GithubPullRequestDetail>;
+    /// Submitted reviews, oldest first.
+    fn list_pull_reviews(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> GithubFuture<Vec<GithubPullRequestReview>>;
+    /// Inline diff comments, including replies to other review comments.
+    fn list_pull_review_comments(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> GithubFuture<Vec<GithubPullRequestReviewComment>>;
+    /// Partial update: state (open/closed), base branch, draft flag.
+    fn update_pull(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        body: &UpdatePullRequestBody,
+    ) -> GithubFuture<GithubPullRequestDetail>;
+    fn merge_pull(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        body: &MergePullRequestBody,
+    ) -> GithubFuture<MergePullRequestResult>;
     fn get_issue(
         &self,
         token: &str,
@@ -150,6 +195,28 @@ pub struct CreateRepoBody {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     pub private: bool,
+}
+
+/// GitHub's merge endpoint takes `merge_method` in snake_case, unlike the
+/// camelCase the IPC DTOs use, so the wire form is built separately.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct MergePullPayload {
+    merge_method: PullRequestMergeMethod,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    commit_title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    commit_message: Option<String>,
+}
+
+impl From<&MergePullRequestBody> for MergePullPayload {
+    fn from(body: &MergePullRequestBody) -> Self {
+        Self {
+            merge_method: body.merge_method,
+            commit_title: body.commit_title.clone(),
+            commit_message: body.commit_message.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -352,6 +419,112 @@ struct RawIssueEvent {
     label: Option<RawIssueLabel>,
     #[serde(default)]
     assignee: Option<RawIssueUser>,
+    /// Review requests name the user in this slot instead of `assignee`.
+    #[serde(default)]
+    requested_reviewer: Option<RawIssueUser>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawPullRef {
+    #[serde(default, rename = "ref")]
+    git_ref: String,
+    #[serde(default)]
+    sha: String,
+    #[serde(default)]
+    label: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawPull {
+    #[serde(default)]
+    number: u64,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    state: String,
+    #[serde(default)]
+    body: Option<String>,
+    #[serde(default)]
+    user: Option<RawIssueUser>,
+    #[serde(default)]
+    labels: Vec<RawIssueLabel>,
+    #[serde(default)]
+    assignees: Vec<RawIssueUser>,
+    #[serde(default)]
+    created_at: Option<String>,
+    #[serde(default)]
+    updated_at: Option<String>,
+    #[serde(default)]
+    html_url: Option<String>,
+    #[serde(default)]
+    draft: bool,
+    #[serde(default)]
+    merged_at: Option<String>,
+    /// null while GitHub computes it, so the tri-state must survive.
+    #[serde(default)]
+    mergeable: Option<bool>,
+    #[serde(default)]
+    mergeable_state: Option<String>,
+    #[serde(default)]
+    head: Option<RawPullRef>,
+    #[serde(default)]
+    base: Option<RawPullRef>,
+    #[serde(default)]
+    additions: u64,
+    #[serde(default)]
+    deletions: u64,
+    #[serde(default)]
+    changed_files: u64,
+    #[serde(default)]
+    commits: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawPullReview {
+    #[serde(default)]
+    id: u64,
+    #[serde(default)]
+    user: Option<RawIssueUser>,
+    #[serde(default)]
+    state: String,
+    #[serde(default)]
+    body: Option<String>,
+    #[serde(default)]
+    submitted_at: Option<String>,
+    #[serde(default)]
+    html_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawPullReviewComment {
+    #[serde(default)]
+    id: u64,
+    #[serde(default)]
+    user: Option<RawIssueUser>,
+    #[serde(default)]
+    body: Option<String>,
+    #[serde(default)]
+    path: String,
+    #[serde(default)]
+    line: Option<u64>,
+    #[serde(default)]
+    diff_hunk: String,
+    #[serde(default)]
+    created_at: Option<String>,
+    #[serde(default)]
+    html_url: Option<String>,
+    #[serde(default)]
+    in_reply_to_id: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawMergeResult {
+    #[serde(default)]
+    sha: String,
+    #[serde(default)]
+    merged: bool,
+    #[serde(default)]
+    message: String,
 }
 
 fn map_issue_user(raw: Option<RawIssueUser>) -> crate::api::github::GithubUser {
@@ -555,7 +728,87 @@ fn map_issue_event(raw: RawIssueEvent) -> GithubIssueEvent {
         created_at: raw.created_at.unwrap_or_default(),
         label: raw.label.as_ref().map(|label| label.name.clone()),
         label_color: raw.label.as_ref().map(|label| label.color.clone()),
-        assignee: raw.assignee.map(|user| user.login),
+        assignee: raw
+            .assignee
+            .or(raw.requested_reviewer)
+            .map(|user| user.login),
+    }
+}
+
+fn empty_pull_ref() -> GithubPullRequestRef {
+    GithubPullRequestRef {
+        r#ref: String::new(),
+        sha: String::new(),
+        label: String::new(),
+    }
+}
+
+fn map_pull_ref(raw: Option<RawPullRef>) -> GithubPullRequestRef {
+    raw.map(|reference| GithubPullRequestRef {
+        r#ref: reference.git_ref,
+        sha: reference.sha,
+        label: reference.label,
+    })
+    .unwrap_or_else(empty_pull_ref)
+}
+
+/// GitHub sends `mergeable` as a nullable boolean, so the tri-state survives
+/// the wire intact: null means the merge is still being computed and the UI
+/// has to re-read before it can offer the merge button.
+fn map_pull_detail(raw: RawPull) -> GithubPullRequestDetail {
+    GithubPullRequestDetail {
+        number: raw.number,
+        title: raw.title,
+        state: raw.state,
+        body: raw.body.unwrap_or_default(),
+        author: map_issue_user(raw.user),
+        labels: raw.labels.iter().map(map_issue_label).collect(),
+        assignees: raw
+            .assignees
+            .into_iter()
+            .map(|user| crate::api::github::GithubUser {
+                login: user.login,
+                avatar_url: user.avatar_url,
+            })
+            .collect(),
+        created_at: raw.created_at.unwrap_or_default(),
+        updated_at: raw.updated_at.unwrap_or_default(),
+        html_url: raw.html_url.unwrap_or_default(),
+        draft: raw.draft,
+        merged_at: raw.merged_at.filter(|at| !at.is_empty()),
+        mergeable: raw.mergeable,
+        mergeable_state: raw.mergeable_state.unwrap_or_default(),
+        head: map_pull_ref(raw.head),
+        base: map_pull_ref(raw.base),
+        additions: raw.additions,
+        deletions: raw.deletions,
+        changed_files: raw.changed_files,
+        commits: raw.commits,
+    }
+}
+
+fn map_pull_review(raw: RawPullReview) -> GithubPullRequestReview {
+    GithubPullRequestReview {
+        id: raw.id,
+        author: map_issue_user(raw.user),
+        state: raw.state,
+        body: raw.body.unwrap_or_default(),
+        submitted_at: raw.submitted_at.unwrap_or_default(),
+        html_url: raw.html_url.unwrap_or_default(),
+    }
+}
+
+fn map_pull_review_comment(raw: RawPullReviewComment) -> GithubPullRequestReviewComment {
+    GithubPullRequestReviewComment {
+        id: raw.id,
+        author: map_issue_user(raw.user),
+        body: raw.body.unwrap_or_default(),
+        path: raw.path,
+        line: raw.line,
+        diff_hunk: raw.diff_hunk,
+        created_at: raw.created_at.unwrap_or_default(),
+        html_url: raw.html_url.unwrap_or_default(),
+        in_reply_to_id: raw.in_reply_to_id,
     }
 }
 
@@ -1029,6 +1282,148 @@ impl GithubApi for HttpGithubApi {
         })
     }
 
+    fn get_pull(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> GithubFuture<GithubPullRequestDetail> {
+        let client = self.client.clone();
+        let authorization = bearer(token);
+        let url = format!("{API_ROOT}/repos/{owner}/{repo}/pulls/{number}");
+        Box::pin(async move {
+            let body = send(client.get(url).header("Authorization", authorization)).await?;
+            let raw: RawPull = serde_json::from_str(&body).map_err(malformed)?;
+            Ok(map_pull_detail(raw))
+        })
+    }
+
+    fn list_pull_reviews(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> GithubFuture<Vec<GithubPullRequestReview>> {
+        let client = self.client.clone();
+        let authorization = bearer(token);
+        let url = format!("{API_ROOT}/repos/{owner}/{repo}/pulls/{number}/reviews");
+        Box::pin(async move {
+            let mut items = Vec::new();
+            for page in 1..=MAX_ISSUE_PAGES {
+                let (body, headers) = send_full(
+                    client
+                        .get(&url)
+                        .header("Authorization", authorization.clone())
+                        .query(&[
+                            ("per_page", ISSUES_PER_PAGE.to_string()),
+                            ("page", page.to_string()),
+                        ]),
+                )
+                .await?;
+                let raw: Vec<RawPullReview> = serde_json::from_str(&body).map_err(malformed)?;
+                let has_more = page_has_more(&headers, raw.len());
+                items.extend(raw.into_iter().map(map_pull_review));
+                if !has_more {
+                    break;
+                }
+            }
+            Ok(items)
+        })
+    }
+
+    fn list_pull_review_comments(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> GithubFuture<Vec<GithubPullRequestReviewComment>> {
+        let client = self.client.clone();
+        let authorization = bearer(token);
+        let url = format!("{API_ROOT}/repos/{owner}/{repo}/pulls/{number}/comments");
+        Box::pin(async move {
+            let mut items = Vec::new();
+            for page in 1..=MAX_ISSUE_PAGES {
+                let (body, headers) = send_full(
+                    client
+                        .get(&url)
+                        .header("Authorization", authorization.clone())
+                        .query(&[
+                            ("per_page", ISSUES_PER_PAGE.to_string()),
+                            ("page", page.to_string()),
+                        ]),
+                )
+                .await?;
+                let raw: Vec<RawPullReviewComment> =
+                    serde_json::from_str(&body).map_err(malformed)?;
+                let has_more = page_has_more(&headers, raw.len());
+                items.extend(raw.into_iter().map(map_pull_review_comment));
+                if !has_more {
+                    break;
+                }
+            }
+            Ok(items)
+        })
+    }
+
+    fn update_pull(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        body: &UpdatePullRequestBody,
+    ) -> GithubFuture<GithubPullRequestDetail> {
+        let client = self.client.clone();
+        let authorization = bearer(token);
+        let url = format!("{API_ROOT}/repos/{owner}/{repo}/pulls/{number}");
+        let payload = serde_json::to_vec(body).map_err(internal);
+        Box::pin(async move {
+            let response = send(
+                client
+                    .patch(url)
+                    .header("Authorization", authorization)
+                    .header("Content-Type", "application/json")
+                    .body(payload?),
+            )
+            .await?;
+            let raw: RawPull = serde_json::from_str(&response).map_err(malformed)?;
+            Ok(map_pull_detail(raw))
+        })
+    }
+
+    fn merge_pull(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        body: &MergePullRequestBody,
+    ) -> GithubFuture<MergePullRequestResult> {
+        let client = self.client.clone();
+        let authorization = bearer(token);
+        let url = format!("{API_ROOT}/repos/{owner}/{repo}/pulls/{number}/merge");
+        let payload = serde_json::to_vec(&MergePullPayload::from(body)).map_err(internal);
+        Box::pin(async move {
+            let response = send(
+                client
+                    .put(url)
+                    .header("Authorization", authorization)
+                    .header("Content-Type", "application/json")
+                    .body(payload?),
+            )
+            .await?;
+            let raw: RawMergeResult = serde_json::from_str(&response).map_err(malformed)?;
+            Ok(MergePullRequestResult {
+                sha: raw.sha,
+                merged: raw.merged,
+                message: raw.message,
+            })
+        })
+    }
+
     fn get_issue(
         &self,
         token: &str,
@@ -1418,6 +1813,181 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(map_search_pull_item(raw).merged_at, None);
+    }
+
+    #[test]
+    fn maps_pull_detail_including_refs_and_merge_verdict() {
+        let raw: RawPull = serde_json::from_value(serde_json::json!({
+            "number": 42,
+            "title": "Add a thing",
+            "state": "open",
+            "body": "why",
+            "user": { "login": "octocat", "avatar_url": "https://a/1" },
+            "labels": [{ "name": "enhancement", "color": "a2eeef" }],
+            "assignees": [{ "login": "hubot", "avatar_url": "https://a/2" }],
+            "created_at": "2026-09-01T12:00:00Z",
+            "updated_at": "2026-09-02T12:00:00Z",
+            "html_url": "https://github.com/octocat/repo/pull/42",
+            "draft": true,
+            "merged_at": null,
+            "mergeable": true,
+            "mergeable_state": "clean",
+            "head": { "ref": "feature", "sha": "aaa", "label": "octocat:feature" },
+            "base": { "ref": "main", "sha": "bbb", "label": "octocat:main" },
+            "additions": 10,
+            "deletions": 3,
+            "changed_files": 2,
+            "commits": 4
+        }))
+        .unwrap();
+        let mapped = map_pull_detail(raw);
+        assert_eq!(mapped.number, 42);
+        assert!(mapped.draft);
+        assert_eq!(mapped.merged_at, None);
+        assert_eq!(mapped.mergeable, Some(true));
+        assert_eq!(mapped.mergeable_state, "clean");
+        assert_eq!(mapped.head.r#ref, "feature");
+        assert_eq!(mapped.base.r#ref, "main");
+        assert_eq!(mapped.additions, 10);
+        assert_eq!(mapped.commits, 4);
+    }
+
+    /// GitHub computes mergeability in the background and reports null until
+    /// it finishes, so the tri-state has to survive the mapping.
+    #[test]
+    fn keeps_pending_mergeability_distinct_from_a_verdict() {
+        let raw: RawPull = serde_json::from_value(serde_json::json!({
+            "number": 1,
+            "title": "t",
+            "state": "open",
+            "mergeable": null,
+            "mergeable_state": "unknown"
+        }))
+        .unwrap();
+        let mapped = map_pull_detail(raw);
+        assert_eq!(mapped.mergeable, None);
+        assert_eq!(mapped.mergeable_state, "unknown");
+    }
+
+    #[test]
+    fn pull_detail_tolerates_missing_refs_and_body() {
+        let raw: RawPull = serde_json::from_value(serde_json::json!({
+            "number": 9,
+            "title": "sparse",
+            "state": "open"
+        }))
+        .unwrap();
+        let mapped = map_pull_detail(raw);
+        assert_eq!(mapped.body, "");
+        assert_eq!(mapped.head.r#ref, "");
+        assert_eq!(mapped.base.label, "");
+        assert_eq!(mapped.additions, 0);
+    }
+
+    /// A review request names the user in `requested_reviewer`, not
+    /// `assignee`, and the UI renders both through the same slot.
+    #[test]
+    fn review_request_events_reuse_the_assignee_slot() {
+        let raw: RawIssueEvent = serde_json::from_value(serde_json::json!({
+            "id": 5,
+            "event": "review_requested",
+            "actor": { "login": "octocat", "avatar_url": "https://a/1" },
+            "created_at": "2026-09-01T12:00:00Z",
+            "requested_reviewer": { "login": "hubot", "avatar_url": "https://a/2" }
+        }))
+        .unwrap();
+        assert_eq!(map_issue_event(raw).assignee.as_deref(), Some("hubot"));
+    }
+
+    #[test]
+    fn maps_review_comments_with_optional_line_and_reply() {
+        let raw: RawPullReviewComment = serde_json::from_value(serde_json::json!({
+            "id": 77,
+            "user": { "login": "hubot", "avatar_url": "https://a/2" },
+            "body": "nit",
+            "path": "src/lib.rs",
+            "line": 42,
+            "diff_hunk": "@@ -1 +1 @@\n-old\n+new",
+            "created_at": "2026-09-03T12:00:00Z",
+            "html_url": "https://github.com/octocat/repo/pull/42#discussion_r77",
+            "in_reply_to_id": 70
+        }))
+        .unwrap();
+        let mapped = map_pull_review_comment(raw);
+        assert_eq!(mapped.path, "src/lib.rs");
+        assert_eq!(mapped.line, Some(42));
+        assert_eq!(mapped.in_reply_to_id, Some(70));
+        assert!(mapped.diff_hunk.contains("+new"));
+    }
+
+    /// An outdated review comment reports no line, so the option must stay
+    /// optional instead of defaulting to a bogus line 0.
+    #[test]
+    fn outdated_review_comments_have_no_line() {
+        let raw: RawPullReviewComment = serde_json::from_value(serde_json::json!({
+            "id": 78,
+            "user": { "login": "hubot", "avatar_url": "" },
+            "body": "old",
+            "path": "src/lib.rs",
+            "diff_hunk": "",
+            "created_at": "2026-09-03T12:00:00Z",
+            "html_url": ""
+        }))
+        .unwrap();
+        assert_eq!(map_pull_review_comment(raw).line, None);
+    }
+
+    #[test]
+    fn maps_pull_reviews() {
+        let raw: RawPullReview = serde_json::from_value(serde_json::json!({
+            "id": 3,
+            "user": { "login": "hubot", "avatar_url": "https://a/2" },
+            "state": "CHANGES_REQUESTED",
+            "body": "please fix",
+            "submitted_at": "2026-09-03T12:00:00Z",
+            "html_url": "https://github.com/octocat/repo/pull/42#pullrequestreview-3"
+        }))
+        .unwrap();
+        let mapped = map_pull_review(raw);
+        assert_eq!(mapped.state, "CHANGES_REQUESTED");
+        assert_eq!(mapped.author.login, "hubot");
+        assert_eq!(mapped.body, "please fix");
+    }
+
+    /// The IPC DTO is camelCase but GitHub's merge endpoint takes
+    /// `merge_method`, so the wire form is built separately and must not
+    /// inherit the IPC naming.
+    #[test]
+    fn merge_payload_uses_snake_case_for_the_github_wire() {
+        let payload = MergePullPayload::from(&MergePullRequestBody {
+            merge_method: PullRequestMergeMethod::Squash,
+            commit_title: None,
+            commit_message: None,
+        });
+        let json = serde_json::to_value(payload).unwrap();
+        assert_eq!(json, serde_json::json!({ "merge_method": "squash" }));
+
+        let with_message = MergePullPayload::from(&MergePullRequestBody {
+            merge_method: PullRequestMergeMethod::Rebase,
+            commit_title: Some("subject".into()),
+            commit_message: Some("body".into()),
+        });
+        assert_eq!(
+            serde_json::to_value(with_message).unwrap(),
+            serde_json::json!({
+                "merge_method": "rebase",
+                "commit_title": "subject",
+                "commit_message": "body"
+            })
+        );
+    }
+
+    #[test]
+    fn merge_body_defaults_to_a_merge_commit() {
+        assert_eq!(
+            MergePullRequestBody::default().merge_method,
+            PullRequestMergeMethod::Merge
+        );
     }
 
     #[test]

@@ -1,7 +1,11 @@
 import { GitPullRequest } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { LabelBadge } from "@/components/repo/issues/issues-view";
+import { LabelBadge } from "@/components/github/label-badge";
+import {
+    pullRequestStatusOf,
+    StatusBadge,
+} from "@/components/github/status-badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,16 +37,11 @@ import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
 import { useGithubAccount } from "@/hooks/github/use-github-account";
 import { useGithubCoords } from "@/hooks/github/use-github-issues";
 import { useRepoPullRequests } from "@/hooks/github/use-github-pull-requests";
+import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
 import type {
     GithubLabel,
     GithubPullRequestListItem,
 } from "@/lib/backend/protocol";
-import { openExternal } from "@/lib/open-external";
-
-import {
-    PullStatusBadge,
-    pullRequestStatusOf,
-} from "../../pulls/pull-status-badge";
 
 type TabState = "open" | "closed";
 
@@ -75,6 +74,7 @@ export function PullRequestsView({ repoId }: { repoId: number }) {
     );
 
     const shared = {
+        repoId,
         rows,
         isLoading: account.isLoading || coordsLoading || pulls.isLoading,
         isError: pulls.isError,
@@ -175,6 +175,7 @@ function PullsTableHead() {
 }
 
 function PullsTable({
+    repoId,
     state,
     rows,
     isLoading,
@@ -187,6 +188,7 @@ function PullsTable({
     isFetchingNextPage,
     onLoadMore,
 }: {
+    repoId: number;
     state: TabState;
     rows: GithubPullRequestListItem[];
     isLoading: boolean;
@@ -214,6 +216,8 @@ function PullsTable({
         observer.observe(sentinel);
         return () => observer.disconnect();
     }, [hasNextPage, isFetchingNextPage, onLoadMore]);
+
+    const router = useActiveTabRouter();
 
     if (isLoading) {
         return <PullsTableSkeleton />;
@@ -293,16 +297,16 @@ function PullsTable({
                             key={pull.number}
                             className="cursor-pointer"
                             onClick={() => {
-                                if (pull.htmlUrl) {
-                                    void openExternal(pull.htmlUrl);
-                                }
+                                router?.navigate({
+                                    to: `/repo/${repoId}/pull/${pull.number}`,
+                                });
                             }}
                         >
                             <TableCell className="font-medium">
                                 {pull.title}
                             </TableCell>
                             <TableCell>
-                                <PullStatusBadge
+                                <StatusBadge
                                     status={pullRequestStatusOf(pull)}
                                 />
                             </TableCell>

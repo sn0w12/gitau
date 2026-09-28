@@ -34,6 +34,7 @@ import { getEntryByRepoId } from "@/stores/repository-store";
 
 import { HomePage } from "./home-page";
 import { IssuePage } from "./repo/issue";
+import { PullRequestPage } from "./repo/pull";
 
 /**
  * Fresh route-tree instances per call: routers mutate their route nodes
@@ -182,6 +183,20 @@ export function createTabRouteTree(options: { tabId?: string } = {}) {
         },
     });
 
+    const repoPullRoute = createRoute({
+        getParentRoute: () => rootRoute,
+        path: "/repo/$repoId/pull/$pullId",
+        component: PullRequestPage,
+        loader: ({ params }) => {
+            applyTitle("Pull request", "pull-request");
+            if (tabId === null) return;
+            const path = getEntryByRepoId(Number(params.repoId))?.path;
+            if (path !== undefined) {
+                associateTabWithRepoPath(tabId, path);
+            }
+        },
+    });
+
     return rootRoute.addChildren([
         homeRoute,
         settingsRoute,
@@ -191,5 +206,6 @@ export function createTabRouteTree(options: { tabId?: string } = {}) {
         ...(devRoute ? [devRoute] : []),
         repoRoute,
         repoIssueRoute,
+        repoPullRoute,
     ]);
 }

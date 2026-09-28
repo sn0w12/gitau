@@ -52,7 +52,7 @@ import { useLocalIssueRepoMap } from "@/hooks/github/use-github-issues";
 import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
 import type { GithubNotification } from "@/lib/backend/protocol";
 import { GitBackendError } from "@/lib/backend/transport/invoke";
-import { parseIssueUrl } from "@/lib/github/repo-coords";
+import { parseIssueUrl, parsePullUrl } from "@/lib/github/repo-coords";
 import { openExternal } from "@/lib/open-external";
 import { toastError } from "@/lib/toast-error";
 import { formatRelativeDate } from "@/lib/utils";
@@ -404,15 +404,18 @@ function InboxRow({
     const resolve = useResolveSubjectUrl();
     const [resolving, setResolving] = useState(false);
 
-    // Issue threads whose repo is open resolve to the in-app issue page;
-    // everything else keeps the external browser behavior.
-    const issueTarget =
+    // Issue and pull request threads whose repo is open resolve to the
+    // in-app thread page; everything else keeps the external browser
+    // behavior.
+    const threadTarget =
         thread.subjectType === "Issue"
             ? parseIssueUrl(thread.htmlUrl ?? thread.subjectUrl ?? undefined)
-            : null;
-    const inAppRepoId = issueTarget
+            : thread.subjectType === "PullRequest"
+              ? parsePullUrl(thread.htmlUrl ?? thread.subjectUrl ?? undefined)
+              : null;
+    const inAppRepoId = threadTarget
         ? localIssueRepos.get(
-              `${issueTarget.owner.toLowerCase()}/${issueTarget.repo.toLowerCase()}`
+              `${threadTarget.owner.toLowerCase()}/${threadTarget.repo.toLowerCase()}`
           )
         : undefined;
 
@@ -435,10 +438,13 @@ function InboxRow({
     };
 
     const openInApp = () => {
-        if (inAppRepoId === undefined || !issueTarget) return;
+        if (inAppRepoId === undefined || !threadTarget) return;
         if (thread.unread) onMarkRead();
         router?.navigate({
-            to: `/repo/${inAppRepoId}/issue/${issueTarget.number}`,
+            to:
+                thread.subjectType === "PullRequest"
+                    ? `/repo/${inAppRepoId}/pull/${threadTarget.number}`
+                    : `/repo/${inAppRepoId}/issue/${threadTarget.number}`,
         });
     };
 

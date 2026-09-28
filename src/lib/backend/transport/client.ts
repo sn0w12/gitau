@@ -22,6 +22,9 @@ import type {
     GithubIssueDetail,
     GithubIssueEvent,
     GithubOrg,
+    GithubPullRequestDetail,
+    GithubPullRequestReview,
+    GithubPullRequestReviewComment,
     GithubRepoPermissions,
     GraphEvent,
     HighlightedSnippet,
@@ -36,6 +39,8 @@ import type {
     HookContent,
     HookRunResult,
     LicenseTemplateInfo,
+    MergePullRequestBody,
+    MergePullRequestResult,
     NotificationPage,
     Oid,
     OpenedRepository,
@@ -61,6 +66,7 @@ import type {
     StatusReport,
     TagInfo,
     UpdateIssueBody,
+    UpdatePullRequestBody,
     ValuesSnapshot,
     WorkflowOutcome,
     WorktreeInfo,
@@ -667,6 +673,42 @@ function createRawBackendClient() {
                     "github_list_pull_requests",
                     { args: { owner, repo, pullState, labels, page } }
                 ),
+            getPull: (owner: string, repo: string, number: number) =>
+                invokeCommand<GithubPullRequestDetail>("github_get_pull", {
+                    args: { owner, repo, number },
+                }),
+            listPullReviews: (owner: string, repo: string, number: number) =>
+                invokeCommand<GithubPullRequestReview[]>(
+                    "github_list_pull_reviews",
+                    { args: { owner, repo, number } }
+                ),
+            listPullReviewComments: (
+                owner: string,
+                repo: string,
+                number: number
+            ) =>
+                invokeCommand<GithubPullRequestReviewComment[]>(
+                    "github_list_pull_review_comments",
+                    { args: { owner, repo, number } }
+                ),
+            updatePull: (
+                owner: string,
+                repo: string,
+                number: number,
+                body: UpdatePullRequestBody
+            ) =>
+                invokeCommand<GithubPullRequestDetail>("github_update_pull", {
+                    args: { owner, repo, number, body },
+                }),
+            mergePull: (
+                owner: string,
+                repo: string,
+                number: number,
+                body: MergePullRequestBody
+            ) =>
+                invokeCommand<MergePullRequestResult>("github_merge_pull", {
+                    args: { owner, repo, number, body },
+                }),
             searchIssues: (page?: number) =>
                 invokeCommand<SearchIssuePage>("github_search_issues", {
                     args: { page },

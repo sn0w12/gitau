@@ -9,7 +9,21 @@ import {
     type ConversationInputHandle,
 } from "@/components/github/input";
 import { MessageSpacer, TimelineMessage } from "@/components/github/message";
-import { issueStatusOf, StatusBadge } from "@/components/github/status-badge";
+import {
+    MERGE_METHOD_LABEL,
+    PullChangesBlock,
+    PullHeaderActions,
+} from "@/components/github/pull-actions";
+import {
+    ReviewSummary,
+    TimelineReview,
+    TimelineReviewComment,
+} from "@/components/github/review";
+import {
+    issueStatusOf,
+    pullRequestStatusOf,
+    StatusBadge,
+} from "@/components/github/status-badge";
 import {
     AvatarStack,
     ComposerSkeleton,
@@ -28,31 +42,40 @@ import {
 import { Frame } from "@/components/ui/frame";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toastManager } from "@/components/ui/toast";
+import { useConfirm } from "@/contexts/confirm-context";
 import { useGithubAccount } from "@/hooks/github/use-github-account";
 import {
     useCreateIssueComment,
     useDeleteIssueComment,
     useGithubCoords,
-    useIssue,
     useRepoPermissions,
-    useUpdateIssue,
     useUpdateIssueComment,
 } from "@/hooks/github/use-github-issues";
+import {
+    useMergePullRequest,
+    usePullRequest,
+    useUpdatePullRequest,
+} from "@/hooks/github/use-github-pull-requests";
 import {
     useActiveTabHistory,
     useActiveTabRouter,
 } from "@/hooks/tabs/use-active-tab-router";
 import type {
     GithubIssueComment,
-    GithubIssueDetail,
     GithubIssueEvent,
+    GithubPullRequestDetail,
+    GithubPullRequestReview,
+    GithubPullRequestReviewComment,
+    MergePullRequestBody,
+    PullRequestMergeMethod,
 } from "@/lib/backend/protocol";
 import {
-    buildIssueTimeline,
+    buildPullTimeline,
     isTimelineMessage,
     timelineKey,
     timelineParticipants,
-    type IssueTimelineItem,
+    type TimelineItem,
 } from "@/lib/github/timeline";
 import { toastError } from "@/lib/toast-error";
 import { repositoryStore } from "@/stores/repository-store";
@@ -69,14 +92,14 @@ interface MessageActions {
 function TimelineRow({
     item,
     last,
-    issue,
+    pull,
     owner,
     repo,
     actions,
 }: {
-    item: IssueTimelineItem;
+    item: TimelineItem;
     last: boolean;
-    issue: GithubIssueDetail;
+    pull: GithubPullRequestDetail;
     owner: string;
     repo: string;
     actions: MessageActions;
@@ -84,16 +107,16 @@ function TimelineRow({
     if (item.kind === "body") {
         return (
             <TimelineMessage
-                text={issue.body || "_No description_"}
-                author={issue.author.login}
-                avatarUrl={issue.author.avatarUrl || undefined}
-                createdAt={issue.createdAt}
-                link={issue.htmlUrl || undefined}
+                text={pull.body || "_No description_"}
+                author={pull.author.login}
+                avatarUrl={pull.author.avatarUrl || undefined}
+                createdAt={pull.createdAt}
+                link={pull.htmlUrl || undefined}
                 owner={owner}
                 repo={repo}
                 canQuote={actions.canQuote}
                 onQuote={actions.onQuote}
-                canEdit={actions.canEdit(issue.author.login)}
+                canEdit={actions.canEdit(pull.author.login)}
                 onSave={actions.onSaveBody}
             />
         );
@@ -119,6 +142,28 @@ function TimelineRow({
             />
         );
     }
+    if (item.kind === "review") {
+        return (
+            <TimelineReview
+                review={item.review}
+                owner={owner}
+                repo={repo}
+                canQuote={actions.canQuote}
+                onQuote={actions.onQuote}
+            />
+        );
+    }
+    if (item.kind === "reviewComment") {
+        return (
+            <TimelineReviewComment
+                comment={item.comment}
+                owner={owner}
+                repo={repo}
+                canQuote={actions.canQuote}
+                onQuote={actions.onQuote}
+            />
+        );
+    }
     const event = item.event;
     return (
         <TimelineEvent
@@ -134,20 +179,29 @@ function TimelineRow({
     );
 }
 
-function IssueSidebar({
-    issue,
+function PullSidebar({
+    pull,
     participants,
+    reviews,
 }: {
-    issue: GithubIssueDetail;
+    pull: GithubPullRequestDetail;
     participants: ReturnType<typeof timelineParticipants>;
+    reviews: GithubPullRequestReview[];
 }) {
     return (
-        <Frame className="flex h-fit w-full flex-col">
-            <SidebarBlock label="Assignees">
-                <AvatarStack users={issue.assignees} />
+        <Frame
+            className="flex h-fit w-full flex-col"
+            data-testid="pull-sidebar"
+        >
+            <PullChangesBlock pull={pull} />
+            <SidebarBlock label="Reviewers">
+                <AvatarStack users={pull.assignees} />
             </SidebarBlock>
             <SidebarBlock label="Labels">
-                <LabelList labels={issue.labels} />
+                <LabelList labels={pull.labels} />
+            </SidebarBlock>
+            <SidebarBlock label="Reviews">
+                <ReviewSummary reviews={reviews} />
             </SidebarBlock>
             <SidebarBlock label="Participants">
                 <AvatarStack users={participants} />
@@ -156,62 +210,54 @@ function IssueSidebar({
     );
 }
 
-function IssueContent({
+function PullRequestContent({
     owner,
     repo,
-    issue,
+    pull,
     comments,
     events,
+    reviews,
+    reviewComments,
     signedIn,
     viewerLogin,
+    canPush,
     goBack,
 }: {
     owner: string;
     repo: string;
-    issue: GithubIssueDetail;
+    pull: GithubPullRequestDetail;
     comments: GithubIssueComment[];
     events: GithubIssueEvent[];
+    reviews: GithubPullRequestReview[];
+    reviewComments: GithubPullRequestReviewComment[];
     signedIn: boolean;
     viewerLogin: string | null;
+    canPush: boolean;
     goBack: () => void;
 }) {
     const createComment = useCreateIssueComment();
-    const updateIssue = useUpdateIssue();
     const updateComment = useUpdateIssueComment();
     const deleteComment = useDeleteIssueComment();
-    const permissions = useRepoPermissions(owner, repo);
+    const updatePull = useUpdatePullRequest();
+    const merge = useMergePullRequest();
+    const { confirm } = useConfirm();
     const composerRef = useRef<ConversationInputHandle>(null);
-    const mutating =
-        createComment.pending || updateIssue.pending || updateComment.pending;
-    const open = issueStatusOf(issue.state) === "open";
-    const timeline = buildIssueTimeline(issue, { comments, events });
-    const participants = timelineParticipants(issue.participants, comments);
 
-    const handleComment = async (body: string) => {
-        try {
-            await createComment.createComment(owner, repo, issue.number, body);
-        } catch (error) {
-            toastError("Could not post comment", error);
-            throw error;
-        }
-    };
+    const status = pullRequestStatusOf(pull);
+    const isOpen = issueStatusOf(pull.state) === "open";
+    const timeline = buildPullTimeline(pull, {
+        comments,
+        events,
+        reviews,
+        reviewComments,
+    });
+    const participants = timelineParticipants(
+        [pull.author, ...pull.assignees],
+        comments,
+        reviews.map((review) => review.author)
+    );
 
-    const handleToggleState = async () => {
-        try {
-            await updateIssue.updateIssue(owner, repo, issue.number, {
-                state: open ? "closed" : "open",
-            });
-        } catch (error) {
-            toastError(
-                open ? "Could not close issue" : "Could not reopen issue",
-                error
-            );
-        }
-    };
-
-    // Authors edit their own messages; repo push access moderates the
-    // rest. Signed-out viewers get no write actions at all.
-    const canPush = permissions.data?.push === true;
+    // Authors edit their own messages; repo push access moderates the rest.
     const canEdit = (authorLogin: string) =>
         signedIn &&
         (authorLogin.toLowerCase() === (viewerLogin ?? "").toLowerCase() ||
@@ -220,16 +266,15 @@ function IssueContent({
         canQuote: signedIn,
         onQuote: (text) => composerRef.current?.insertQuote(text),
         canEdit,
-        // Rejections propagate to the message, which toasts once.
         onSaveBody: async (body) => {
-            await updateIssue.updateIssue(owner, repo, issue.number, { body });
+            await updatePull.updatePull(owner, repo, pull.number, { body });
         },
         onSaveComment: async (commentId, body) => {
             await updateComment.updateComment(
                 owner,
                 repo,
                 commentId,
-                issue.number,
+                pull.number,
                 body
             );
         },
@@ -238,34 +283,109 @@ function IssueContent({
                 owner,
                 repo,
                 commentId,
-                issue.number
+                pull.number
             );
         },
     };
+
+    const handleComment = async (body: string) => {
+        try {
+            await createComment.createComment(owner, repo, pull.number, body);
+        } catch (error) {
+            toastError("Could not post comment", error);
+            throw error;
+        }
+    };
+
+    const handleToggleState = async () => {
+        try {
+            await updatePull.updatePull(owner, repo, pull.number, {
+                state: isOpen ? "closed" : "open",
+            });
+        } catch (error) {
+            toastError(
+                isOpen
+                    ? "Could not close pull request"
+                    : "Could not reopen pull request",
+                error
+            );
+        }
+    };
+
+    const handleToggleDraft = async () => {
+        try {
+            await updatePull.updatePull(owner, repo, pull.number, {
+                draft: !pull.draft,
+            });
+        } catch (error) {
+            toastError("Could not change draft state", error);
+        }
+    };
+
+    const handleMerge = async (method: PullRequestMergeMethod) => {
+        const result = await confirm({
+            title: `Merge pull request #${pull.number}?`,
+            description: `${MERGE_METHOD_LABEL[method]}: ${pull.head.ref} into ${pull.base.ref}. This writes to the remote and cannot be undone from here.`,
+            confirmText: "Merge",
+        });
+        if (!result.confirmed) return;
+        const body: MergePullRequestBody = { mergeMethod: method };
+        try {
+            const outcome = await merge.mergePull(
+                owner,
+                repo,
+                pull.number,
+                body
+            );
+            if (!outcome.merged) {
+                toastManager.add({
+                    title: "GitHub declined the merge",
+                    description: outcome.message,
+                    type: "error",
+                });
+                return;
+            }
+            toastManager.add({ title: "Pull request merged", type: "success" });
+        } catch (error) {
+            toastError("Could not merge pull request", error);
+        }
+    };
+
+    const mutating =
+        createComment.pending ||
+        updateComment.pending ||
+        deleteComment.pending ||
+        updatePull.pending;
 
     return (
         <div className="container flex h-full min-h-0 flex-col px-1 py-2">
             <header className="ui-selectable flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <span className="truncate font-display text-3xl tracking-tight">
-                        {issue.title}
+                        {pull.title}
                     </span>
                     <span className="self-end pb-0.5 font-mono text-muted-foreground">
-                        #{issue.number}
+                        #{pull.number}
                     </span>
-                    <StatusBadge
-                        status={issueStatusOf(issue.state)}
-                        className="mb-1.5 self-end"
-                    />
+                    <StatusBadge status={status} className="mb-1.5 self-end" />
                 </div>
-                <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={goBack}
-                    aria-label="Back to issues"
-                >
-                    <X />
-                </Button>
+                <div className="flex items-center gap-2">
+                    <PullHeaderActions
+                        pull={pull}
+                        canPush={canPush}
+                        onMerge={(method) => void handleMerge(method)}
+                        onToggleDraft={() => void handleToggleDraft()}
+                        pending={merge.pending || updatePull.pending}
+                    />
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={goBack}
+                        aria-label="Back to pull requests"
+                    >
+                        <X />
+                    </Button>
+                </div>
             </header>
             <div className="mt-2 grid min-h-0 flex-1 grid-cols-3">
                 <div className="col-span-2 flex min-h-0 w-full flex-col">
@@ -282,7 +402,7 @@ function IssueContent({
                                     <TimelineRow
                                         item={item}
                                         last={index === timeline.length - 1}
-                                        issue={issue}
+                                        pull={pull}
                                         owner={owner}
                                         repo={repo}
                                         actions={actions}
@@ -295,40 +415,44 @@ function IssueContent({
                             <ConversationInput
                                 pending={mutating}
                                 stateLabel={
-                                    open ? "Close issue" : "Reopen issue"
+                                    isOpen
+                                        ? "Close pull request"
+                                        : "Reopen pull request"
                                 }
+                                onToggleState={() => void handleToggleState()}
                                 owner={owner}
                                 repo={repo}
                                 onSubmit={handleComment}
-                                onToggleState={() => void handleToggleState()}
                                 inputRef={composerRef}
                             />
                         ) : null}
                     </ScrollArea>
                 </div>
-                <IssueSidebar issue={issue} participants={participants} />
+                <div className="flex flex-col gap-1">
+                    <PullSidebar
+                        pull={pull}
+                        participants={participants}
+                        reviews={reviews}
+                    />
+                </div>
             </div>
         </div>
     );
 }
 
-function useIssueParams() {
+function usePullParams() {
     const params = useParams({ strict: false });
     const repoId = Number(params.repoId);
-    const issueNumber = Number(params.issueId);
+    const pullNumber = Number(params.pullId);
     const valid =
         Number.isInteger(repoId) &&
         repoId > 0 &&
-        Number.isInteger(issueNumber) &&
-        issueNumber > 0;
-    return { repoId, issueNumber, valid };
+        Number.isInteger(pullNumber) &&
+        pullNumber > 0;
+    return { repoId, pullNumber, valid };
 }
 
-function useIssueRouteData(
-    repoId: number,
-    issueNumber: number,
-    valid: boolean
-) {
+function usePullRouteData(repoId: number, pullNumber: number, valid: boolean) {
     const entry = useSelector(repositoryStore, (state) => {
         if (!valid) return undefined;
         for (const candidate of state.entries.values()) {
@@ -338,20 +462,29 @@ function useIssueRouteData(
     });
     const account = useGithubAccount();
     const { coords } = useGithubCoords(valid ? repoId : undefined);
-    const { detail, comments, events } = useIssue(
+    const number = valid ? pullNumber : null;
+    const thread = usePullRequest(
         coords?.owner ?? null,
         coords?.repo ?? null,
-        valid ? issueNumber : null
+        number
     );
-    return { entry, account, coords, detail, comments, events };
+    const permissions = useRepoPermissions(
+        coords?.owner ?? null,
+        coords?.repo ?? null
+    );
+    return { entry, account, coords, permissions, thread };
 }
 
-export function IssuePage() {
-    const { repoId, issueNumber, valid } = useIssueParams();
+export function PullRequestPage() {
+    const { repoId, pullNumber, valid } = usePullParams();
     const router = useActiveTabRouter();
     const history = useActiveTabHistory();
-    const { entry, account, coords, detail, comments, events } =
-        useIssueRouteData(repoId, issueNumber, valid);
+    const { entry, account, coords, permissions, thread } = usePullRouteData(
+        repoId,
+        pullNumber,
+        valid
+    );
+    const { detail, comments, events, reviews, reviewComments } = thread;
 
     const goBack = () => {
         if (history.canGoBack) {
@@ -359,7 +492,7 @@ export function IssuePage() {
         } else {
             router?.navigate({
                 to: `/repo/${repoId}`,
-                search: { view: "issues" },
+                search: { view: "pulls" },
             });
         }
     };
@@ -414,15 +547,15 @@ export function IssuePage() {
             <div className="container flex h-full items-center justify-center p-1">
                 <Empty>
                     <EmptyHeader>
-                        <EmptyTitle>Could not load issue</EmptyTitle>
+                        <EmptyTitle>Could not load pull request</EmptyTitle>
                         <EmptyDescription>
                             {detail.error instanceof Error
                                 ? detail.error.message
-                                : "The issue could not be found."}
+                                : "The pull request could not be found."}
                         </EmptyDescription>
                     </EmptyHeader>
                     <Button variant="outline" size="sm" onClick={goBack}>
-                        Back to issues
+                        Back to pull requests
                     </Button>
                 </Empty>
             </div>
@@ -430,14 +563,17 @@ export function IssuePage() {
     }
 
     return (
-        <IssueContent
+        <PullRequestContent
             owner={coords?.owner ?? ""}
             repo={coords?.repo ?? ""}
-            issue={detail.data}
+            pull={detail.data}
             comments={comments.data ?? []}
             events={events.data ?? []}
+            reviews={reviews.data ?? []}
+            reviewComments={reviewComments.data ?? []}
             signedIn={account.data != null}
             viewerLogin={account.data?.login ?? null}
+            canPush={permissions.data?.push === true}
             goBack={goBack}
         />
     );

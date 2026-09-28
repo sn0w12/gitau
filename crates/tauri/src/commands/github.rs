@@ -2,8 +2,10 @@ use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
 use git_backend::api::github::{
     AccountProfile, DeviceFlowStart, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
-    GithubOrg, GithubRepoPermissions, NotificationPage, PublishRepositoryRequest, PublishResult,
-    SearchIssuePage, SearchPullRequestPage, UpdateIssueBody,
+    GithubOrg, GithubPullRequestDetail, GithubPullRequestReview, GithubPullRequestReviewComment,
+    GithubRepoPermissions, MergePullRequestBody, MergePullRequestResult, NotificationPage,
+    PublishRepositoryRequest, PublishResult, SearchIssuePage, SearchPullRequestPage,
+    UpdateIssueBody, UpdatePullRequestBody,
 };
 
 /// The connected account, `None` while signed out.
@@ -194,6 +196,78 @@ pub async fn github_search_issues(
     state
         .backend
         .github_search_issues(page.unwrap_or(1).max(1))
+        .await
+        .map_err(to_serialized)
+}
+
+#[tauri::command]
+pub async fn github_get_pull(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    number: u64,
+) -> CommandResult<GithubPullRequestDetail> {
+    state
+        .backend
+        .github_get_pull(owner, repo, number)
+        .await
+        .map_err(to_serialized)
+}
+
+#[tauri::command]
+pub async fn github_list_pull_reviews(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    number: u64,
+) -> CommandResult<Vec<GithubPullRequestReview>> {
+    state
+        .backend
+        .github_list_pull_reviews(owner, repo, number)
+        .await
+        .map_err(to_serialized)
+}
+
+#[tauri::command]
+pub async fn github_list_pull_review_comments(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    number: u64,
+) -> CommandResult<Vec<GithubPullRequestReviewComment>> {
+    state
+        .backend
+        .github_list_pull_review_comments(owner, repo, number)
+        .await
+        .map_err(to_serialized)
+}
+
+#[tauri::command]
+pub async fn github_update_pull(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    number: u64,
+    body: UpdatePullRequestBody,
+) -> CommandResult<GithubPullRequestDetail> {
+    state
+        .backend
+        .github_update_pull(owner, repo, number, body)
+        .await
+        .map_err(to_serialized)
+}
+
+#[tauri::command]
+pub async fn github_merge_pull(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    number: u64,
+    body: MergePullRequestBody,
+) -> CommandResult<MergePullRequestResult> {
+    state
+        .backend
+        .github_merge_pull(owner, repo, number, body)
         .await
         .map_err(to_serialized)
 }

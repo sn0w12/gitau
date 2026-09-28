@@ -865,6 +865,93 @@ export interface GithubRepoPermissions {
     admin: boolean;
 }
 
+/** One side of a pull request. */
+export interface GithubPullRequestRef {
+    ref: string;
+    sha: string;
+    label: string;
+}
+
+/** Full pull request detail. Everything the issue projection carries plus
+ * what only the pulls endpoint reports. */
+export interface GithubPullRequestDetail {
+    number: number;
+    title: string;
+    state: string;
+    body: string;
+    author: GithubUser;
+    labels: GithubLabel[];
+    /** Reviewers requested on the pull request. */
+    assignees: GithubUser[];
+    createdAt: string;
+    updatedAt: string;
+    htmlUrl: string;
+    draft: boolean;
+    /** Merge commit time. Set only once merged, which is also how a merged
+     * pull request is told apart from a closed one. */
+    mergedAt?: string | null;
+    /** null while GitHub is still computing the merge, so the UI must
+     * re-read before offering the merge button. */
+    mergeable?: boolean | null;
+    /** Why the merge landed where it did, e.g. `clean` or `blocked`. */
+    mergeableState: string;
+    head: GithubPullRequestRef;
+    base: GithubPullRequestRef;
+    additions: number;
+    deletions: number;
+    changedFiles: number;
+    commits: number;
+}
+
+/** One submitted review. `state` is GitHub's raw verdict. */
+export interface GithubPullRequestReview {
+    id: number;
+    author: GithubUser;
+    state: string;
+    body: string;
+    submittedAt: string;
+    htmlUrl: string;
+}
+
+/** One inline comment anchored to a line in the diff. */
+export interface GithubPullRequestReviewComment {
+    id: number;
+    author: GithubUser;
+    body: string;
+    /** Repository-relative path the comment is anchored to. */
+    path: string;
+    /** Line in the new file; absent once the comment is outdated. */
+    line?: number;
+    diffHunk: string;
+    createdAt: string;
+    htmlUrl: string;
+    inReplyToId?: number;
+}
+
+/** Partial pull request update: fields left out are untouched. */
+export interface UpdatePullRequestBody {
+    state?: string;
+    body?: string;
+    base?: string;
+    draft?: boolean;
+}
+
+export type PullRequestMergeMethod = "merge" | "rebase" | "squash";
+
+/** Merge options. An absent title or message lets GitHub pick its own. */
+export interface MergePullRequestBody {
+    mergeMethod: PullRequestMergeMethod;
+    commitTitle?: string;
+    commitMessage?: string;
+}
+
+/** `merged` is false when GitHub accepted the call but declined to merge. */
+export interface MergePullRequestResult {
+    sha: string;
+    merged: boolean;
+    message: string;
+}
+
 /** A tab as persisted in the session document. `repoId` is process-local
  * and remapped on restore after repositories are reopened. */
 export interface PersistedTab {

@@ -2,11 +2,17 @@ import { Markdown, type MarkdownComponents } from "@tanstack/markdown/react";
 import { Children, isValidElement, useMemo } from "react";
 
 import { ALERT_TAG, githubMarkdownExtension } from "@/lib/markdown/github";
+import {
+    DETAILS_TAG,
+    normalizeHtmlBlocks,
+    safeHtmlExtension,
+} from "@/lib/markdown/html";
 import { cn } from "@/lib/utils";
 
 import { ExternalLink } from "../external-link";
 import { Checkbox } from "../ui/checkbox";
 import { Frame, FramePanel } from "../ui/frame";
+import { Kbd } from "../ui/kbd";
 import { Separator } from "../ui/separator";
 import {
     Table,
@@ -18,6 +24,7 @@ import {
 } from "../ui/table";
 import { MarkdownAlert } from "./alert";
 import { CodeBlock } from "./code-block";
+import { MarkdownDetails } from "./html";
 
 function linkHref(href: string | undefined): string | undefined {
     const hasProtocol = /^[a-z][a-z0-9+.-]*:/i.test(href || "");
@@ -169,7 +176,43 @@ const components = {
     hr() {
         return <Separator className="my-3" />;
     },
-    img(props) {
+    /** Tags that only exist because a markdown body carried HTML. The rest
+     * resolve to real elements with no mapping, which React escapes. */
+    [DETAILS_TAG]: MarkdownDetails,
+    // The renderer hands every component node an empty child list, and React
+    // rejects children on an intrinsic void element outright, so a void tag
+    // needs a wrapper that drops them.
+    br({ children: _voidChildren, ...props }) {
+        return <br {...props} />;
+    },
+    wbr({ children: _voidChildren, ...props }) {
+        return <wbr {...props} />;
+    },
+    kbd(props) {
+        return <Kbd {...props} />;
+    },
+    sub(props) {
+        return <sub {...props} className="text-xs" />;
+    },
+    sup(props) {
+        return <sup {...props} className="text-xs" />;
+    },
+    mark(props) {
+        return <mark {...props} className="rounded-sm bg-warning/24 px-0.5" />;
+    },
+    small(props) {
+        return <small {...props} className="text-muted-foreground" />;
+    },
+    s(props) {
+        return <s {...props} />;
+    },
+    del(props) {
+        return <del {...props} />;
+    },
+    ins(props) {
+        return <ins {...props} className="no-underline" />;
+    },
+    img({ children: _voidChildren, ...props }) {
         const src = props.src || "";
         const trusted =
             /^https:\/\/(github\.com|githubusercontent\.com|githubassets\.com)\//i.test(
@@ -216,6 +259,9 @@ export function CustomMarkdown({
 }) {
     const extensions = useMemo(
         () => [
+            // Sanitizing runs first so the GitHub text rules see the tags as
+            // plain text they can autolink around, rather than as nodes.
+            safeHtmlExtension(),
             githubMarkdownExtension(
                 owner && repo ? { owner, repo } : undefined
             ),
@@ -224,8 +270,18 @@ export function CustomMarkdown({
     );
     return (
         <div className="min-w-0 break-words">
-            <Markdown extensions={extensions} components={components}>
-                {children}
+            <Markdown
+                extensions={extensions}
+                components={components}
+                // Required so the parser can tell real html from escaped
+                // `\<b>` text. It is safe because `safeHtmlExtension`
+                // rewrites every html node before the renderer sees one, so
+                // the renderer's innerHTML branch stays unreachable.
+                allowHtml
+            >
+                {typeof children === "string"
+                    ? normalizeHtmlBlocks(children)
+                    : children}
             </Markdown>
         </div>
     );

@@ -20,9 +20,12 @@ pub mod token_store;
 
 pub use crate::api::github::{
     AccountProfile, DeviceFlowStart, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
-    GithubIssueListItem, GithubLabel, GithubNotification, GithubOrg, GithubPullRequestListItem,
-    GithubRepoPermissions, GithubUser, NotificationPage, PublishRepositoryRequest, PublishResult,
-    SearchIssueItem, SearchIssuePage, SearchPullRequestPage, UpdateIssueBody,
+    GithubIssueListItem, GithubLabel, GithubNotification, GithubOrg, GithubPullRequestDetail,
+    GithubPullRequestListItem, GithubPullRequestRef, GithubPullRequestReview,
+    GithubPullRequestReviewComment, GithubRepoPermissions, GithubUser, MergePullRequestBody,
+    MergePullRequestResult, NotificationPage, PublishRepositoryRequest, PublishResult,
+    PullRequestMergeMethod, SearchIssueItem, SearchIssuePage, SearchPullRequestPage,
+    UpdateIssueBody, UpdatePullRequestBody,
 };
 pub use api::{CreateRepoBody, CreatedRepository, GithubApi, HttpGithubApi};
 pub use token_store::{KeyringTokenStore, MemoryTokenStore, TokenStore};
@@ -437,6 +440,80 @@ impl GitHubAuth {
         Ok(self
             .api
             .list_pull_requests(&token, owner, repo, state, labels, page)
+            .await?)
+    }
+
+    pub async fn get_pull(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<GithubPullRequestDetail> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self.api.get_pull(&token, owner, repo, number).await?)
+    }
+
+    pub async fn list_pull_reviews(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<Vec<GithubPullRequestReview>> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .list_pull_reviews(&token, owner, repo, number)
+            .await?)
+    }
+
+    pub async fn list_pull_review_comments(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<Vec<GithubPullRequestReviewComment>> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .list_pull_review_comments(&token, owner, repo, number)
+            .await?)
+    }
+
+    pub async fn update_pull(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        body: &UpdatePullRequestBody,
+    ) -> Result<GithubPullRequestDetail> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .update_pull(&token, owner, repo, number, body)
+            .await?)
+    }
+
+    pub async fn merge_pull(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        body: &MergePullRequestBody,
+    ) -> Result<MergePullRequestResult> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .merge_pull(&token, owner, repo, number, body)
             .await?)
     }
 
@@ -875,6 +952,58 @@ mod tests {
                 _labels: &[String],
                 _page: u32,
             ) -> api::GithubFuture<SearchPullRequestPage> {
+                unreachable!()
+            }
+
+            fn get_pull(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _number: u64,
+            ) -> api::GithubFuture<GithubPullRequestDetail> {
+                unreachable!()
+            }
+
+            fn list_pull_reviews(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _number: u64,
+            ) -> api::GithubFuture<Vec<GithubPullRequestReview>> {
+                unreachable!()
+            }
+
+            fn list_pull_review_comments(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _number: u64,
+            ) -> api::GithubFuture<Vec<GithubPullRequestReviewComment>> {
+                unreachable!()
+            }
+
+            fn update_pull(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _number: u64,
+                _body: &UpdatePullRequestBody,
+            ) -> api::GithubFuture<GithubPullRequestDetail> {
+                unreachable!()
+            }
+
+            fn merge_pull(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _number: u64,
+                _body: &MergePullRequestBody,
+            ) -> api::GithubFuture<MergePullRequestResult> {
                 unreachable!()
             }
 

@@ -6,8 +6,9 @@ use std::sync::{Arc, Mutex};
 
 use git_backend::Backend;
 use git_backend::api::github::{
-    AccountProfile, DeviceFlowStart, GithubOrg, NotificationPage, SearchIssuePage,
-    SearchPullRequestPage,
+    AccountProfile, DeviceFlowStart, GithubOrg, GithubPullRequestDetail, GithubPullRequestReview,
+    GithubPullRequestReviewComment, MergePullRequestBody, MergePullRequestResult, NotificationPage,
+    SearchIssuePage, SearchPullRequestPage, UpdatePullRequestBody,
 };
 use git_backend::github::api::{GithubApi, GithubFuture};
 use git_backend::github::device_flow::{DeviceCodeResponse, TokenPoll};
@@ -173,6 +174,70 @@ impl GithubApi for FakeApi {
                 items: vec![],
                 page: 1,
                 has_more: false,
+            })
+        })
+    }
+
+    fn get_pull(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _number: u64,
+    ) -> GithubFuture<GithubPullRequestDetail> {
+        Box::pin(async {
+            Err(git_backend::github::GitHubError::NotFound {
+                message: "not implemented in fake".into(),
+            })
+        })
+    }
+
+    fn list_pull_reviews(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _number: u64,
+    ) -> GithubFuture<Vec<GithubPullRequestReview>> {
+        Box::pin(async { Ok(vec![]) })
+    }
+
+    fn list_pull_review_comments(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _number: u64,
+    ) -> GithubFuture<Vec<GithubPullRequestReviewComment>> {
+        Box::pin(async { Ok(vec![]) })
+    }
+
+    fn update_pull(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _number: u64,
+        _body: &UpdatePullRequestBody,
+    ) -> GithubFuture<GithubPullRequestDetail> {
+        Box::pin(async {
+            Err(git_backend::github::GitHubError::NotFound {
+                message: "not implemented in fake".into(),
+            })
+        })
+    }
+
+    fn merge_pull(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _number: u64,
+        _body: &MergePullRequestBody,
+    ) -> GithubFuture<MergePullRequestResult> {
+        Box::pin(async {
+            Err(git_backend::github::GitHubError::NotFound {
+                message: "not implemented in fake".into(),
             })
         })
     }

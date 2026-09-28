@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CustomMarkdown } from "@/components/issues/markdown";
+import { CustomMarkdown } from "@/components/github/markdown";
 import { AppServicesContext } from "@/contexts/services-context";
 import type { HighlightedSnippet } from "@/lib/backend/protocol";
 import type { BackendClient } from "@/lib/backend/transport/client";
@@ -62,6 +62,128 @@ afterEach(() => {
 
 beforeEach(() => {
     seedSettingsForTests({});
+});
+
+describe("Safe HTML", () => {
+    it("renders void elements with no children and no React warning", () => {
+        const warnings: unknown[][] = [];
+        const spy = vi
+            .spyOn(console, "error")
+            .mockImplementation((...args: unknown[]) => {
+                warnings.push(args);
+            });
+        try {
+            for (const source of [
+                "one<br />two",
+                "one<br>two",
+                "one<wbr />two",
+                "one<hr />two",
+                'x<img src="https://github.com/a.png" alt="a" />y',
+            ]) {
+                const view = renderMarkdown(source);
+                for (const tag of ["br", "wbr", "hr", "img"]) {
+                    const element = view.container.querySelector(tag);
+                    if (element === null) continue;
+                    expect(element.childNodes, source).toHaveLength(0);
+                }
+                // React refuses children on an intrinsic void element, so a
+                // regression here shows up as a console error, not as markup.
+                const joined = JSON.stringify(warnings);
+                expect(joined, source).not.toContain("void element");
+            }
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    it("renders a void element inline with the text around it", () => {
+        const view = renderMarkdown("one<br />two");
+        const br = view.container.querySelector("br");
+        expect(br).not.toBeNull();
+        expect(br?.innerHTML).toBe("");
+        expect(view.container.textContent).toBe("onetwo");
+    });
+
+    it("renders inline html as real elements, not as markup text", () => {
+        const view = renderMarkdown("a <b>bold</b> and <i>italic</i>");
+        expect(view.container.querySelector("b")?.textContent).toBe("bold");
+        expect(view.container.querySelector("i")?.textContent).toBe("italic");
+        expect(view.container.textContent).not.toContain("<b>");
+    });
+
+    it("renders a dependabot details block as a disclosure", () => {
+        // Opened, so the collapsed-by-default body is in the DOM; the point is
+        // that it arrived as markdown rather than as literal tags.
+        const view = renderMarkdown(
+            [
+                "<details open>",
+                "<summary>Release notes</summary>",
+                "",
+                "- Fixed a thing",
+                "",
+                "</details>",
+            ].join("\n")
+        );
+        const text = view.container.textContent ?? "";
+        expect(text).toContain("Release notes");
+        expect(text).toContain("Fixed a thing");
+        expect(text).not.toContain("<details>");
+        expect(text).not.toContain("<summary>");
+        expect(view.container.querySelector("li")?.textContent).toBe(
+            "Fixed a thing"
+        );
+    });
+
+    it("collapses a details body by default", () => {
+        const view = renderMarkdown(
+            "<details>\n<summary>Release notes</summary>\n\n- Fixed\n\n</details>"
+        );
+        expect(view.container.textContent).toContain("Release notes");
+        expect(view.container.textContent).not.toContain("Fixed");
+    });
+
+    it("toggles a details body when the summary is clicked", () => {
+        const view = renderMarkdown(
+            "<details>\n<summary>Release notes</summary>\n\n- Fixed\n\n</details>"
+        );
+        const trigger = view.container.querySelector<HTMLElement>(
+            '[data-slot="collapsible-trigger"]'
+        );
+        expect(trigger).not.toBeNull();
+        expect(trigger?.getAttribute("aria-expanded")).toBe("false");
+
+        fireEvent.click(trigger as Element);
+        expect(trigger?.getAttribute("aria-expanded")).toBe("true");
+        expect(view.container.textContent).toContain("Fixed");
+
+        fireEvent.click(trigger as Element);
+        expect(trigger?.getAttribute("aria-expanded")).toBe("false");
+        expect(view.container.textContent).not.toContain("Fixed");
+    });
+
+    it("starts open when the details block carries the open attribute", () => {
+        const view = renderMarkdown(
+            "<details open>\n<summary>Release notes</summary>\n\n- Fixed\n\n</details>"
+        );
+        expect(view.container.textContent).toContain("Fixed");
+        const trigger = view.container.querySelector<HTMLElement>(
+            '[data-slot="collapsible-trigger"]'
+        );
+        expect(trigger?.getAttribute("aria-expanded")).toBe("true");
+    });
+
+    it("drops script and its body", () => {
+        const view = renderMarkdown("before <script>alert(1)</script> after");
+        expect(view.container.textContent).toBe("before  after");
+        expect(view.container.querySelector("script")).toBeNull();
+    });
+
+    it("drops an inline event handler", () => {
+        const view = renderMarkdown('<b onclick="steal()">text</b>');
+        const bold = view.container.querySelector("b");
+        expect(bold?.getAttribute("onclick")).toBeNull();
+        expect(bold?.textContent).toBe("text");
+    });
 });
 
 describe("GitHub references", () => {

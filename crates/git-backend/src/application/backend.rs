@@ -10,8 +10,10 @@ use tokio::sync::mpsc;
 use crate::api::changes::{DiscardRequest, StageRequest, StatusOptions};
 use crate::api::github::{
     AccountProfile, DeviceFlowStart, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
-    GithubOrg, GithubRepoPermissions, NotificationPage, PublishRepositoryRequest, PublishResult,
-    SearchIssuePage, SearchPullRequestPage, UpdateIssueBody,
+    GithubOrg, GithubPullRequestDetail, GithubPullRequestReview, GithubPullRequestReviewComment,
+    GithubRepoPermissions, MergePullRequestBody, MergePullRequestResult, NotificationPage,
+    PublishRepositoryRequest, PublishResult, SearchIssuePage, SearchPullRequestPage,
+    UpdateIssueBody, UpdatePullRequestBody,
 };
 use crate::api::graph::GraphQuery;
 use crate::api::highlight::HighlightedSnippet;
@@ -1910,6 +1912,62 @@ impl Backend {
     /// `is:issue involves:@me sort:updated-desc`.
     pub async fn github_search_issues(&self, page: u32) -> Result<SearchIssuePage> {
         self.github.search_issues(page).await
+    }
+
+    /// Full pull request detail, including draft, mergeability, refs, and
+    /// diff stats.
+    pub async fn github_get_pull(
+        &self,
+        owner: String,
+        repo: String,
+        number: u64,
+    ) -> Result<GithubPullRequestDetail> {
+        self.github.get_pull(&owner, &repo, number).await
+    }
+
+    pub async fn github_list_pull_reviews(
+        &self,
+        owner: String,
+        repo: String,
+        number: u64,
+    ) -> Result<Vec<GithubPullRequestReview>> {
+        self.github.list_pull_reviews(&owner, &repo, number).await
+    }
+
+    pub async fn github_list_pull_review_comments(
+        &self,
+        owner: String,
+        repo: String,
+        number: u64,
+    ) -> Result<Vec<GithubPullRequestReviewComment>> {
+        self.github
+            .list_pull_review_comments(&owner, &repo, number)
+            .await
+    }
+
+    /// Partial update to a pull request: state, base branch, or draft flag.
+    /// Every field left `None` is untouched.
+    pub async fn github_update_pull(
+        &self,
+        owner: String,
+        repo: String,
+        number: u64,
+        body: UpdatePullRequestBody,
+    ) -> Result<GithubPullRequestDetail> {
+        self.github.update_pull(&owner, &repo, number, &body).await
+    }
+
+    /// Merges a pull request into its base. Returns `merged: false` when
+    /// GitHub accepted the call but declined, for instance because a
+    /// branch protection rule blocks it.
+    pub async fn github_merge_pull(
+        &self,
+        owner: String,
+        repo: String,
+        number: u64,
+        body: MergePullRequestBody,
+    ) -> Result<MergePullRequestResult> {
+        self.github.merge_pull(&owner, &repo, number, &body).await
     }
 
     pub async fn github_get_issue(
