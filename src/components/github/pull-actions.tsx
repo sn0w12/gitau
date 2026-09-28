@@ -130,12 +130,8 @@ export function PullChangesBlock({ pull }: { pull: GithubPullRequestDetail }) {
     return (
         <SidebarBlock label="Changes">
             <div className="flex flex-wrap items-center gap-1">
-                <Badge size="sm" variant="success">
-                    +{pull.additions}
-                </Badge>
-                <Badge size="sm" variant="error">
-                    -{pull.deletions}
-                </Badge>
+                <Badge variant="success">+{pull.additions}</Badge>
+                <Badge variant="error">-{pull.deletions}</Badge>
                 <span className="text-muted-foreground">
                     {pull.changedFiles}{" "}
                     {pull.changedFiles === 1 ? "file" : "files"}
