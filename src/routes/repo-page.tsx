@@ -46,7 +46,7 @@ export type reducerAction =
     | { type: "CLEAR_SELECTION" };
 
 export type RepoTab = "changes" | "history";
-export type RepoView = "overview" | "graph" | "issues";
+export type RepoView = "overview" | "graph" | "issues" | "pulls";
 
 // Every tab's repo page reports the same boot metric; only the first
 // window-to-content measurement counts.
@@ -100,7 +100,9 @@ function reducer(prevState: ReducerState, action: reducerAction) {
 }
 
 function searchView(search: { view?: unknown }): RepoView {
-    return search.view === "issues" || search.view === "graph"
+    return search.view === "issues" ||
+        search.view === "pulls" ||
+        search.view === "graph"
         ? search.view
         : "overview";
 }

@@ -749,6 +749,29 @@ export interface SearchIssuePage {
     hasMore: boolean;
 }
 
+/** One row of the pull requests list. `mergedAt` is the only signal that
+ * separates a merged pull request from a closed one: search reports both as
+ * `state: "closed"`. */
+export interface GithubPullRequestListItem {
+    number: number;
+    title: string;
+    state: string;
+    labels: GithubLabel[];
+    commentCount: number;
+    assignees: GithubUser[];
+    author: GithubUser;
+    updatedAt: string;
+    mergedAt?: string | null;
+    htmlUrl: string;
+}
+
+/** One 1-based page of pull request search results. */
+export interface SearchPullRequestPage {
+    items: GithubPullRequestListItem[];
+    page: number;
+    hasMore: boolean;
+}
+
 export interface PublishResult {
     fullName: string;
     htmlUrl: string;

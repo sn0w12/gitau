@@ -3,7 +3,7 @@ use crate::state::{to_repo_id, SharedState};
 use git_backend::api::github::{
     AccountProfile, DeviceFlowStart, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
     GithubOrg, GithubRepoPermissions, NotificationPage, PublishRepositoryRequest, PublishResult,
-    SearchIssuePage, UpdateIssueBody,
+    SearchIssuePage, SearchPullRequestPage, UpdateIssueBody,
 };
 
 /// The connected account, `None` while signed out.
@@ -153,6 +153,30 @@ pub async fn github_list_issues(
             owner,
             repo,
             issue_state.unwrap_or_else(|| "open".into()),
+            labels.unwrap_or_default(),
+            page.unwrap_or(1).max(1),
+        )
+        .await
+        .map_err(to_serialized)
+}
+
+/// Pull requests of a GitHub repository. `state` is open/closed/all;
+/// `labels` matches pull requests carrying every named label.
+#[tauri::command]
+pub async fn github_list_pull_requests(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    pull_state: Option<String>,
+    labels: Option<Vec<String>>,
+    page: Option<u32>,
+) -> CommandResult<SearchPullRequestPage> {
+    state
+        .backend
+        .github_list_pull_requests(
+            owner,
+            repo,
+            pull_state.unwrap_or_else(|| "open".into()),
             labels.unwrap_or_default(),
             page.unwrap_or(1).max(1),
         )

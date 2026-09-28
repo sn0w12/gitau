@@ -79,6 +79,8 @@ export const githubKeys = {
         ["github", "search-issues", login] as const,
     issues: (owner: string, repo: string, state: string, labels: string) =>
         ["github", "issues", owner, repo, state, labels] as const,
+    pulls: (owner: string, repo: string, state: string, labels: string) =>
+        ["github", "pulls", owner, repo, state, labels] as const,
     issueDetail: (owner: string, repo: string, number: number) =>
         ["github", "issue", owner, repo, number] as const,
     issueComments: (owner: string, repo: string, number: number) =>

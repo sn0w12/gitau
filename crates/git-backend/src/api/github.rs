@@ -122,6 +122,34 @@ pub struct SearchIssuePage {
     pub has_more: bool,
 }
 
+/// One row of the pull requests list. Carries the issue projection plus
+/// `merged_at`, which is the only way to tell a merged pull request from a
+/// closed one: search reports both as `state: "closed"`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestListItem {
+    pub number: u64,
+    pub title: String,
+    pub state: String,
+    pub labels: Vec<GithubLabel>,
+    pub comment_count: u64,
+    pub assignees: Vec<GithubUser>,
+    pub author: GithubUser,
+    pub updated_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub merged_at: Option<String>,
+    pub html_url: String,
+}
+
+/// One page of pull request search results.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchPullRequestPage {
+    pub items: Vec<GithubPullRequestListItem>,
+    pub page: u32,
+    pub has_more: bool,
+}
+
 /// A GitHub user as shown on issues: login plus avatar, never the token.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]

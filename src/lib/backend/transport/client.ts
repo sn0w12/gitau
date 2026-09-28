@@ -43,6 +43,7 @@ import type {
     PublishResult,
     PushOutcome,
     SearchIssuePage,
+    SearchPullRequestPage,
     RangeResult,
     RepoListing,
     RepoSnapshot,
@@ -655,6 +656,17 @@ function createRawBackendClient() {
                 invokeCommand<SearchIssuePage>("github_list_issues", {
                     args: { owner, repo, issueState, labels, page },
                 }),
+            listPullRequests: (
+                owner: string,
+                repo: string,
+                pullState?: string,
+                labels?: string[],
+                page?: number
+            ) =>
+                invokeCommand<SearchPullRequestPage>(
+                    "github_list_pull_requests",
+                    { args: { owner, repo, pullState, labels, page } }
+                ),
             searchIssues: (page?: number) =>
                 invokeCommand<SearchIssuePage>("github_search_issues", {
                     args: { page },

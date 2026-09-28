@@ -1,12 +1,10 @@
-import { ChevronDown, GitPullRequest, LayoutGrid } from "lucide-react";
+import { ChevronDown, LayoutGrid } from "lucide-react";
 
 import {
     Menu,
-    MenuItem,
     MenuPopup,
     MenuRadioGroup,
     MenuRadioItem,
-    MenuSeparator,
     MenuTrigger,
 } from "@/components/ui/menu";
 import { BORDER_GRADIENT, REPO_TOOLBAR_TRIGGER_CLASS } from "@/lib/constants";
@@ -17,12 +15,11 @@ const VIEW_LABELS: Record<RepoView, string> = {
     overview: "Overview",
     graph: "Commit Graph",
     issues: "Issues",
+    pulls: "Pull requests",
 };
 
-/**
- * The right-panel view menu: switches the main area between the available
- * views. Pull requests stay a placeholder until their backend exists.
- */
+/** The right-panel view menu: switches the main area between the available
+ * views. */
 export function RepoViewSwitcher({
     view,
     onView,
@@ -66,16 +63,6 @@ export function RepoViewSwitcher({
                         );
                     })}
                 </MenuRadioGroup>
-                <MenuSeparator />
-                <MenuItem disabled>
-                    <GitPullRequest />
-                    <span className="min-w-0 flex-1 truncate">
-                        Pull requests
-                    </span>
-                    <span className="ms-auto text-xs text-muted-foreground">
-                        Soon
-                    </span>
-                </MenuItem>
             </MenuPopup>
         </Menu>
     );

@@ -1,8 +1,8 @@
-import { CircleDot } from "lucide-react";
+import { GitPullRequest } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { LabelBadge } from "@/components/repo/issues/issues-view";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     Empty,
@@ -31,85 +31,64 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
 import { useGithubAccount } from "@/hooks/github/use-github-account";
-import {
-    useGithubCoords,
-    useRepoIssues,
-} from "@/hooks/github/use-github-issues";
-import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
-import type { GithubIssueListItem, GithubLabel } from "@/lib/backend/protocol";
-import { getTextColor } from "@/lib/utils";
+import { useGithubCoords } from "@/hooks/github/use-github-issues";
+import { useRepoPullRequests } from "@/hooks/github/use-github-pull-requests";
+import type {
+    GithubLabel,
+    GithubPullRequestListItem,
+} from "@/lib/backend/protocol";
+import { openExternal } from "@/lib/open-external";
 
-import { issueStatusOf, StatusBadge } from "../../issues/status-badge";
+import {
+    PullStatusBadge,
+    pullRequestStatusOf,
+} from "../../pulls/pull-status-badge";
 
 type TabState = "open" | "closed";
 
-export function LabelBadge({ label }: { label: GithubLabel }) {
-    return (
-        <Badge
-            className={
-                getTextColor(label.color) === "bright"
-                    ? "text-background dark:text-foreground"
-                    : "text-foreground dark:text-background"
-            }
-            style={{
-                backgroundColor: `#${label.color}`,
-            }}
-        >
-            {label.name}
-        </Badge>
-    );
-}
-
-function AssigneeStack({
-    assignees,
-}: {
-    assignees: GithubIssueListItem["assignees"];
-}) {
-    if (assignees.length === 0) return null;
-    return (
-        <div className="flex -space-x-[0.4rem]">
-            {assignees.map((assignee) => (
-                <Avatar
-                    key={assignee.login}
-                    className="size-5 ring-2 ring-card"
-                >
-                    <AvatarImage src={assignee.avatarUrl || undefined} />
-                    <AvatarFallback>
-                        {assignee.login.slice(0, 1).toUpperCase()}
-                    </AvatarFallback>
-                </Avatar>
-            ))}
-        </div>
-    );
-}
-
-export function IssuesView({ repoId }: { repoId: number }) {
+export function PullRequestsView({ repoId }: { repoId: number }) {
     const [tab, setTab] = useState<TabState>("open");
     const [label, setLabel] = useState<string>("none");
 
     const account = useGithubAccount();
     const { coords, isLoading: coordsLoading } = useGithubCoords(repoId);
-    const issues = useRepoIssues(repoId, tab);
+    const pulls = useRepoPullRequests(repoId, tab);
 
     const labels = useMemo(() => {
         const seen = new Map<string, GithubLabel>();
-        for (const issue of issues.issues) {
-            for (const item of issue.labels) {
+        for (const pull of pulls.pulls) {
+            for (const item of pull.labels) {
                 if (!seen.has(item.name)) seen.set(item.name, item);
             }
         }
         return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
-    }, [issues.issues]);
+    }, [pulls.pulls]);
 
     const rows = useMemo(
         () =>
-            issues.issues.filter(
-                (issue) =>
+            pulls.pulls.filter(
+                (pull) =>
                     label === "none" ||
-                    issue.labels.some((item) => item.name === label)
+                    pull.labels.some((item) => item.name === label)
             ),
-        [issues.issues, label]
+        [pulls.pulls, label]
     );
+
+    const shared = {
+        rows,
+        isLoading: account.isLoading || coordsLoading || pulls.isLoading,
+        isError: pulls.isError,
+        errorMessage:
+            pulls.error instanceof Error
+                ? pulls.error.message
+                : "Could not load pull requests",
+        onRetry: () => void pulls.refetch(),
+        hasCoords: coords !== null,
+        signedIn: account.data != null,
+        hasNextPage: pulls.hasNextPage ?? false,
+        isFetchingNextPage: pulls.isFetchingNextPage,
+        onLoadMore: () => void pulls.fetchNextPage(),
+    };
 
     return (
         <div className="flex h-full min-h-0 flex-col p-0.5">
@@ -166,67 +145,22 @@ export function IssuesView({ repoId }: { repoId: number }) {
                     </div>
                 </div>
                 <Frame className="min-h-0 w-full flex-1">
-                    <TabsPanel
-                        className="flex min-h-0 flex-1 flex-col"
-                        value="open"
-                    >
-                        <IssuesTable
-                            repoId={repoId}
-                            state={tab}
-                            rows={rows}
-                            isLoading={
-                                account.isLoading ||
-                                coordsLoading ||
-                                issues.isLoading
-                            }
-                            isError={issues.isError}
-                            errorMessage={
-                                issues.error instanceof Error
-                                    ? issues.error.message
-                                    : "Could not load issues"
-                            }
-                            onRetry={() => void issues.refetch()}
-                            hasCoords={coords !== null}
-                            signedIn={account.data != null}
-                            hasNextPage={issues.hasNextPage ?? false}
-                            isFetchingNextPage={issues.isFetchingNextPage}
-                            onLoadMore={() => void issues.fetchNextPage()}
-                        />
-                    </TabsPanel>
-                    <TabsPanel
-                        className="flex min-h-0 flex-1 flex-col"
-                        value="closed"
-                    >
-                        <IssuesTable
-                            repoId={repoId}
-                            state={tab}
-                            rows={rows}
-                            isLoading={
-                                account.isLoading ||
-                                coordsLoading ||
-                                issues.isLoading
-                            }
-                            isError={issues.isError}
-                            errorMessage={
-                                issues.error instanceof Error
-                                    ? issues.error.message
-                                    : "Could not load issues"
-                            }
-                            onRetry={() => void issues.refetch()}
-                            hasCoords={coords !== null}
-                            signedIn={account.data != null}
-                            hasNextPage={issues.hasNextPage ?? false}
-                            isFetchingNextPage={issues.isFetchingNextPage}
-                            onLoadMore={() => void issues.fetchNextPage()}
-                        />
-                    </TabsPanel>
+                    {(["open", "closed"] as const).map((value) => (
+                        <TabsPanel
+                            key={value}
+                            className="flex min-h-0 flex-1 flex-col"
+                            value={value}
+                        >
+                            <PullsTable {...shared} state={tab} />
+                        </TabsPanel>
+                    ))}
                 </Frame>
             </Tabs>
         </div>
     );
 }
 
-function IssuesTableHead() {
+function PullsTableHead() {
     return (
         <TableHeader>
             <TableRow>
@@ -234,14 +168,13 @@ function IssuesTableHead() {
                 <TableHead className="h-9">Status</TableHead>
                 <TableHead className="h-9">Labels</TableHead>
                 <TableHead className="h-9">Comments</TableHead>
-                <TableHead className="h-9 text-right">Assignees</TableHead>
+                <TableHead className="h-9 text-right">Author</TableHead>
             </TableRow>
         </TableHeader>
     );
 }
 
-function IssuesTable({
-    repoId,
+function PullsTable({
     state,
     rows,
     isLoading,
@@ -254,9 +187,8 @@ function IssuesTable({
     isFetchingNextPage,
     onLoadMore,
 }: {
-    repoId: number;
     state: TabState;
-    rows: GithubIssueListItem[];
+    rows: GithubPullRequestListItem[];
     isLoading: boolean;
     isError: boolean;
     errorMessage: string;
@@ -282,22 +214,21 @@ function IssuesTable({
         observer.observe(sentinel);
         return () => observer.disconnect();
     }, [hasNextPage, isFetchingNextPage, onLoadMore]);
-    const router = useActiveTabRouter();
 
     if (isLoading) {
-        return <IssuesTableSkeleton />;
+        return <PullsTableSkeleton />;
     }
 
     if (!signedIn) {
         return (
             <Empty>
                 <EmptyMedia variant="icon">
-                    <CircleDot />
+                    <GitPullRequest />
                 </EmptyMedia>
                 <EmptyHeader>
                     <EmptyTitle>Connect GitHub</EmptyTitle>
                     <EmptyDescription>
-                        Sign in on the Account page to read issues.
+                        Sign in on the Account page to read pull requests.
                     </EmptyDescription>
                 </EmptyHeader>
             </Empty>
@@ -308,13 +239,13 @@ function IssuesTable({
         return (
             <Empty>
                 <EmptyMedia variant="icon">
-                    <CircleDot />
+                    <GitPullRequest />
                 </EmptyMedia>
                 <EmptyHeader>
                     <EmptyTitle>No GitHub remote</EmptyTitle>
                     <EmptyDescription>
                         This repository has no github.com remote, so there are
-                        no issues to show.
+                        no pull requests to show.
                     </EmptyDescription>
                 </EmptyHeader>
             </Empty>
@@ -325,7 +256,7 @@ function IssuesTable({
         return (
             <Empty>
                 <EmptyHeader>
-                    <EmptyTitle>Could not load issues</EmptyTitle>
+                    <EmptyTitle>Could not load pull requests</EmptyTitle>
                     <EmptyDescription>{errorMessage}</EmptyDescription>
                 </EmptyHeader>
                 <Button variant="outline" size="sm" onClick={onRetry}>
@@ -339,13 +270,13 @@ function IssuesTable({
         return (
             <Empty>
                 <EmptyMedia variant="icon" className="mb-0">
-                    <CircleDot />
+                    <GitPullRequest />
                 </EmptyMedia>
                 <EmptyHeader>
                     <EmptyTitle>
                         {state === "open"
-                            ? "No open issues"
-                            : "No closed issues"}
+                            ? "No open pull requests"
+                            : "No closed pull requests"}
                     </EmptyTitle>
                 </EmptyHeader>
             </Empty>
@@ -355,42 +286,52 @@ function IssuesTable({
     return (
         <div className="flex h-full min-h-0 flex-col">
             <Table containerClassName="min-h-0 flex-1" variant="card">
-                <IssuesTableHead />
+                <PullsTableHead />
                 <TableBody>
-                    {rows.map((issue) => (
+                    {rows.map((pull) => (
                         <TableRow
-                            key={issue.number}
+                            key={pull.number}
                             className="cursor-pointer"
                             onClick={() => {
-                                router?.navigate({
-                                    to: `/repo/${repoId}/issue/${issue.number}`,
-                                });
+                                if (pull.htmlUrl) {
+                                    void openExternal(pull.htmlUrl);
+                                }
                             }}
                         >
                             <TableCell className="font-medium">
-                                {issue.title}
+                                {pull.title}
                             </TableCell>
                             <TableCell>
-                                <StatusBadge
-                                    status={issueStatusOf(issue.state)}
+                                <PullStatusBadge
+                                    status={pullRequestStatusOf(pull)}
                                 />
                             </TableCell>
                             <TableCell className="space-x-1">
-                                {issue.labels.map((label) => (
-                                    <LabelBadge
-                                        key={label.name}
-                                        label={label}
-                                    />
+                                {pull.labels.map((item) => (
+                                    <LabelBadge key={item.name} label={item} />
                                 ))}
                             </TableCell>
                             <TableCell className="font-mono">
-                                {issue.commentCount}
+                                {pull.commentCount}
                             </TableCell>
                             <TableCell>
-                                <div className="flex min-h-5 items-center justify-end">
-                                    <AssigneeStack
-                                        assignees={issue.assignees}
-                                    />
+                                <div className="flex min-h-5 items-center justify-end gap-1.5">
+                                    <span className="truncate text-xs text-muted-foreground">
+                                        {pull.author.login}
+                                    </span>
+                                    <Avatar className="size-5">
+                                        <AvatarImage
+                                            src={
+                                                pull.author.avatarUrl ||
+                                                undefined
+                                            }
+                                        />
+                                        <AvatarFallback>
+                                            {pull.author.login
+                                                .slice(0, 1)
+                                                .toUpperCase()}
+                                        </AvatarFallback>
+                                    </Avatar>
                                 </div>
                             </TableCell>
                         </TableRow>
@@ -416,17 +357,19 @@ function IssuesTable({
 }
 
 /** Same table shell with skeleton rows shaped like real rows. */
-function IssuesTableSkeleton() {
+function PullsTableSkeleton() {
     return (
         <Table containerClassName="min-h-0 flex-1" variant="card">
-            <IssuesTableHead />
+            <PullsTableHead />
             <TableBody>
                 {Array.from({ length: 8 }, (_, index) => (
                     <TableRow key={index}>
                         <TableCell className="font-medium">
                             <Skeleton
                                 className="h-4"
-                                style={{ width: `${62 - (index % 3) * 12}%` }}
+                                style={{
+                                    width: `${62 - (index % 3) * 12}%`,
+                                }}
                             />
                         </TableCell>
                         <TableCell>
@@ -444,13 +387,9 @@ function IssuesTableSkeleton() {
                             <Skeleton className="h-4 w-6" />
                         </TableCell>
                         <TableCell>
-                            <div className="flex min-h-5 items-center justify-end">
-                                <div className="flex -space-x-[0.4rem]">
-                                    <Skeleton className="size-5 rounded-full ring-2 ring-card" />
-                                    {index % 2 === 0 ? (
-                                        <Skeleton className="size-5 rounded-full ring-2 ring-card" />
-                                    ) : null}
-                                </div>
+                            <div className="flex min-h-5 items-center justify-end gap-1.5">
+                                <Skeleton className="h-3 w-16" />
+                                <Skeleton className="size-5 rounded-full" />
                             </div>
                         </TableCell>
                     </TableRow>

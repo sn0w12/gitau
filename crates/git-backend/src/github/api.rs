@@ -7,8 +7,9 @@ use serde::{Deserialize, Serialize};
 use super::device_flow::{DeviceCodeResponse, TokenPoll, parse_device_code, parse_token_poll};
 use super::{
     AccountProfile, GitHubError, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
-    GithubLabel, GithubNotification, GithubOrg, GithubRepoPermissions, GithubUser,
-    NotificationPage, SearchIssueItem, SearchIssuePage, UpdateIssueBody,
+    GithubLabel, GithubNotification, GithubOrg, GithubPullRequestListItem, GithubRepoPermissions,
+    GithubUser, NotificationPage, SearchIssueItem, SearchIssuePage, SearchPullRequestPage,
+    UpdateIssueBody,
 };
 
 /// Object-safe async surface: boxed futures let tests inject fakes without
@@ -58,6 +59,18 @@ pub trait GithubApi: Send + Sync {
     /// Search issues across all of GitHub. The query is fixed to
     /// `is:issue involves:@me sort:updated-desc`.
     fn search_issues(&self, token: &str, page: u32) -> GithubFuture<SearchIssuePage>;
+    /// Pull requests of a repository, open/closed/all. `labels` matches
+    /// pull requests carrying every named label. Search carries no head or
+    /// base ref, so the rows are limited to what the issue projection has.
+    fn list_pull_requests(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        state: &str,
+        labels: &[String],
+        page: u32,
+    ) -> GithubFuture<SearchPullRequestPage>;
     fn get_issue(
         &self,
         token: &str,
@@ -283,6 +296,16 @@ struct RawSearchIssue {
     html_url: Option<String>,
     #[serde(default)]
     repository_url: Option<String>,
+    #[serde(default)]
+    pull_request: Option<RawSearchPullRef>,
+}
+
+/// Search items carry this block only for pull requests, and `merged_at` is
+/// the sole signal that a `closed` pull request was in fact merged.
+#[derive(Debug, Deserialize)]
+struct RawSearchPullRef {
+    #[serde(default)]
+    merged_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -393,6 +416,80 @@ fn map_search_issue_item(raw: RawSearchIssue) -> SearchIssueItem {
         html_url: raw.html_url.unwrap_or_default(),
         repo_full_name,
     }
+}
+
+/// Repo-scoped pull requests, so the repo name comes from the query rather
+/// than the URL. `merged_at` is the only thing separating a merged pull
+/// request from a merely closed one, since both report `state: "closed"`.
+fn map_search_pull_item(raw: RawSearchIssue) -> GithubPullRequestListItem {
+    GithubPullRequestListItem {
+        number: raw.number,
+        title: raw.title,
+        state: raw.state,
+        labels: raw.labels.iter().map(map_issue_label).collect(),
+        comment_count: raw.comments,
+        assignees: raw
+            .assignees
+            .into_iter()
+            .map(|user| crate::api::github::GithubUser {
+                login: user.login,
+                avatar_url: user.avatar_url,
+            })
+            .collect(),
+        author: map_issue_user(raw.user),
+        updated_at: raw.updated_at.unwrap_or_default(),
+        merged_at: raw
+            .pull_request
+            .and_then(|reference| reference.merged_at)
+            .filter(|at| !at.is_empty()),
+        html_url: raw.html_url.unwrap_or_default(),
+    }
+}
+
+/// `list_issues` and `list_pull_requests` hit the same endpoint and differ
+/// only in the `is:` qualifier and the projection, so both build their query
+/// here. Returns the raw items plus whether another page exists.
+async fn search_repo(
+    client: &reqwest::Client,
+    token: String,
+    terms: &[String],
+    page: u32,
+) -> std::result::Result<(Vec<RawSearchIssue>, bool), GitHubError> {
+    let (body, headers) = send_full(
+        client
+            .get(format!("{API_ROOT}/search/issues"))
+            .header("Authorization", bearer(&token))
+            .query(&[
+                ("q", terms.join(" ")),
+                ("per_page", ISSUES_PER_PAGE.to_string()),
+                ("page", page.to_string()),
+                ("sort", "created".to_owned()),
+                ("order", "desc".to_owned()),
+            ]),
+    )
+    .await?;
+    let raw: RawSearchIssueResponse = serde_json::from_str(&body).map_err(malformed)?;
+    let has_more = page_has_more(&headers, raw.items.len());
+    Ok((raw.items, has_more))
+}
+
+/// Qualifiers shared by both repo-scoped listings: scope to the repository,
+/// narrow to one state when asked, and require every named label.
+fn repo_search_terms(
+    qualifier: &str,
+    owner: &str,
+    repo: &str,
+    state: &str,
+    labels: &[String],
+) -> Vec<String> {
+    let mut terms = vec![qualifier.to_owned(), format!("repo:{owner}/{repo}")];
+    if state == "open" || state == "closed" {
+        terms.push(format!("state:{state}"));
+    }
+    for label in labels {
+        terms.push(format!("label:\"{label}\""));
+    }
+    terms
 }
 
 fn map_issue_detail(
@@ -842,36 +939,13 @@ impl GithubApi for HttpGithubApi {
         page: u32,
     ) -> GithubFuture<SearchIssuePage> {
         let client = self.client.clone();
-        let authorization = bearer(token);
-        let owner = owner.to_owned();
-        let repo = repo.to_owned();
-        let state = state.to_owned();
-        let labels = labels.to_owned();
+        let token = token.to_owned();
+        let terms = repo_search_terms("is:issue", owner, repo, state, labels);
+        let repo_full_name = format!("{owner}/{repo}");
         let page = page.max(1);
         Box::pin(async move {
-            let mut terms = vec!["is:issue".to_owned(), format!("repo:{owner}/{repo}")];
-            if state == "open" || state == "closed" {
-                terms.push(format!("state:{state}"));
-            }
-            for label in &labels {
-                terms.push(format!("label:\"{label}\""));
-            }
-            let (body, headers) = send_full(
-                client
-                    .get(format!("{API_ROOT}/search/issues"))
-                    .header("Authorization", authorization)
-                    .query(&[
-                        ("q", terms.join(" ")),
-                        ("per_page", ISSUES_PER_PAGE.to_string()),
-                        ("page", page.to_string()),
-                        ("sort", "created".to_owned()),
-                        ("order", "desc".to_owned()),
-                    ]),
-            )
-            .await?;
-            let raw: RawSearchIssueResponse = serde_json::from_str(&body).map_err(malformed)?;
-            let items: Vec<SearchIssueItem> = raw
-                .items
+            let (items, has_more) = search_repo(&client, token, &terms, page).await?;
+            let items: Vec<SearchIssueItem> = items
                 .into_iter()
                 .map(|item| {
                     let labels: Vec<GithubLabel> =
@@ -894,12 +968,35 @@ impl GithubApi for HttpGithubApi {
                         author: item.user.map(|user| user.login).unwrap_or_default(),
                         updated_at: item.updated_at.unwrap_or_default(),
                         html_url: item.html_url.unwrap_or_default(),
-                        repo_full_name: format!("{owner}/{repo}"),
+                        repo_full_name: repo_full_name.clone(),
                     }
                 })
                 .collect();
-            let has_more = page_has_more(&headers, items.len());
             Ok(SearchIssuePage {
+                items,
+                page,
+                has_more,
+            })
+        })
+    }
+
+    fn list_pull_requests(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        state: &str,
+        labels: &[String],
+        page: u32,
+    ) -> GithubFuture<SearchPullRequestPage> {
+        let client = self.client.clone();
+        let token = token.to_owned();
+        let terms = repo_search_terms("is:pr", owner, repo, state, labels);
+        let page = page.max(1);
+        Box::pin(async move {
+            let (items, has_more) = search_repo(&client, token, &terms, page).await?;
+            let items = items.into_iter().map(map_search_pull_item).collect();
+            Ok(SearchPullRequestPage {
                 items,
                 page,
                 has_more,
@@ -1271,6 +1368,56 @@ mod tests {
         })
         .unwrap();
         assert_eq!(json, serde_json::json!({"name": "repo", "private": true}));
+    }
+
+    #[test]
+    fn repo_search_terms_scope_to_one_kind_and_repository() {
+        let terms = repo_search_terms("is:pr", "octocat", "repo", "open", &[]);
+        assert_eq!(terms, vec!["is:pr", "repo:octocat/repo", "state:open"]);
+
+        let with_labels = repo_search_terms("is:issue", "octocat", "repo", "all", &["bug".into()]);
+        assert_eq!(
+            with_labels,
+            vec!["is:issue", "repo:octocat/repo", "label:\"bug\""]
+        );
+    }
+
+    #[test]
+    fn maps_pull_requests_and_keeps_merge_state() {
+        let raw: RawSearchIssue = serde_json::from_value(serde_json::json!({
+            "number": 42,
+            "title": "Add a thing",
+            "state": "closed",
+            "user": { "login": "octocat", "avatar_url": "https://a/1" },
+            "labels": [{ "name": "enhancement", "color": "a2eeef" }],
+            "assignees": [{ "login": "hubot", "avatar_url": "https://a/2" }],
+            "comments": 3,
+            "updated_at": "2026-09-01T12:00:00Z",
+            "html_url": "https://github.com/octocat/repo/pull/42",
+            "pull_request": { "merged_at": "2026-09-02T09:00:00Z" }
+        }))
+        .unwrap();
+        let mapped = map_search_pull_item(raw);
+        assert_eq!(mapped.number, 42);
+        assert_eq!(mapped.author.login, "octocat");
+        assert_eq!(mapped.author.avatar_url, "https://a/1");
+        assert_eq!(mapped.assignees.len(), 1);
+        assert_eq!(mapped.labels[0].name, "enhancement");
+        assert_eq!(mapped.merged_at.as_deref(), Some("2026-09-02T09:00:00Z"));
+    }
+
+    /// A closed pull request with no merge time was abandoned, not merged.
+    #[test]
+    fn closed_pull_request_without_merge_time_has_no_merged_at() {
+        let raw: RawSearchIssue = serde_json::from_value(serde_json::json!({
+            "number": 7,
+            "title": "Abandoned",
+            "state": "closed",
+            "html_url": "https://github.com/octocat/repo/pull/7",
+            "pull_request": { "merged_at": null }
+        }))
+        .unwrap();
+        assert_eq!(map_search_pull_item(raw).merged_at, None);
     }
 
     #[test]

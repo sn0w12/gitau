@@ -20,9 +20,9 @@ pub mod token_store;
 
 pub use crate::api::github::{
     AccountProfile, DeviceFlowStart, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
-    GithubIssueListItem, GithubLabel, GithubNotification, GithubOrg, GithubRepoPermissions,
-    GithubUser, NotificationPage, PublishRepositoryRequest, PublishResult, SearchIssueItem,
-    SearchIssuePage, UpdateIssueBody,
+    GithubIssueListItem, GithubLabel, GithubNotification, GithubOrg, GithubPullRequestListItem,
+    GithubRepoPermissions, GithubUser, NotificationPage, PublishRepositoryRequest, PublishResult,
+    SearchIssueItem, SearchIssuePage, SearchPullRequestPage, UpdateIssueBody,
 };
 pub use api::{CreateRepoBody, CreatedRepository, GithubApi, HttpGithubApi};
 pub use token_store::{KeyringTokenStore, MemoryTokenStore, TokenStore};
@@ -420,6 +420,24 @@ impl GitHubAuth {
             remote: "github.com".into(),
         })?;
         Ok(self.api.search_issues(&token, page).await?)
+    }
+
+    /// Pull requests of a repository, open/closed/all, paginated.
+    pub async fn list_pull_requests(
+        &self,
+        owner: &str,
+        repo: &str,
+        state: &str,
+        labels: &[String],
+        page: u32,
+    ) -> Result<SearchPullRequestPage> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .list_pull_requests(&token, owner, repo, state, labels, page)
+            .await?)
     }
 
     pub async fn get_issue(
@@ -845,6 +863,18 @@ mod tests {
                 _token: &str,
                 _page: u32,
             ) -> api::GithubFuture<SearchIssuePage> {
+                unreachable!()
+            }
+
+            fn list_pull_requests(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _state: &str,
+                _labels: &[String],
+                _page: u32,
+            ) -> api::GithubFuture<SearchPullRequestPage> {
                 unreachable!()
             }
 

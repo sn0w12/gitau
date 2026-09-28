@@ -11,7 +11,7 @@ use crate::api::changes::{DiscardRequest, StageRequest, StatusOptions};
 use crate::api::github::{
     AccountProfile, DeviceFlowStart, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
     GithubOrg, GithubRepoPermissions, NotificationPage, PublishRepositoryRequest, PublishResult,
-    SearchIssuePage, UpdateIssueBody,
+    SearchIssuePage, SearchPullRequestPage, UpdateIssueBody,
 };
 use crate::api::graph::GraphQuery;
 use crate::api::highlight::HighlightedSnippet;
@@ -467,7 +467,7 @@ impl Backend {
         let current_gen = entry.generation();
         let mut best: Option<(Generation, Arc<StatusReport>)> = None;
         for g in (1..current_gen.0).rev() {
-            let key = (Generation(g), options.clone());
+            let key = (Generation(g), *options);
             if let Some(CachedValue::Status(report)) = entry.cached("status", &key) {
                 if best.as_ref().is_none_or(|(bg, _)| g > bg.0) {
                     best = Some((Generation(g), report));
@@ -1888,6 +1888,21 @@ impl Backend {
     ) -> Result<SearchIssuePage> {
         self.github
             .list_issues(&owner, &repo, &state, &labels, page)
+            .await
+    }
+
+    /// Pull requests of a GitHub repository, `state` is open/closed/all.
+    /// Paginated, 1-based pages.
+    pub async fn github_list_pull_requests(
+        &self,
+        owner: String,
+        repo: String,
+        state: String,
+        labels: Vec<String>,
+        page: u32,
+    ) -> Result<SearchPullRequestPage> {
+        self.github
+            .list_pull_requests(&owner, &repo, &state, &labels, page)
             .await
     }
 

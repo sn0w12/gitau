@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 use git_backend::Backend;
 use git_backend::api::github::{
     AccountProfile, DeviceFlowStart, GithubOrg, NotificationPage, SearchIssuePage,
+    SearchPullRequestPage,
 };
 use git_backend::github::api::{GithubApi, GithubFuture};
 use git_backend::github::device_flow::{DeviceCodeResponse, TokenPoll};
@@ -151,6 +152,24 @@ impl GithubApi for FakeApi {
     fn search_issues(&self, _token: &str, _page: u32) -> GithubFuture<SearchIssuePage> {
         Box::pin(async {
             Ok(SearchIssuePage {
+                items: vec![],
+                page: 1,
+                has_more: false,
+            })
+        })
+    }
+
+    fn list_pull_requests(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _state: &str,
+        _labels: &[String],
+        _page: u32,
+    ) -> GithubFuture<SearchPullRequestPage> {
+        Box::pin(async {
+            Ok(SearchPullRequestPage {
                 items: vec![],
                 page: 1,
                 has_more: false,

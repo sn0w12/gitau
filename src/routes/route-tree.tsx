@@ -123,7 +123,9 @@ export function createTabRouteTree(options: { tabId?: string } = {}) {
         component: RepoPage,
         validateSearch: (search: Record<string, unknown>) => ({
             view:
-                search.view === "issues" || search.view === "graph"
+                search.view === "issues" ||
+                search.view === "pulls" ||
+                search.view === "graph"
                     ? search.view
                     : undefined,
         }),
