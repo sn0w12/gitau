@@ -8,9 +8,9 @@ use super::ansi;
 use super::device_flow::{DeviceCodeResponse, TokenPoll, parse_device_code, parse_token_poll};
 use super::{
     AccountProfile, GitHubError, GithubActionStep, GithubCheckAnnotation, GithubCheckRun,
-    GithubCheckRunDetail, GithubCheckRunLog, GithubCheckRunOutput, GithubIssueComment,
-    GithubIssueDetail, GithubIssueEvent, GithubLabel, GithubNotification, GithubOrg,
-    GithubPullRequestCommit, GithubPullRequestDetail, GithubPullRequestListItem,
+    GithubCheckRunDetail, GithubCheckRunLog, GithubCheckRunOutput, GithubCommitStatus,
+    GithubIssueComment, GithubIssueDetail, GithubIssueEvent, GithubLabel, GithubNotification,
+    GithubOrg, GithubPullRequestCommit, GithubPullRequestDetail, GithubPullRequestListItem,
     GithubPullRequestRef, GithubPullRequestReview, GithubPullRequestReviewComment,
     GithubRepoPermissions, GithubUser, GithubWorkflowRun, MergePullRequestBody,
     MergePullRequestResult, NotificationPage, PullRequestMergeMethod, SearchIssueItem,
@@ -176,6 +176,16 @@ pub trait GithubApi: Send + Sync {
         repo: &str,
         sha: &str,
     ) -> GithubFuture<Vec<GithubWorkflowRun>>;
+    /// Commit statuses for a commit, one per reporter. Reporters that have
+    /// not moved to the checks API report here, and GitHub lists them
+    /// alongside check runs.
+    fn list_commit_statuses(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        sha: &str,
+    ) -> GithubFuture<Vec<GithubCommitStatus>>;
     fn get_issue(
         &self,
         token: &str,
@@ -737,6 +747,25 @@ struct RawWorkflowRunsResponse {
     workflow_runs: Vec<RawWorkflowRun>,
 }
 
+/// The combined status endpoint wraps the newest status per context.
+#[derive(Debug, Deserialize)]
+struct RawCombinedStatus {
+    #[serde(default)]
+    statuses: Vec<RawCommitStatus>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawCommitStatus {
+    #[serde(default)]
+    id: u64,
+    #[serde(default)]
+    context: String,
+    #[serde(default)]
+    state: String,
+    #[serde(default)]
+    description: Option<String>,
+}
+
 fn map_check_run(raw: RawCheckRun) -> GithubCheckRun {
     GithubCheckRun {
         id: raw.id,
@@ -1099,6 +1128,41 @@ fn map_workflow_run(raw: RawWorkflowRun) -> GithubWorkflowRun {
         html_url: raw.html_url,
         created_at: raw.created_at.unwrap_or_default(),
     }
+}
+
+fn map_commit_status(raw: RawCommitStatus) -> GithubCommitStatus {
+    GithubCommitStatus {
+        id: raw.id,
+        context: raw.context,
+        state: raw.state,
+        description: raw.description.unwrap_or_default(),
+    }
+}
+
+/// One row per name, newest wins. A commit often gets the same workflow twice,
+/// once for the branch push and once for the pull request, and GitHub shows
+/// only the latest of each; ids only ever grow, so they settle ties when two
+/// runs report the same start.
+fn latest_per_name<T>(
+    items: impl IntoIterator<Item = T>,
+    name: impl Fn(&T) -> &str,
+    rank: impl Fn(&T) -> (String, u64),
+) -> Vec<T> {
+    let mut newest: Vec<(String, (String, u64), T)> = Vec::new();
+    for item in items {
+        let key = name(&item).to_owned();
+        let stamp = rank(&item);
+        match newest.iter_mut().find(|(existing, _, _)| *existing == key) {
+            Some(slot) => {
+                if stamp > slot.1 {
+                    slot.1 = stamp;
+                    slot.2 = item;
+                }
+            }
+            None => newest.push((key, stamp, item)),
+        }
+    }
+    newest.into_iter().map(|(_, _, item)| item).collect()
 }
 
 fn map_issue_user(raw: Option<RawIssueUser>) -> crate::api::github::GithubUser {
@@ -2174,7 +2238,12 @@ impl GithubApi for HttpGithubApi {
             )
             .await?;
             let raw: RawCheckRunsResponse = serde_json::from_str(&body).map_err(malformed)?;
-            Ok(raw.check_runs.into_iter().map(map_check_run).collect())
+            let runs: Vec<GithubCheckRun> = raw.check_runs.into_iter().map(map_check_run).collect();
+            Ok(latest_per_name(
+                runs,
+                |run| run.name.as_str(),
+                |run| (run.started_at.clone(), run.id),
+            ))
         })
     }
 
@@ -2284,11 +2353,34 @@ impl GithubApi for HttpGithubApi {
             )
             .await?;
             let raw: RawWorkflowRunsResponse = serde_json::from_str(&body).map_err(malformed)?;
-            Ok(raw
+            let runs: Vec<GithubWorkflowRun> = raw
                 .workflow_runs
                 .into_iter()
                 .map(map_workflow_run)
-                .collect())
+                .collect();
+            Ok(latest_per_name(
+                runs,
+                |run| run.name.as_str(),
+                |run| (run.created_at.clone(), run.id),
+            ))
+        })
+    }
+
+    fn list_commit_statuses(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        sha: &str,
+    ) -> GithubFuture<Vec<GithubCommitStatus>> {
+        let client = self.client.clone();
+        let authorization = bearer(token);
+        let sha = sha.to_owned();
+        let url = format!("{API_ROOT}/repos/{owner}/{repo}/commits/{sha}/status");
+        Box::pin(async move {
+            let body = send(client.get(url).header("Authorization", authorization)).await?;
+            let raw: RawCombinedStatus = serde_json::from_str(&body).map_err(malformed)?;
+            Ok(raw.statuses.into_iter().map(map_commit_status).collect())
         })
     }
 
@@ -3254,6 +3346,85 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(map_pull_review_comment(raw).line, None);
+    }
+
+    /// CodeRabbit and other reporters that never moved to the checks API
+    /// only ever publish here, so the page has to read this endpoint too.
+    #[test]
+    fn maps_commit_statuses_with_their_descriptions() {
+        let raw: RawCombinedStatus = serde_json::from_value(serde_json::json!({
+            "state": "pending",
+            "statuses": [
+                {
+                    "id": 55178427953u64,
+                    "context": "CodeRabbit",
+                    "state": "pending",
+                    "description": "Review in progress",
+                    "target_url": null
+                },
+                {
+                    "id": 55178427954u64,
+                    "context": "vercel",
+                    "state": "success",
+                    "description": null
+                }
+            ]
+        }))
+        .unwrap();
+        let mapped: Vec<GithubCommitStatus> =
+            raw.statuses.into_iter().map(map_commit_status).collect();
+        assert_eq!(mapped.len(), 2);
+        assert_eq!(mapped[0].context, "CodeRabbit");
+        assert_eq!(mapped[0].state, "pending");
+        assert_eq!(mapped[0].description, "Review in progress");
+        assert_eq!(mapped[1].description, "");
+    }
+
+    /// A branch push and the pull request each trigger the same workflow, so
+    /// one commit carries the same check name twice. GitHub shows only the
+    /// latest of each, and a stale failing run must not outvote it.
+    #[test]
+    fn collapses_repeated_names_to_the_latest_run() {
+        let push = GithubCheckRun {
+            id: 109444055402,
+            name: "require-label".to_owned(),
+            status: "completed".to_owned(),
+            conclusion: Some("failure".to_owned()),
+            details_url: Some(
+                "https://github.com/octocat/repo/actions/runs/36579628281/job/1".to_owned(),
+            ),
+            started_at: "2026-09-29T14:02:28Z".to_owned(),
+            completed_at: None,
+        };
+        let pull_request = GithubCheckRun {
+            id: 109444066282,
+            name: "require-label".to_owned(),
+            status: "completed".to_owned(),
+            conclusion: Some("success".to_owned()),
+            details_url: Some(
+                "https://github.com/octocat/repo/actions/runs/36579631210/job/2".to_owned(),
+            ),
+            started_at: "2026-09-29T14:02:29Z".to_owned(),
+            completed_at: None,
+        };
+        let other = GithubCheckRun {
+            id: 109444140071,
+            name: "rust".to_owned(),
+            started_at: "2026-09-29T14:02:38Z".to_owned(),
+            ..push.clone()
+        };
+        let collapsed = latest_per_name(
+            vec![push, pull_request, other],
+            |run| run.name.as_str(),
+            |run| (run.started_at.clone(), run.id),
+        );
+        assert_eq!(collapsed.len(), 2);
+        let kept = collapsed
+            .iter()
+            .find(|run| run.name == "require-label")
+            .unwrap();
+        assert_eq!(kept.id, 109444066282);
+        assert_eq!(kept.conclusion.as_deref(), Some("success"));
     }
 
     #[test]

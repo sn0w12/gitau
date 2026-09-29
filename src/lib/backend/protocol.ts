@@ -1022,7 +1022,8 @@ export interface GithubCheckRunDetail extends GithubCheckRun {
 
 /** One CI check run on a commit. `status` is the progress
  * (`queued`, `in_progress`, `completed`); `conclusion` is absent until it
- * completes. */
+ * completes. Only the latest run per name is returned, so a workflow triggered
+ * by both a push and the pull request appears once. */
 export interface GithubCheckRun {
     id: number;
     name: string;
@@ -1033,7 +1034,21 @@ export interface GithubCheckRun {
     completedAt?: string | null;
 }
 
-/** One workflow run for a commit. */
+/** One commit status, the older sibling of a check run. Apps that never
+ * moved to the checks API report only here, and GitHub lists both in the same
+ * place. */
+export interface GithubCommitStatus {
+    id: number;
+    /** The reporter's name for the check, e.g. `CodeRabbit`. */
+    context: string;
+    /** `pending`, `success`, `failure`, or `error`. */
+    state: string;
+    /** Free text the reporter attaches, e.g. `Review in progress`. */
+    description: string;
+}
+
+/** One workflow run for a commit. Only the latest run per workflow name is
+ * returned, since a branch push and the pull request both trigger one. */
 export interface GithubWorkflowRun {
     id: number;
     name: string;

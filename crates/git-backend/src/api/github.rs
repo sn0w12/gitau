@@ -365,6 +365,22 @@ pub struct GithubCheckRun {
     pub completed_at: Option<String>,
 }
 
+/// One commit status, the older sibling of a check run. Apps that have not
+/// moved to the checks API (CodeRabbit among them) report here instead, and
+/// GitHub shows both in one place, so the pull request page has to read both.
+/// The endpoint already returns only the newest status per context.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubCommitStatus {
+    pub id: u64,
+    /// The reporter's name for the check, e.g. `CodeRabbit`.
+    pub context: String,
+    /// `pending`, `success`, `failure`, or `error`.
+    pub state: String,
+    /// Free text the reporter attaches, e.g. `Review in progress`.
+    pub description: String,
+}
+
 /// One workflow run for a commit. Runs are started from GitHub or the app's
 /// own CI, not from here, so this is a read model.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

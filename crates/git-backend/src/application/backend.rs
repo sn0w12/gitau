@@ -10,11 +10,11 @@ use tokio::sync::mpsc;
 use crate::api::changes::{DiscardRequest, StageRequest, StatusOptions};
 use crate::api::github::{
     AccountProfile, DeviceFlowStart, GithubCheckRun, GithubCheckRunDetail, GithubCheckRunLog,
-    GithubIssueComment, GithubIssueDetail, GithubIssueEvent, GithubOrg, GithubPullRequestCommit,
-    GithubPullRequestDetail, GithubPullRequestReview, GithubPullRequestReviewComment,
-    GithubRepoPermissions, GithubWorkflowRun, MergePullRequestBody, MergePullRequestResult,
-    NotificationPage, PublishRepositoryRequest, PublishResult, SearchIssuePage,
-    SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody,
+    GithubCommitStatus, GithubIssueComment, GithubIssueDetail, GithubIssueEvent, GithubOrg,
+    GithubPullRequestCommit, GithubPullRequestDetail, GithubPullRequestReview,
+    GithubPullRequestReviewComment, GithubRepoPermissions, GithubWorkflowRun, MergePullRequestBody,
+    MergePullRequestResult, NotificationPage, PublishRepositoryRequest, PublishResult,
+    SearchIssuePage, SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody,
 };
 use crate::api::graph::GraphQuery;
 use crate::api::highlight::HighlightedSnippet;
@@ -2027,6 +2027,17 @@ impl Backend {
     /// `is:pr involves:@me sort:updated-desc`.
     pub async fn github_search_pull_requests(&self, page: u32) -> Result<SearchPullRequestPage> {
         self.github.search_pull_requests(page).await
+    }
+
+    /// Commit statuses for a commit, one per reporter. Reporters that have
+    /// not moved to the checks API report only here.
+    pub async fn github_list_commit_statuses(
+        &self,
+        owner: String,
+        repo: String,
+        sha: String,
+    ) -> Result<Vec<GithubCommitStatus>> {
+        self.github.list_commit_statuses(&owner, &repo, &sha).await
     }
 
     pub async fn github_get_issue(

@@ -21,13 +21,13 @@ pub mod token_store;
 
 pub use crate::api::github::{
     AccountProfile, DeviceFlowStart, GithubActionStep, GithubCheckAnnotation, GithubCheckRun,
-    GithubCheckRunDetail, GithubCheckRunLog, GithubCheckRunOutput, GithubIssueComment,
-    GithubIssueDetail, GithubIssueEvent, GithubIssueListItem, GithubLabel, GithubNotification,
-    GithubOrg, GithubPullRequestCommit, GithubPullRequestDetail, GithubPullRequestListItem,
-    GithubPullRequestRef, GithubPullRequestReview, GithubPullRequestReviewComment,
-    GithubRepoPermissions, GithubUser, GithubWorkflowRun, MergePullRequestBody,
-    MergePullRequestResult, NotificationPage, PublishRepositoryRequest, PublishResult,
-    PullRequestMergeMethod, SearchIssueItem, SearchIssuePage, SearchPullRequestPage,
+    GithubCheckRunDetail, GithubCheckRunLog, GithubCheckRunOutput, GithubCommitStatus,
+    GithubIssueComment, GithubIssueDetail, GithubIssueEvent, GithubIssueListItem, GithubLabel,
+    GithubNotification, GithubOrg, GithubPullRequestCommit, GithubPullRequestDetail,
+    GithubPullRequestListItem, GithubPullRequestRef, GithubPullRequestReview,
+    GithubPullRequestReviewComment, GithubRepoPermissions, GithubUser, GithubWorkflowRun,
+    MergePullRequestBody, MergePullRequestResult, NotificationPage, PublishRepositoryRequest,
+    PublishResult, PullRequestMergeMethod, SearchIssueItem, SearchIssuePage, SearchPullRequestPage,
     ThreadStateReason, UpdateIssueBody, UpdatePullRequestBody,
 };
 pub use api::{CreateRepoBody, CreatedRepository, GithubApi, HttpGithubApi};
@@ -603,6 +603,22 @@ impl GitHubAuth {
         Ok(self.api.search_pull_requests(&token, page).await?)
     }
 
+    /// Commit statuses for a commit, one per reporter.
+    pub async fn list_commit_statuses(
+        &self,
+        owner: &str,
+        repo: &str,
+        sha: &str,
+    ) -> Result<Vec<GithubCommitStatus>> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .list_commit_statuses(&token, owner, repo, sha)
+            .await?)
+    }
+
     pub async fn get_issue(
         &self,
         owner: &str,
@@ -1034,6 +1050,16 @@ mod tests {
                 _token: &str,
                 _page: u32,
             ) -> api::GithubFuture<SearchPullRequestPage> {
+                unreachable!()
+            }
+
+            fn list_commit_statuses(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _sha: &str,
+            ) -> api::GithubFuture<Vec<GithubCommitStatus>> {
                 unreachable!()
             }
 

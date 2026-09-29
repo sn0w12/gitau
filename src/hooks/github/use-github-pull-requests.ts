@@ -19,6 +19,7 @@ import {
     checkRunLogQuery,
     checkRunQuery,
     checkRunsQuery,
+    commitStatusesQuery,
     infiniteRepoPullsQuery,
     infiniteSearchPullRequestsQuery,
     pullCommitsQuery,
@@ -117,6 +118,11 @@ export function usePullRequest(
     const workflows = useQuery(
         workflowRunsQuery({ backend }, owner, repo, sha, enabled)
     );
+    // Reporters still on the statuses API are a separate list GitHub merges
+    // into the same place, so they are read from the same commit.
+    const statuses = useQuery(
+        commitStatusesQuery({ backend }, owner, repo, sha, enabled)
+    );
     return {
         detail,
         comments,
@@ -126,6 +132,7 @@ export function usePullRequest(
         reviewComments,
         checks,
         workflows,
+        statuses,
     };
 }
 

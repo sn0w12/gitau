@@ -2,11 +2,11 @@ use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
 use git_backend::api::github::{
     AccountProfile, DeviceFlowStart, GithubCheckRun, GithubCheckRunDetail, GithubCheckRunLog,
-    GithubIssueComment, GithubIssueDetail, GithubIssueEvent, GithubOrg, GithubPullRequestCommit,
-    GithubPullRequestDetail, GithubPullRequestReview, GithubPullRequestReviewComment,
-    GithubRepoPermissions, GithubWorkflowRun, MergePullRequestBody, MergePullRequestResult,
-    NotificationPage, PublishRepositoryRequest, PublishResult, SearchIssuePage,
-    SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody,
+    GithubCommitStatus, GithubIssueComment, GithubIssueDetail, GithubIssueEvent, GithubOrg,
+    GithubPullRequestCommit, GithubPullRequestDetail, GithubPullRequestReview,
+    GithubPullRequestReviewComment, GithubRepoPermissions, GithubWorkflowRun, MergePullRequestBody,
+    MergePullRequestResult, NotificationPage, PublishRepositoryRequest, PublishResult,
+    SearchIssuePage, SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody,
 };
 
 /// The connected account, `None` while signed out.
@@ -211,6 +211,21 @@ pub async fn github_search_pull_requests(
     state
         .backend
         .github_search_pull_requests(page.unwrap_or(1).max(1))
+        .await
+        .map_err(to_serialized)
+}
+
+/// Commit statuses for a commit, one per reporter.
+#[tauri::command]
+pub async fn github_list_commit_statuses(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    sha: String,
+) -> CommandResult<Vec<GithubCommitStatus>> {
+    state
+        .backend
+        .github_list_commit_statuses(owner, repo, sha)
         .await
         .map_err(to_serialized)
 }

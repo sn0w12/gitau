@@ -7,10 +7,10 @@ use std::sync::{Arc, Mutex};
 use git_backend::Backend;
 use git_backend::api::github::{
     AccountProfile, DeviceFlowStart, GithubCheckRun, GithubCheckRunDetail, GithubCheckRunLog,
-    GithubOrg, GithubPullRequestCommit, GithubPullRequestDetail, GithubPullRequestReview,
-    GithubPullRequestReviewComment, GithubWorkflowRun, MergePullRequestBody,
-    MergePullRequestResult, NotificationPage, SearchIssuePage, SearchPullRequestPage,
-    UpdatePullRequestBody,
+    GithubCommitStatus, GithubOrg, GithubPullRequestCommit, GithubPullRequestDetail,
+    GithubPullRequestReview, GithubPullRequestReviewComment, GithubWorkflowRun,
+    MergePullRequestBody, MergePullRequestResult, NotificationPage, SearchIssuePage,
+    SearchPullRequestPage, UpdatePullRequestBody,
 };
 use git_backend::github::api::{GithubApi, GithubFuture};
 use git_backend::github::device_flow::{DeviceCodeResponse, TokenPoll};
@@ -206,6 +206,16 @@ impl GithubApi for FakeApi {
                 message: "not implemented in fake".into(),
             })
         })
+    }
+
+    fn list_commit_statuses(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _sha: &str,
+    ) -> GithubFuture<Vec<GithubCommitStatus>> {
+        Box::pin(async { Ok(vec![]) })
     }
 
     fn list_pull_reviews(

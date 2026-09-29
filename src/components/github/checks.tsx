@@ -45,6 +45,7 @@ import type {
     GithubCheckAnnotation,
     GithubCheckRun,
     GithubCheckRunOutput,
+    GithubCommitStatus,
     GithubWorkflowRun,
     SyntaxStyle,
 } from "@/lib/backend/protocol";
@@ -109,7 +110,43 @@ interface CheckRow {
     key: string;
     name: string;
     checkRunId?: number;
+    /** Commit statuses carry their own text, e.g. `Review in progress`. */
+    detail?: string;
+    /** Whether there is a run to open. A commit status has none, so it is a
+     * plain row. */
+    interactive: boolean;
     appearance: { icon: React.ReactNode; className: string; label: string };
+}
+
+/** A commit status reports one of four states, and `pending` is the reporter
+ * saying it has not finished, which is what GitHub shows as waiting. */
+function statusAppearance(status: GithubCommitStatus): CheckRow["appearance"] {
+    switch (status.state.toLowerCase()) {
+        case "success":
+            return {
+                icon: <CheckCheck className="size-4" />,
+                className: "text-success",
+                label: "Passed",
+            };
+        case "pending":
+            return {
+                icon: <CircleDashed className="size-4" />,
+                className: "text-info",
+                label: "Pending",
+            };
+        case "error":
+            return {
+                icon: <TriangleAlert className="size-4" />,
+                className: "text-warning",
+                label: "Error",
+            };
+        default:
+            return {
+                icon: <Check className="size-4" />,
+                className: "text-destructive",
+                label: "Failed",
+            };
+    }
 }
 
 /** A check run's details URL carries the workflow run it belongs to
@@ -123,7 +160,8 @@ function workflowRunIdOf(detailsUrl: string | null | undefined) {
 
 function useCheckRows(
     checks: GithubCheckRun[],
-    workflows: GithubWorkflowRun[]
+    workflows: GithubWorkflowRun[],
+    statuses: GithubCommitStatus[]
 ): CheckRow[] {
     return useMemo(() => {
         const covered = new Set(
@@ -131,11 +169,17 @@ function useCheckRows(
                 .map((check) => workflowRunIdOf(check.detailsUrl))
                 .filter((id): id is string => id != null)
         );
+        // A reporter that has both a check run and a status under the same
+        // name is one piece of work, and GitHub's own list merges them.
+        const named = new Set(
+            [...checks, ...workflows].map((run) => run.name.toLowerCase())
+        );
         return [
             ...checks.map((check) => ({
                 key: `check-${check.id}`,
                 name: check.name,
                 checkRunId: check.id,
+                interactive: true,
                 appearance: checkAppearance(check),
             })),
             // Workflow runs only add runs the checks do not already cover, so
@@ -145,10 +189,20 @@ function useCheckRows(
                 .map((run) => ({
                     key: `workflow-${run.id}`,
                     name: run.name,
+                    interactive: true,
                     appearance: workflowAppearance(run),
                 })),
+            ...statuses
+                .filter((status) => !named.has(status.context.toLowerCase()))
+                .map((status) => ({
+                    key: `status-${status.id}`,
+                    name: status.context,
+                    detail: status.description,
+                    interactive: false,
+                    appearance: statusAppearance(status),
+                })),
         ];
-    }, [checks, workflows]);
+    }, [checks, workflows, statuses]);
 }
 
 export function ChecksSection({
@@ -156,15 +210,17 @@ export function ChecksSection({
     repo,
     checks,
     workflows,
+    statuses,
     isLoading,
 }: {
     owner: string;
     repo: string;
     checks: GithubCheckRun[];
     workflows: GithubWorkflowRun[];
+    statuses: GithubCommitStatus[];
     isLoading: boolean;
 }) {
-    const runs = useCheckRows(checks, workflows);
+    const runs = useCheckRows(checks, workflows, statuses);
     const [open, setOpen] = useState<CheckRow | null>(null);
 
     if (isLoading) {
@@ -189,19 +245,19 @@ export function ChecksSection({
             <ul className="flex flex-col gap-0.5">
                 {runs.map((run) => (
                     <li key={run.key} className="text-sm">
-                        <button
-                            type="button"
-                            className="ui-selectable flex w-full items-center gap-1.5 rounded-sm text-start hover:bg-accent"
-                            onClick={() => setOpen(run)}
-                        >
-                            <span className={run.appearance.className}>
-                                {run.appearance.icon}
-                            </span>
-                            <span className="truncate">{run.name}</span>
-                            <span className="ms-auto shrink-0 text-xs text-muted-foreground">
-                                {run.appearance.label}
-                            </span>
-                        </button>
+                        {run.interactive ? (
+                            <button
+                                type="button"
+                                className="ui-selectable flex w-full items-center gap-1.5 rounded-sm text-start hover:bg-accent"
+                                onClick={() => setOpen(run)}
+                            >
+                                <CheckRowBody run={run} />
+                            </button>
+                        ) : (
+                            <div className="ui-selectable flex w-full items-center gap-1.5 rounded-sm text-start">
+                                <CheckRowBody run={run} />
+                            </div>
+                        )}
                     </li>
                 ))}
             </ul>
@@ -212,6 +268,27 @@ export function ChecksSection({
                 onClose={() => setOpen(null)}
             />
         </SidebarBlock>
+    );
+}
+
+/** One line of the list: state glyph, name with any reporter text, and the
+ * outcome on the right. */
+function CheckRowBody({ run }: { run: CheckRow }) {
+    return (
+        <>
+            <span className={run.appearance.className}>
+                {run.appearance.icon}
+            </span>
+            <span className="truncate">
+                {run.name}{" "}
+                {run.detail ? (
+                    <span className="text-muted-foreground">{run.detail}</span>
+                ) : null}
+            </span>
+            <span className="ms-auto shrink-0 text-xs text-muted-foreground">
+                {run.appearance.label}
+            </span>
+        </>
     );
 }
 

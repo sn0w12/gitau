@@ -94,6 +94,9 @@ export const githubKeys = {
     /** Keyed by the head commit, since that is what CI reports against. */
     checkRuns: (owner: string, repo: string, sha: string) =>
         ["github", "commit", owner, repo, sha, "checks"] as const,
+    /** Same commit, same reason: reporters still on the statuses API. */
+    commitStatuses: (owner: string, repo: string, sha: string) =>
+        ["github", "commit", owner, repo, sha, "statuses"] as const,
     checkRun: (owner: string, repo: string, checkRunId: number) =>
         ["github", "check-run", owner, repo, checkRunId] as const,
     checkRunLog: (owner: string, repo: string, checkRunId: number) =>

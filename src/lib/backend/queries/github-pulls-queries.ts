@@ -1,5 +1,10 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
+import type {
+    GithubCheckRun,
+    GithubCommitStatus,
+    GithubWorkflowRun,
+} from "@/lib/backend/protocol";
 import type { BackendClient } from "@/lib/backend/transport/client";
 import { expectOk } from "@/lib/backend/transport/result";
 
@@ -96,18 +101,18 @@ export function pullRequestQuery(
     });
 }
 
-/** CI only changes while the page is open, so runs are polled until every one
- * reports a conclusion. A pull request whose checks already finished stops
- * costing requests, which is the state a reader usually leaves it in. */
+/** CI only changes while the page is open, so results are polled until every
+ * one has settled. A pull request whose CI already finished stops costing
+ * requests, which is the state a reader usually leaves it in. `settled` is the
+ * source's own vocabulary: check runs conclude, statuses stop being pending. */
 const CHECKS_POLL_MS = 10_000;
 
-function pollUntilSettled(
-    runs: { status: string }[] | undefined
+function pollUntilSettled<T>(
+    items: T[] | undefined,
+    settled: (item: T) => boolean
 ): number | false {
-    if (runs === undefined) return false;
-    return runs.some((run) => run.status !== "completed")
-        ? CHECKS_POLL_MS
-        : false;
+    if (items === undefined) return false;
+    return items.some((item) => !settled(item)) ? CHECKS_POLL_MS : false;
 }
 
 export function checkRunsQuery(
@@ -128,7 +133,41 @@ export function checkRunsQuery(
                 )
             ),
         staleTime: 15_000,
-        refetchInterval: (query) => pollUntilSettled(query.state.data),
+        refetchInterval: (query) =>
+            pollUntilSettled(
+                query.state.data,
+                (run: GithubCheckRun) => run.status === "completed"
+            ),
+        retry: false,
+        enabled: enabled && owner != null && repo != null && !!sha,
+    });
+}
+
+/** Commit statuses for a commit. Polled on the same rule as check runs, since
+ * a pending status is the reporter saying it has not reported yet. */
+export function commitStatusesQuery(
+    deps: GithubPullsDeps,
+    owner: string | null,
+    repo: string | null,
+    sha: string | null,
+    enabled: boolean
+) {
+    return queryOptions({
+        queryKey: githubKeys.commitStatuses(owner ?? "", repo ?? "", sha ?? ""),
+        queryFn: async () =>
+            expectOk(
+                await deps.backend.github.listCommitStatuses(
+                    owner ?? "",
+                    repo ?? "",
+                    sha ?? ""
+                )
+            ),
+        staleTime: 15_000,
+        refetchInterval: (query) =>
+            pollUntilSettled(
+                query.state.data,
+                (status: GithubCommitStatus) => status.state !== "pending"
+            ),
         retry: false,
         enabled: enabled && owner != null && repo != null && !!sha,
     });
@@ -204,7 +243,11 @@ export function workflowRunsQuery(
                 )
             ),
         staleTime: 15_000,
-        refetchInterval: (query) => pollUntilSettled(query.state.data),
+        refetchInterval: (query) =>
+            pollUntilSettled(
+                query.state.data,
+                (run: GithubWorkflowRun) => run.status === "completed"
+            ),
         retry: false,
         enabled: enabled && owner != null && repo != null && !!sha,
     });

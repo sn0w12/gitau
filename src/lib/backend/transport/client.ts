@@ -22,6 +22,7 @@ import type {
     GithubCheckRun,
     GithubCheckRunDetail,
     GithubCheckRunLog,
+    GithubCommitStatus,
     GithubIssueDetail,
     GithubIssueEvent,
     GithubOrg,
@@ -734,6 +735,11 @@ function createRawBackendClient() {
             listWorkflowRuns: (owner: string, repo: string, sha: string) =>
                 invokeCommand<GithubWorkflowRun[]>(
                     "github_list_workflow_runs",
+                    { args: { owner, repo, sha } }
+                ),
+            listCommitStatuses: (owner: string, repo: string, sha: string) =>
+                invokeCommand<GithubCommitStatus[]>(
+                    "github_list_commit_statuses",
                     { args: { owner, repo, sha } }
                 ),
             searchIssues: (page?: number) =>

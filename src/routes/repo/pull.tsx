@@ -66,6 +66,7 @@ import {
 } from "@/hooks/tabs/use-active-tab-router";
 import type {
     GithubCheckRun,
+    GithubCommitStatus,
     GithubIssueComment,
     GithubIssueEvent,
     GithubPullRequestCommit,
@@ -197,6 +198,7 @@ function PullSidebar({
     reviews,
     checks,
     workflows,
+    statuses,
     checksLoading,
 }: {
     owner: string;
@@ -206,6 +208,7 @@ function PullSidebar({
     reviews: GithubPullRequestReview[];
     checks: GithubCheckRun[];
     workflows: GithubWorkflowRun[];
+    statuses: GithubCommitStatus[];
     checksLoading: boolean;
 }) {
     return (
@@ -219,6 +222,7 @@ function PullSidebar({
                 repo={repo}
                 checks={checks}
                 workflows={workflows}
+                statuses={statuses}
                 isLoading={checksLoading}
             />
             <SidebarBlock label="Reviewers">
@@ -248,6 +252,7 @@ function PullRequestContent({
     reviewComments,
     checks,
     workflows,
+    statuses,
     checksLoading,
     signedIn,
     viewerLogin,
@@ -264,6 +269,7 @@ function PullRequestContent({
     reviewComments: GithubPullRequestReviewComment[];
     checks?: GithubCheckRun[];
     workflows?: GithubWorkflowRun[];
+    statuses?: GithubCommitStatus[];
     checksLoading: boolean;
     signedIn: boolean;
     viewerLogin: string | null;
@@ -473,6 +479,7 @@ function PullRequestContent({
                         reviews={reviews}
                         checks={checks ?? []}
                         workflows={workflows ?? []}
+                        statuses={statuses ?? []}
                         checksLoading={checksLoading}
                     />
                 </div>
@@ -534,6 +541,7 @@ export function PullRequestPage() {
         reviewComments,
         checks,
         workflows,
+        statuses,
     } = thread;
 
     const goBack = () => {
@@ -622,6 +630,7 @@ export function PullRequestPage() {
             reviewComments={reviewComments.data ?? []}
             checks={checks.data}
             workflows={workflows.data}
+            statuses={statuses.data}
             checksLoading={checks.isLoading}
             signedIn={account.data != null}
             viewerLogin={account.data?.login ?? null}
