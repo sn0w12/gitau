@@ -15,6 +15,7 @@ import type {
 } from "@/lib/backend/protocol";
 import type { BackendClient } from "@/lib/backend/transport/client";
 import type { Result } from "@/lib/backend/transport/result";
+import type { ListTab } from "@/lib/routing/repo-search";
 import { seedSettingsForTests } from "@/stores/settings-store";
 
 (
@@ -148,6 +149,21 @@ async function waitFor(predicate: () => boolean): Promise<boolean> {
     return predicate();
 }
 
+/** The list tab and label are controlled by the repo page's query string, so
+ * a standalone render supplies them as props. */
+function renderPulls(services: ReturnType<typeof backendWith>, tab: ListTab) {
+    return renderWith(
+        services,
+        <PullRequestsView
+            repoId={1}
+            tab={tab}
+            onTabChange={() => {}}
+            label="none"
+            onLabelChange={() => {}}
+        />
+    );
+}
+
 describe("PullRequestsView", () => {
     beforeEach(() => {
         seedSettingsForTests({});
@@ -156,7 +172,7 @@ describe("PullRequestsView", () => {
 
     it("prompts to connect while signed out", async () => {
         const services = backendWith({ signedIn: false });
-        const view = renderWith(services, <PullRequestsView repoId={1} />);
+        const view = renderPulls(services, "open");
         await flush();
 
         const shown = await waitFor(() =>
@@ -169,7 +185,7 @@ describe("PullRequestsView", () => {
 
     it("explains a missing github remote instead of calling the backend", async () => {
         const services = backendWith({ remotes: [] });
-        const view = renderWith(services, <PullRequestsView repoId={1} />);
+        const view = renderPulls(services, "open");
         await flush();
 
         const shown = await waitFor(() =>
@@ -188,7 +204,7 @@ describe("PullRequestsView", () => {
                 hasMore: false,
             },
         });
-        const view = renderWith(services, <PullRequestsView repoId={1} />);
+        const view = renderPulls(services, "open");
         await flush();
 
         const shown = await waitFor(() =>
@@ -232,7 +248,7 @@ describe("PullRequestsView", () => {
                 hasMore: false,
             },
         });
-        const view = renderWith(services, <PullRequestsView repoId={1} />);
+        const view = renderPulls(services, "open");
         await flush();
 
         const shown = await waitFor(() =>

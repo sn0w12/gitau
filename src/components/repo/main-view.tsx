@@ -3,8 +3,13 @@ import { useHotkey } from "@tanstack/react-hotkeys";
 import { useEffect, useState } from "react";
 
 import { useTabId } from "@/contexts/tab-context";
+import type {
+    ListTab,
+    RepoStateAction,
+    RepoTab,
+    RepoView,
+} from "@/lib/routing/repo-search";
 import { cn } from "@/lib/utils";
-import type { reducerAction, RepoTab, RepoView } from "@/routes/repo-page";
 
 import { CommitDiffView } from "../diff/commit-diff-view";
 import { ConflictDiffViewer } from "../diff/conflict-diff-viewer";
@@ -54,6 +59,10 @@ export function MainRepoView({
     repoId,
     tab,
     view,
+    issuesTab,
+    pullsTab,
+    issueLabel,
+    pullLabel,
     generation,
     selectedChangeId,
     selectedCommitId,
@@ -63,11 +72,15 @@ export function MainRepoView({
     repoId: number;
     tab: RepoTab;
     view: RepoView;
+    issuesTab: ListTab;
+    pullsTab: ListTab;
+    issueLabel: string;
+    pullLabel: string;
     generation?: number;
     selectedChangeId: string | null;
     selectedCommitId: string | null;
     selectedStashId: string | null;
-    dispatch: React.ActionDispatch<[action: reducerAction]>;
+    dispatch: React.ActionDispatch<[action: RepoStateAction]>;
 }) {
     "use no memo";
 
@@ -142,7 +155,17 @@ export function MainRepoView({
     if (view === "issues") {
         return (
             <div className="min-h-0 flex-1">
-                <IssuesView repoId={repoId} />
+                <IssuesView
+                    repoId={repoId}
+                    tab={issuesTab}
+                    onTabChange={(next) =>
+                        dispatch({ type: "SET_ISSUES_TAB", data: next })
+                    }
+                    label={issueLabel}
+                    onLabelChange={(next) =>
+                        dispatch({ type: "SET_ISSUE_LABEL", data: next })
+                    }
+                />
             </div>
         );
     }
@@ -150,7 +173,17 @@ export function MainRepoView({
     if (view === "pulls") {
         return (
             <div className="min-h-0 flex-1">
-                <PullRequestsView repoId={repoId} />
+                <PullRequestsView
+                    repoId={repoId}
+                    tab={pullsTab}
+                    onTabChange={(next) =>
+                        dispatch({ type: "SET_PULLS_TAB", data: next })
+                    }
+                    label={pullLabel}
+                    onLabelChange={(next) =>
+                        dispatch({ type: "SET_PULL_LABEL", data: next })
+                    }
+                />
             </div>
         );
     }

@@ -220,6 +220,7 @@ describe("session restore", () => {
             value: { id: 99, snapshot: null },
         }));
         // Persisted last session: the repo had id 42 there; this run it is 99.
+        // The query string is the repo page's state and has to survive too.
         const session: SessionDocument = {
             version: 1,
             tabs: [
@@ -227,7 +228,7 @@ describe("session restore", () => {
                     tabId: "t1",
                     title: "x",
                     repoPath: "/live",
-                    lastResolvedHref: "/repo/42/commits",
+                    lastResolvedHref: "/repo/42/commits?view=graph&commit=abc",
                 },
             ],
             activeTabId: "t1",
@@ -237,7 +238,7 @@ describe("session restore", () => {
         hydrateSession(session, new Map([["/live", 99]]));
 
         expect(appStore.state.tabs[0].lastResolvedHref).toBe(
-            "/repo/99/commits"
+            "/repo/99/commits?view=graph&commit=abc"
         );
     });
 });

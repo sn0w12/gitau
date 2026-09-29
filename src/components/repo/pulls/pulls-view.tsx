@@ -1,5 +1,5 @@
 import { GitPullRequest } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { LabelBadge } from "@/components/github/label-badge";
 import {
@@ -42,13 +42,21 @@ import type {
     GithubLabel,
     GithubPullRequestListItem,
 } from "@/lib/backend/protocol";
+import type { ListTab } from "@/lib/routing/repo-search";
 
-type TabState = "open" | "closed";
-
-export function PullRequestsView({ repoId }: { repoId: number }) {
-    const [tab, setTab] = useState<TabState>("open");
-    const [label, setLabel] = useState<string>("none");
-
+export function PullRequestsView({
+    repoId,
+    tab,
+    onTabChange,
+    label,
+    onLabelChange,
+}: {
+    repoId: number;
+    tab: ListTab;
+    onTabChange: (tab: ListTab) => void;
+    label: string;
+    onLabelChange: (label: string) => void;
+}) {
     const account = useGithubAccount();
     const { coords, isLoading: coordsLoading } = useGithubCoords(repoId);
     const pulls = useRepoPullRequests(repoId, tab);
@@ -95,7 +103,7 @@ export function PullRequestsView({ repoId }: { repoId: number }) {
             <Tabs
                 className="min-h-0 flex-1 gap-0.5"
                 value={tab}
-                onValueChange={(value) => setTab(value as TabState)}
+                onValueChange={(value) => onTabChange(value as ListTab)}
             >
                 <div className="flex justify-between">
                     <TabsList>
@@ -107,7 +115,8 @@ export function PullRequestsView({ repoId }: { repoId: number }) {
                             aria-label="Select label"
                             value={label}
                             onValueChange={(next) => {
-                                if (typeof next === "string") setLabel(next);
+                                if (typeof next === "string")
+                                    onLabelChange(next);
                             }}
                             items={[
                                 { value: "none", label: "None" },
@@ -189,7 +198,7 @@ function PullsTable({
     onLoadMore,
 }: {
     repoId: number;
-    state: TabState;
+    state: ListTab;
     rows: GithubPullRequestListItem[];
     isLoading: boolean;
     isError: boolean;

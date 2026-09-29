@@ -139,4 +139,42 @@ describe("per-tab routers", () => {
         );
         expect(stored?.repoPath).toBe("C:/repos/gitau");
     });
+
+    it("keeps a replace from growing the tab's history", async () => {
+        const tab = makeTab("replace");
+        const router = createTabRouter(tab.record.tabId, "/repo/5", services);
+        const start = router.history.length;
+
+        await router.navigate({
+            to: "/repo/$repoId",
+            params: { repoId: "5" },
+            search: { view: "graph" },
+            replace: true,
+        });
+        await router.navigate({
+            to: "/repo/$repoId",
+            params: { repoId: "5" },
+            search: { view: "graph", commit: "abc" },
+            replace: true,
+        });
+
+        expect(router.history.length).toBe(start);
+        expect(router.state.location.search).toEqual({
+            view: "graph",
+            commit: "abc",
+        });
+    });
+
+    it("validates the repo page query string down to the known keys", () => {
+        const tab = makeTab("validate");
+        const router = createTabRouter(tab.record.tabId, "/", services);
+
+        const validateSearch = router.routesById["/repo/$repoId"].options
+            .validateSearch as (search: Record<string, unknown>) => unknown;
+
+        expect(
+            validateSearch({ view: "pulls", tab: "history", junk: "1" })
+        ).toEqual({ view: "pulls", tab: "history" });
+        expect(validateSearch({ view: "nope" })).toEqual({});
+    });
 });

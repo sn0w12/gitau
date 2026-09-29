@@ -1,8 +1,8 @@
 "use no memo";
 
-import { useParams, useSearch } from "@tanstack/react-router";
+import { useParams } from "@tanstack/react-router";
 import { useSelector } from "@tanstack/react-store";
-import { useEffect, useReducer, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import { BranchSelector } from "@/components/repo/branches/branch-selector";
 import { ChangesPanel } from "@/components/repo/changes/changes-panel";
@@ -18,6 +18,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTab } from "@/components/ui/tabs";
 import { useTabId } from "@/contexts/tab-context";
 import { repoDisplayName } from "@/hooks/repositories/use-repo-identity";
+import { useRepoPageState } from "@/hooks/repositories/use-repo-page-state";
 import { useRepoShortcuts } from "@/hooks/repositories/use-repo-shortcuts";
 import { useRepository } from "@/hooks/repositories/use-repository-queries";
 import { useSettingValue } from "@/hooks/settings/use-setting";
@@ -29,88 +30,13 @@ import { appStore } from "@/stores/app-store";
 import { repositoryStore } from "@/stores/repository-store";
 import { setSetting } from "@/stores/settings-store";
 
-interface ReducerState {
-    selectedChange: string | null;
-    selectedCommit: string | null;
-    selectedStash: string | null;
-    repoTab: RepoTab;
-    view: RepoView;
-}
-
-export type reducerAction =
-    | { type: "SET_CHANGE"; data: string | null }
-    | { type: "SET_COMMIT"; data: string | null }
-    | { type: "SET_STASH"; data: string | null }
-    | { type: "SET_TAB"; data: RepoTab }
-    | { type: "SET_VIEW"; data: RepoView }
-    | { type: "CLEAR_SELECTION" };
-
-export type RepoTab = "changes" | "history";
-export type RepoView = "overview" | "graph" | "issues" | "pulls";
-
 // Every tab's repo page reports the same boot metric; only the first
 // window-to-content measurement counts.
 let reportedRepoReady = false;
 
-function reducer(prevState: ReducerState, action: reducerAction) {
-    switch (action.type) {
-        case "SET_CHANGE":
-            return {
-                ...prevState,
-                selectedChange: action.data,
-                selectedStash: null,
-            };
-        case "SET_COMMIT":
-            return {
-                ...prevState,
-                selectedCommit: action.data,
-                selectedStash: null,
-            };
-        case "SET_STASH":
-            return {
-                ...prevState,
-                selectedStash: action.data,
-                selectedChange: null,
-                selectedCommit: null,
-            };
-        case "SET_TAB":
-            return {
-                ...prevState,
-                repoTab: action.data,
-                selectedChange: null,
-                selectedCommit: null,
-                selectedStash: null,
-            };
-        case "SET_VIEW":
-            return {
-                ...prevState,
-                view: action.data,
-                selectedChange: null,
-                selectedCommit: null,
-                selectedStash: null,
-            };
-        case "CLEAR_SELECTION":
-            return {
-                ...prevState,
-                selectedChange: null,
-                selectedCommit: null,
-                selectedStash: null,
-            };
-    }
-}
-
-function searchView(search: { view?: unknown }): RepoView {
-    return search.view === "issues" ||
-        search.view === "pulls" ||
-        search.view === "graph"
-        ? search.view
-        : "overview";
-}
-
 export function RepoPage() {
     const tabId = useTabId();
     const params = useParams({ strict: false });
-    const search = useSearch({ strict: false });
     const repoId = Number(params.repoId);
     const valid = Number.isInteger(repoId) && repoId > 0;
 
@@ -124,34 +50,23 @@ export function RepoPage() {
     const { snapshot, status } = useRepository(valid ? repoId : undefined);
     const lg = useMediaQuery("lg");
 
+    // View, panel, selection, and the issues and pulls list slices live in the
+    // query string, so the href a tab was restored with, and the one a back
+    // navigation returns to, both reproduce the page.
     const [
-        { selectedChange, selectedCommit, selectedStash, repoTab, view },
+        {
+            selectedChange,
+            selectedCommit,
+            selectedStash,
+            repoTab,
+            view,
+            issuesTab,
+            pullsTab,
+            issueLabel,
+            pullLabel,
+        },
         dispatch,
-    ] = useReducer(reducer, {
-        selectedChange: null,
-        selectedCommit: null,
-        selectedStash: null,
-        repoTab: "changes",
-        view: searchView(search),
-    });
-
-    // Deep links (back from an issue page, restored tabs) carry the view
-    // in `?view=`; the reducer otherwise keeps its mounted state.
-    const searchViewName = searchView(search);
-    useEffect(() => {
-        dispatch({ type: "SET_VIEW", data: searchViewName });
-    }, [searchViewName]);
-
-    // Navigating between /repo/:id values reuses this component instance, so
-    // the reducer keeps the old repo's selection. Drop it or a content-address
-    // from the previous repo lingers in a diff view that cannot load it.
-    const prevRepoIdRef = useRef(repoId);
-    useEffect(() => {
-        if (prevRepoIdRef.current !== repoId) {
-            prevRepoIdRef.current = repoId;
-            dispatch({ type: "CLEAR_SELECTION" });
-        }
-    }, [repoId]);
+    ] = useRepoPageState(repoId);
 
     useEffect(() => {
         if (reportedRepoReady) return;
@@ -304,6 +219,10 @@ export function RepoPage() {
                             repoId={repoId}
                             tab={repoTab}
                             view={view}
+                            issuesTab={issuesTab}
+                            pullsTab={pullsTab}
+                            issueLabel={issueLabel}
+                            pullLabel={pullLabel}
                             generation={snapshot.data?.generation}
                             selectedChangeId={selectedChange}
                             selectedCommitId={selectedCommit}

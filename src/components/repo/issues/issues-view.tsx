@@ -1,5 +1,5 @@
 import { CircleDot } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { LabelBadge } from "@/components/github/label-badge";
 import { issueStatusOf, StatusBadge } from "@/components/github/status-badge";
@@ -38,8 +38,7 @@ import {
 } from "@/hooks/github/use-github-issues";
 import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
 import type { GithubIssueListItem, GithubLabel } from "@/lib/backend/protocol";
-
-type TabState = "open" | "closed";
+import type { ListTab } from "@/lib/routing/repo-search";
 
 function AssigneeStack({
     assignees,
@@ -64,10 +63,19 @@ function AssigneeStack({
     );
 }
 
-export function IssuesView({ repoId }: { repoId: number }) {
-    const [tab, setTab] = useState<TabState>("open");
-    const [label, setLabel] = useState<string>("none");
-
+export function IssuesView({
+    repoId,
+    tab,
+    onTabChange,
+    label,
+    onLabelChange,
+}: {
+    repoId: number;
+    tab: ListTab;
+    onTabChange: (tab: ListTab) => void;
+    label: string;
+    onLabelChange: (label: string) => void;
+}) {
     const account = useGithubAccount();
     const { coords, isLoading: coordsLoading } = useGithubCoords(repoId);
     const issues = useRepoIssues(repoId, tab);
@@ -97,7 +105,7 @@ export function IssuesView({ repoId }: { repoId: number }) {
             <Tabs
                 className="min-h-0 flex-1 gap-0.5"
                 value={tab}
-                onValueChange={(value) => setTab(value as TabState)}
+                onValueChange={(value) => onTabChange(value as ListTab)}
             >
                 <div className="flex justify-between">
                     <TabsList>
@@ -109,7 +117,8 @@ export function IssuesView({ repoId }: { repoId: number }) {
                             aria-label="Select label"
                             value={label}
                             onValueChange={(next) => {
-                                if (typeof next === "string") setLabel(next);
+                                if (typeof next === "string")
+                                    onLabelChange(next);
                             }}
                             items={[
                                 { value: "none", label: "None" },
@@ -236,7 +245,7 @@ function IssuesTable({
     onLoadMore,
 }: {
     repoId: number;
-    state: TabState;
+    state: ListTab;
     rows: GithubIssueListItem[];
     isLoading: boolean;
     isError: boolean;

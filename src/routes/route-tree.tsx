@@ -23,6 +23,7 @@ import {
 } from "@/lib/backend/queries/repository-queries";
 import { getAppRuntime } from "@/lib/bootstrap/app-runtime";
 import { openRepositoryByPath } from "@/lib/repositories/open-repository";
+import { validateRepoSearch } from "@/lib/routing/repo-search";
 import { AccountPage } from "@/routes/account-page";
 import { DevPage } from "@/routes/dev-page";
 import { InboxPage } from "@/routes/inbox-page";
@@ -130,14 +131,7 @@ export function createTabRouteTree(options: { tabId?: string } = {}) {
         getParentRoute: () => rootRoute,
         path: "/repo/$repoId",
         component: RepoPage,
-        validateSearch: (search: Record<string, unknown>) => ({
-            view:
-                search.view === "issues" ||
-                search.view === "pulls" ||
-                search.view === "graph"
-                    ? search.view
-                    : undefined,
-        }),
+        validateSearch: validateRepoSearch,
         loader: async ({ params }) => {
             const routeId = Number(params.repoId);
             if (!Number.isInteger(routeId) || routeId <= 0) return;
@@ -158,11 +152,14 @@ export function createTabRouteTree(options: { tabId?: string } = {}) {
             if (boundId === undefined) return;
 
             // A restored href can embed a previous process-local id; send
-            // the router to this session's real one.
+            // the router to this session's real one. `search: true` carries
+            // the page state across, or the rewrite drops the view and
+            // selection the tab was restored with.
             if (boundId !== routeId) {
                 throw redirect({
                     to: "/repo/$repoId",
                     params: { repoId: String(boundId) },
+                    search: true,
                     replace: true,
                 });
             }

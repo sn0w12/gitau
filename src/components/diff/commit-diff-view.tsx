@@ -17,8 +17,8 @@ import { useRepoPath } from "@/hooks/repositories/use-repo-path";
 import { useRevealInFileManager } from "@/hooks/repositories/use-reveal-in-file-manager";
 import { useSetting } from "@/hooks/settings/use-setting";
 import type { DiffSessionState } from "@/lib/backend/streams/diff-session";
+import type { RepoStateAction } from "@/lib/routing/repo-search";
 import { pluralize } from "@/lib/utils";
-import type { reducerAction } from "@/routes/repo-page";
 
 import { SplitPath } from "../repo/split-path";
 import {
@@ -53,7 +53,7 @@ export function CommitDiffView({
     repoId: number;
     commitId: string;
     tabId?: string;
-    dispatch: React.ActionDispatch<[action: reducerAction]>;
+    dispatch: React.ActionDispatch<[action: RepoStateAction]>;
 }) {
     const request = React.useMemo(
         () => ({ comparison: { commitToParent: { commit: commitId } } }),
@@ -92,7 +92,7 @@ function CommitDiffContent({
 }: {
     state: DiffSessionState;
     controller: import("@/lib/backend/streams/diff-session").DiffSessionController;
-    dispatch: React.ActionDispatch<[action: reducerAction]>;
+    dispatch: React.ActionDispatch<[action: RepoStateAction]>;
     repoPath: string;
 }) {
     const { mode, setMode } = useDiffViewMode();

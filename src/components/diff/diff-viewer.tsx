@@ -8,7 +8,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useDiffViewMode } from "@/hooks/changes/use-diff-view-mode";
 import { useImageDiffViewMode } from "@/hooks/changes/use-image-diff-view-mode";
 import type { DiffSessionState } from "@/lib/backend/streams/diff-session";
-import type { reducerAction } from "@/routes/repo-page";
+import type { RepoStateAction } from "@/lib/routing/repo-search";
 
 /**
  * Streaming diff viewer with unified and split layouts. One session per
@@ -27,7 +27,7 @@ export function DiffViewer({
     /** Repository generation; a change re-streams the worktree diff. */
     generation?: number;
     tabId?: string;
-    dispatch: React.ActionDispatch<[action: reducerAction]>;
+    dispatch: React.ActionDispatch<[action: RepoStateAction]>;
 }) {
     const pathList = React.useMemo(() => paths ?? [], [paths]);
     const request = React.useMemo(
@@ -65,7 +65,7 @@ function DiffContent({
 }: {
     state: DiffSessionState;
     controller: import("@/lib/backend/streams/diff-session").DiffSessionController;
-    dispatch: React.ActionDispatch<[action: reducerAction]>;
+    dispatch: React.ActionDispatch<[action: RepoStateAction]>;
 }) {
     const { mode, setMode } = useDiffViewMode();
     const image = state.imagesBySection.get(state.sections[0]?.sectionId ?? -1);

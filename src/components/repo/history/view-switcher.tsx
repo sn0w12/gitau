@@ -8,8 +8,8 @@ import {
     MenuTrigger,
 } from "@/components/ui/menu";
 import { BORDER_GRADIENT, REPO_TOOLBAR_TRIGGER_CLASS } from "@/lib/constants";
+import type { RepoView } from "@/lib/routing/repo-search";
 import { cn } from "@/lib/utils";
-import type { RepoView } from "@/routes/repo-page";
 
 const VIEW_LABELS: Record<RepoView, string> = {
     overview: "Overview",

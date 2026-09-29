@@ -14,15 +14,15 @@ import type {
 } from "@/lib/backend/protocol";
 import { diffSessionRegistry } from "@/lib/backend/streams/diff-session-registry";
 import type { AppServices } from "@/lib/bootstrap/app-runtime";
-import type { reducerAction } from "@/routes/repo-page";
+import type { RepoStateAction } from "@/lib/routing/repo-search";
 import { seedSettingsForTests } from "@/stores/settings-store";
 
 /** Records dispatched repo-page actions so interactions can be asserted. */
 function recordedActions(): {
-    dispatch: (action: reducerAction) => void;
-    actions: reducerAction[];
+    dispatch: (action: RepoStateAction) => void;
+    actions: RepoStateAction[];
 } {
-    const actions: reducerAction[] = [];
+    const actions: RepoStateAction[] = [];
     return {
         dispatch: (action) => {
             actions.push(action);

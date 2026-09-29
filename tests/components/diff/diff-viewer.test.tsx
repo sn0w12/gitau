@@ -14,7 +14,7 @@ import type {
 } from "@/lib/backend/protocol";
 import { diffSessionRegistry } from "@/lib/backend/streams/diff-session-registry";
 import type { AppServices } from "@/lib/bootstrap/app-runtime";
-import type { reducerAction } from "@/routes/repo-page";
+import type { RepoStateAction } from "@/lib/routing/repo-search";
 import { seedSettingsForTests } from "@/stores/settings-store";
 
 type ChannelSink = (event: DiffEvent) => void;
@@ -150,7 +150,7 @@ describe("DiffViewer", () => {
 
     it("renders streamed rows in unified mode by default", async () => {
         seedSettingsForTests({ diffViewMode: "unified" });
-        const actions: reducerAction[] = [];
+        const actions: RepoStateAction[] = [];
         const view = renderWith(
             fakeBackend(streamedEvents),
             <DiffViewer

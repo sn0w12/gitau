@@ -1,7 +1,7 @@
 import type { Dispatch, RefObject } from "react";
 
 import { useSettingHotkey } from "@/hooks/settings/use-setting-hotkey";
-import type { reducerAction, RepoView } from "@/routes/repo-page";
+import type { RepoStateAction, RepoView } from "@/lib/routing/repo-search";
 
 import { useChangeActions } from "./use-change-actions";
 import { useSyncActions } from "./use-sync-actions";
@@ -10,7 +10,7 @@ interface RepoShortcutScope {
     repoId: number | undefined;
     repoPath: string;
     view: RepoView;
-    dispatch: Dispatch<reducerAction>;
+    dispatch: Dispatch<RepoStateAction>;
     containerRef: RefObject<HTMLDivElement | null>;
     enabled: boolean;
 }

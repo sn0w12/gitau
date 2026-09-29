@@ -9,7 +9,7 @@ import { useMergeActions } from "@/hooks/repositories/use-merge-actions";
 import { useConflictFile } from "@/hooks/repositories/use-repository-queries";
 import type { ConflictFile, SectionMeta } from "@/lib/backend/protocol";
 import type { SectionRows } from "@/lib/backend/streams/diff-session";
-import type { reducerAction } from "@/routes/repo-page";
+import type { RepoStateAction } from "@/lib/routing/repo-search";
 
 function sectionMeta(file: ConflictFile): SectionMeta {
     return {
@@ -103,7 +103,7 @@ export function ConflictDiffViewer({
 }: {
     repoId: number;
     path: string;
-    dispatch: React.ActionDispatch<[action: reducerAction]>;
+    dispatch: React.ActionDispatch<[action: RepoStateAction]>;
 }) {
     const actions = useMergeActions(repoId);
     const { mode, setMode } = useDiffViewMode();

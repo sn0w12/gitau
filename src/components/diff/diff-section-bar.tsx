@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import type { DiffViewMode } from "@/hooks/changes/use-diff-view-mode";
 import type { ImageDiffViewMode } from "@/hooks/changes/use-image-diff-view-mode";
 import type { SectionKind } from "@/lib/backend/protocol";
-import type { reducerAction } from "@/routes/repo-page";
+import type { RepoStateAction } from "@/lib/routing/repo-search";
 
 import { SplitPath } from "../repo/split-path";
 import {
@@ -36,7 +36,7 @@ export function DiffSectionBar({
     onModeChange: (mode: DiffViewMode) => void;
     imageMode?: ImageDiffViewMode;
     onImageModeChange?: (mode: ImageDiffViewMode) => void;
-    dispatch: React.ActionDispatch<[action: reducerAction]>;
+    dispatch: React.ActionDispatch<[action: RepoStateAction]>;
 }) {
     return (
         <div className="flex h-8 shrink-0 items-center gap-1 border-b px-1">
