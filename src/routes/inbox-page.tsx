@@ -56,7 +56,7 @@ import { GitBackendError } from "@/lib/backend/transport/invoke";
 import { parseIssueUrl, parsePullUrl } from "@/lib/github/repo-coords";
 import { openExternal } from "@/lib/open-external";
 import { toastError } from "@/lib/toast-error";
-import { formatRelativeDate } from "@/lib/utils";
+import { cn, formatRelativeDate } from "@/lib/utils";
 
 type InboxFilter = "all" | "unread" | "mention" | "review_requested" | "assign";
 
@@ -448,27 +448,26 @@ function InboxRow({
                         threadTarget.number
                     );
                 }}
-                className="flex min-w-0 cursor-pointer items-center gap-1 truncate text-left font-medium hover:underline"
+                className="flex min-w-0 cursor-pointer items-center gap-1 text-left font-medium hover:underline"
             >
-                <span className="truncate">
+                <span className="min-w-0 truncate">
                     {thread.subjectTitle || "(no title)"}
                 </span>
             </button>
         ) : thread.htmlUrl ? (
-            <ExternalLink
-                href={thread.htmlUrl}
-                className="truncate font-medium"
-            >
-                {thread.subjectTitle || "(no title)"}
+            <ExternalLink href={thread.htmlUrl} className="min-w-0 font-medium">
+                <span className="min-w-0 truncate">
+                    {thread.subjectTitle || "(no title)"}
+                </span>
             </ExternalLink>
         ) : (
             <button
                 type="button"
                 disabled={resolving || !thread.subjectUrl}
                 onClick={() => void openResolved()}
-                className="flex min-w-0 cursor-pointer items-center gap-1 truncate text-left font-medium hover:underline disabled:pointer-events-none disabled:opacity-100"
+                className="flex min-w-0 cursor-pointer items-center gap-1 text-left font-medium hover:underline disabled:pointer-events-none disabled:opacity-100"
             >
-                <span className="truncate">
+                <span className="min-w-0 truncate">
                     {thread.subjectTitle || "(no title)"}
                 </span>
             </button>
@@ -476,18 +475,15 @@ function InboxRow({
     return (
         <div className="flex items-center gap-2 px-2 py-2">
             <span
-                aria-hidden={!thread.unread}
-                className={
-                    thread.unread
-                        ? "size-2 shrink-0 rounded-full bg-primary"
-                        : "size-2 shrink-0"
-                }
-            />
-            <span className="shrink-0 text-muted-foreground [&_svg:not([class*='size-'])]:size-4">
+                className={cn(
+                    "shrink-0 [&_svg:not([class*='size-'])]:size-4",
+                    thread.unread ? "text-primary" : "text-muted-foreground"
+                )}
+            >
                 <SubjectIcon type={thread.subjectType} />
             </span>
             <div className="min-w-0 flex-1">
-                <div className="truncate text-sm">{title}</div>
+                <div className="flex min-w-0 text-sm">{title}</div>
                 <p className="truncate text-xs text-muted-foreground">
                     {formatSubjectType(thread.subjectType)}
                     {thread.updatedAt

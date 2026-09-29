@@ -7,7 +7,7 @@ import { ExternalLink } from "@/components/external-link";
 import { LabelBadge } from "@/components/github/label-badge";
 import {
     pullRequestStatusOf,
-    StatusBadge,
+    ThreadStatusIcon,
 } from "@/components/github/status-badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -256,25 +256,26 @@ function PullsRow({
             <button
                 type="button"
                 onClick={() => void openThread(repoPath, "pull", pull.number)}
-                className="flex min-w-0 cursor-pointer items-center gap-1 truncate text-left font-medium hover:underline"
+                className="flex min-w-0 cursor-pointer items-center gap-1 text-left font-medium hover:underline"
             >
-                <span className="truncate">{pull.title || "(no title)"}</span>
+                <span className="min-w-0 truncate">
+                    {pull.title || "(no title)"}
+                </span>
             </button>
         ) : (
-            <ExternalLink href={pull.htmlUrl} className="truncate font-medium">
-                {pull.title || "(no title)"}
+            <ExternalLink href={pull.htmlUrl} className="min-w-0 font-medium">
+                <span className="min-w-0 truncate">
+                    {pull.title || "(no title)"}
+                </span>
             </ExternalLink>
         );
 
     return (
         <div className="flex items-center gap-2 px-2 py-2">
-            <StatusBadge
-                status={pullRequestStatusOf(pull)}
-                className="shrink-0"
-            />
+            <ThreadStatusIcon status={pullRequestStatusOf(pull)} />
             <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                    <span className="truncate text-sm">{title}</span>
+                    <div className="flex min-w-0 flex-1 text-sm">{title}</div>
                     <div className="flex shrink-0 flex-wrap gap-1">
                         {pull.labels.map((label) => (
                             <LabelBadge key={label.name} label={label} />

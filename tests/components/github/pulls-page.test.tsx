@@ -232,7 +232,9 @@ describe("PullsPage", () => {
         expect(text).toContain("Docs update");
         expect(text).toContain("octocat");
         expect(text).toContain("#42");
-        expect(text).toContain("Open");
+        expect(
+            view.container.querySelector(".lucide-circle-dot")
+        ).not.toBeNull();
         view.unmount();
     });
 
@@ -266,8 +268,12 @@ describe("PullsPage", () => {
             view.container.textContent!.includes("Abandoned one")
         );
         expect(listed).toBe(true);
-        expect(view.container.textContent).toContain("Merged");
-        expect(view.container.textContent).toContain("Closed");
+        expect(
+            view.container.querySelector(".lucide-git-merge")
+        ).not.toBeNull();
+        expect(
+            view.container.querySelector(".lucide-circle-slash")
+        ).not.toBeNull();
         view.unmount();
     });
 

@@ -1,6 +1,7 @@
 import { CircleDashed, CircleDot, CircleSlash, GitMerge } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 /**
  * Conversation state of a GitHub thread. Issues only ever report `open` or
@@ -32,6 +33,15 @@ const statusVariant: Record<ThreadStatus, "info" | "secondary" | "success"> = {
     open: "success",
 };
 
+/** Color marks how a thread ended, not just whether it is live: a merge
+ * landed and stays blue, while closed and draft recede to gray. */
+const statusColor: Record<ThreadStatus, string> = {
+    closed: "text-muted-foreground",
+    draft: "text-muted-foreground",
+    merged: "text-info",
+    open: "text-success",
+};
+
 export function issueStatusOf(state: string): ThreadStatus {
     return state.toLowerCase() === "open" ? "open" : "closed";
 }
@@ -61,5 +71,30 @@ export function StatusBadge({
             {statusIcon[status]}
             {statusLabel[status]}
         </Badge>
+    );
+}
+
+/**
+ * Status as a bare glyph, for thread rows that lead with an icon instead of
+ * a badge. The size rule matches the issue rows so every list aligns.
+ */
+export function ThreadStatusIcon({
+    status,
+    className,
+}: {
+    status: ThreadStatus;
+    className?: string;
+}) {
+    return (
+        <span
+            className={cn(
+                "shrink-0",
+                statusColor[status],
+                "[&_svg:not([class*='size-'])]:size-4",
+                className
+            )}
+        >
+            {statusIcon[status]}
+        </span>
     );
 }

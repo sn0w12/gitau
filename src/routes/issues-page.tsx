@@ -5,6 +5,10 @@ import { useMemo } from "react";
 
 import { ExternalLink } from "@/components/external-link";
 import { LabelBadge } from "@/components/github/label-badge";
+import {
+    issueStatusOf,
+    ThreadStatusIcon,
+} from "@/components/github/status-badge";
 import { Button } from "@/components/ui/button";
 import {
     Empty,
@@ -253,31 +257,26 @@ function IssuesRow({
                 onClick={() =>
                     void openThread(repoPath, "issue", issueTarget.number)
                 }
-                className="flex min-w-0 cursor-pointer items-center gap-1 truncate text-left font-medium hover:underline"
+                className="flex min-w-0 cursor-pointer items-center gap-1 text-left font-medium hover:underline"
             >
-                <span className="truncate">{issue.title || "(no title)"}</span>
+                <span className="min-w-0 truncate">
+                    {issue.title || "(no title)"}
+                </span>
             </button>
         ) : (
-            <ExternalLink href={issue.htmlUrl} className="truncate font-medium">
-                {issue.title || "(no title)"}
+            <ExternalLink href={issue.htmlUrl} className="min-w-0 font-medium">
+                <span className="min-w-0 truncate">
+                    {issue.title || "(no title)"}
+                </span>
             </ExternalLink>
         );
 
-    const isOpen = issue.state.toLowerCase() === "open";
     return (
         <div className="flex items-center gap-2 px-2 py-2">
-            <span
-                className={
-                    isOpen
-                        ? "shrink-0 text-success [&_svg:not([class*='size-'])]:size-4"
-                        : "shrink-0 text-info [&_svg:not([class*='size-'])]:size-4"
-                }
-            >
-                <CircleDot />
-            </span>
+            <ThreadStatusIcon status={issueStatusOf(issue.state)} />
             <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                    <span className="truncate text-sm">{title}</span>
+                    <div className="flex min-w-0 flex-1 text-sm">{title}</div>
                     <div className="flex shrink-0 flex-wrap gap-1">
                         {issue.labels.map((label) => (
                             <LabelBadge key={label.name} label={label} />
