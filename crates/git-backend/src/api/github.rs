@@ -438,8 +438,9 @@ pub struct GithubPullRequestDetail {
     pub updated_at: String,
     pub html_url: String,
     pub draft: bool,
-    /// Merge commit SHA once merged. The only signal separating a merged
-    /// pull request from a closed one, since both report `state: "closed"`.
+    /// Merge commit time. Set only once merged, which is also how a merged
+    /// pull request is told apart from a closed one, since both report
+    /// `state: "closed"`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub merged_at: Option<String>,
     /// GitHub's mergeable verdict: null while the merge is still being
