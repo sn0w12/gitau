@@ -977,6 +977,8 @@ export interface GithubCheckRunLog {
     /** The 1-based table every step's spans index into, carrying the log's own
      * colours rather than any syntax theme. */
     styles: SyntaxStyle[];
+    /** The job log exactly as the endpoint returned it, before any splitting. */
+    raw: string;
     /** Set when the run has no job log to show, with the reason. */
     unavailable?: string;
 }

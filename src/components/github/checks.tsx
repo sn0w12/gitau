@@ -33,10 +33,13 @@ import {
 } from "@/components/ui/dialog";
 import { Frame, FrameHeader, FramePanel } from "@/components/ui/frame";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toastManager } from "@/components/ui/toast";
+import { useAppServices } from "@/contexts/services-context";
 import {
     useCheckRun,
     useCheckRunLog,
 } from "@/hooks/github/use-github-pull-requests";
+import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
 import type {
     GithubActionStep,
     GithubCheckAnnotation,
@@ -45,8 +48,8 @@ import type {
     GithubWorkflowRun,
     SyntaxStyle,
 } from "@/lib/backend/protocol";
+import { toastError } from "@/lib/toast-error";
 import { cn } from "@/lib/utils";
-
 function checkAppearance(run: GithubCheckRun): {
     icon: React.ReactNode;
     className: string;
@@ -318,7 +321,83 @@ function CheckRunResults({
                 <AnnotationList annotations={annotations} />
             ) : null}
             {logBlock(log)}
+            {import.meta.env.DEV ? (
+                <DumpJobLog
+                    owner={owner}
+                    repo={repo}
+                    checkRunId={run.checkRunId}
+                />
+            ) : null}
         </>
+    );
+}
+
+/** Puts the untouched log and the step list on the clipboard, so the real
+ * shape of a job log can be read from a live run. The step stamps and the
+ * `##[group]` markers do not line up the way the splitting assumes, and the
+ * only way to settle where the boundaries actually are is to look at both
+ * sides of the same job side by side. */
+function DumpJobLog({
+    owner,
+    repo,
+    checkRunId,
+}: {
+    owner: string;
+    repo: string;
+    checkRunId: number | undefined;
+}) {
+    const { backend } = useAppServices();
+    const { copyToClipboard } = useCopyToClipboard();
+    const [dumping, setDumping] = useState(false);
+    return (
+        <div className="flex justify-end">
+            <Button
+                variant="outline"
+                size="sm"
+                loading={dumping}
+                onClick={async () => {
+                    if (checkRunId == null) return;
+                    setDumping(true);
+                    const outcome = await backend.github.getCheckRunLog(
+                        owner,
+                        repo,
+                        checkRunId
+                    );
+                    setDumping(false);
+                    if (!outcome.ok) {
+                        toastError("Could not read the log", outcome.error);
+                        return;
+                    }
+                    const { raw, steps } = outcome.value;
+                    const header = steps
+                        .map((step) =>
+                            [
+                                `number: ${step.number}`,
+                                `name: ${step.name}`,
+                                `status: ${step.status}`,
+                                `conclusion: ${step.conclusion ?? ""}`,
+                                `started_at: ${step.startedAt ?? ""}`,
+                                `completed_at: ${step.completedAt ?? ""}`,
+                            ].join("\t")
+                        )
+                        .join("\n");
+                    const text = [
+                        "=== steps (check run / job id " + checkRunId + ") ===",
+                        header,
+                        "",
+                        "=== raw log ===",
+                        raw,
+                    ].join("\n");
+                    copyToClipboard(text);
+                    toastManager.add({
+                        title: `Copied ${text.length} chars`,
+                        type: "success",
+                    });
+                }}
+            >
+                Dump job log
+            </Button>
+        </div>
     );
 }
 

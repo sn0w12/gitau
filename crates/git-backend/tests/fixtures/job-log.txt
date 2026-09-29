@@ -1,0 +1,68 @@
+2026-09-26T19:12:21.3522162Z Current runner version: '2.337.0'
+2026-09-26T19:12:21.3549723Z ##[group]Runner Image Provisioner
+2026-09-26T19:12:21.3550662Z Hosted Compute Agent
+2026-09-26T19:12:21.3554915Z ##[endgroup]
+2026-09-26T19:12:21.3556967Z ##[group]Operating System
+2026-09-26T19:12:21.3559310Z ##[endgroup]
+2026-09-26T19:12:21.3559964Z ##[group]Runner Image
+2026-09-26T19:12:21.3565433Z ##[endgroup]
+2026-09-26T19:12:21.3567313Z ##[group]GITHUB_TOKEN Permissions
+2026-09-26T19:12:21.3571791Z ##[endgroup]
+2026-09-26T19:12:21.3576423Z Prepare workflow directory
+2026-09-26T19:12:21.6312394Z Download action repository 'actions/checkout@v7' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-09-26T19:12:21.9519430Z Complete job name: frontend
+2026-09-26T19:12:22.0354624Z ##[group]Run actions/checkout@v7
+2026-09-26T19:12:22.0355590Z with:
+2026-09-26T19:12:22.0356326Z   repository: sn0w12/gitau
+2026-09-26T19:12:22.0367279Z ##[endgroup]
+2026-09-26T19:12:22.1417629Z Syncing repository: sn0w12/gitau
+2026-09-26T19:12:22.1420482Z ##[group]Getting Git version info
+2026-09-26T19:12:22.1534588Z ##[endgroup]
+2026-09-26T19:12:22.1615300Z ##[group]Determining repository object format
+2026-09-26T19:12:22.1617354Z ##[endgroup]
+2026-09-26T19:12:22.1618107Z ##[group]Initializing the repository
+2026-09-26T19:12:22.1828982Z ##[endgroup]
+2026-09-26T19:12:22.1829851Z ##[group]Disabling automatic garbage collection
+2026-09-26T19:12:22.1873913Z ##[endgroup]
+2026-09-26T19:12:22.1875191Z ##[group]Setting up auth
+2026-09-26T19:12:22.2298524Z Removing HTTP extra header
+2026-09-26T19:12:22.3040412Z ##[endgroup]
+2026-09-26T19:12:22.3041192Z ##[group]Fetching the repository
+2026-09-26T19:12:22.6879310Z ##[endgroup]
+2026-09-26T19:12:22.6881084Z ##[group]Determining the checkout info
+2026-09-26T19:12:22.6883387Z ##[endgroup]
+2026-09-26T19:12:22.6990933Z ##[group]Checking out the ref
+2026-09-26T19:12:22.7476240Z Or undo this operation with:
+2026-09-26T19:12:22.7480774Z HEAD is now at e27a631 Merge 002f2926673107808ec4722c1712d6cc291a6040 into 2fe61131fff18e7700e0b58df4dc8be9692b60a5
+2026-09-26T19:12:22.7484497Z ##[endgroup]
+2026-09-26T19:12:22.8068627Z ##[group]Run actions/setup-node@v7
+2026-09-26T19:12:22.8070163Z with:
+2026-09-26T19:12:22.8088013Z ##[endgroup]
+2026-09-26T19:12:23.3940959Z Found in cache @ /opt/hostedtoolcache/node/24.21.0/x64
+2026-09-26T19:12:23.3945855Z ##[group]Environment details
+2026-09-26T19:12:23.8112714Z node: v24.21.0
+2026-09-26T19:12:23.8114175Z ##[endgroup]
+2026-09-26T19:12:24.9518805Z ##[group]Run npm ci
+2026-09-26T19:12:24.9519188Z [36;1mnpm ci[0m
+2026-09-26T19:12:24.9808755Z ##[endgroup]
+2026-09-26T19:12:38.9722213Z found 0 vulnerabilities
+2026-09-26T19:12:39.0831110Z ##[group]Run npm run format:check
+2026-09-26T19:12:39.0900212Z ##[endgroup]
+2026-09-26T19:12:40.1530110Z All matched files use the correct format.
+2026-09-26T19:12:40.1848978Z ##[group]Run npm run lint
+2026-09-26T19:12:40.1914984Z ##[endgroup]
+2026-09-26T19:12:40.5849705Z Found 0 warnings and 0 errors.
+2026-09-26T19:12:40.5859108Z Finished in 245ms on 292 files with 128 rules using 4 threads.
+2026-09-26T19:12:40.6040189Z ##[group]Run npm run typecheck
+2026-09-26T19:12:40.6106442Z ##[endgroup]
+2026-09-26T19:12:40.7223203Z > tsc --noEmit
+2026-09-26T19:12:43.2560593Z ##[group]Run npm test
+2026-09-26T19:12:43.2624553Z ##[endgroup]
+2026-09-26T19:12:43.3692338Z > vitest run
+2026-09-26T19:13:20.0566617Z [2m Test Files [22m [1m[32m50 passed[39m[22m[90m (50)[39m
+2026-09-26T19:13:20.1866212Z Post job cleanup.
+2026-09-26T19:13:20.3017463Z Cache hit occurred on the primary key node-cache-Linux-x64-npm-900b928bbc9a3dd98cc68a77260a8ec8277fb2937135f170490b227844f76ed8, not saving cache.
+2026-09-26T19:13:20.3177806Z Post job cleanup.
+2026-09-26T19:13:20.4488803Z Removing HTTP extra header
+2026-09-26T19:13:20.5541710Z Removing credentials config '/home/runner/work/_temp/git-credentials-4dccc51a-5d4c-4460-a39b-506a29337d43.config'
+2026-09-26T19:13:20.5709221Z Cleaning up orphan processes

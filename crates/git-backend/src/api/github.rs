@@ -285,6 +285,12 @@ pub struct GithubCheckRunLog {
     /// The 1-based table every step's spans index into, carrying the log's
     /// own colours rather than any syntax theme.
     pub styles: Vec<SnippetStyle>,
+    /// The job log exactly as the endpoint returned it, before any splitting.
+    /// Kept so the real shape of a log can be read from a live run instead of
+    /// inferred, since the step stamps and the `##[group]` markers do not line
+    /// up with the steps the way the splitting assumes.
+    #[serde(default)]
+    pub raw: String,
     /// Set when the run has no job log to show, with the reason.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unavailable: Option<String>,
