@@ -868,6 +868,13 @@ fn slice_log_by_steps(
         } else if has_message(line, COMPLETE_MARKER) {
             current = complete;
         }
+        // A line the runner echoed is shown without its `[command]` prefix and
+        // in the runner's own colour, so it reads as the runner's line rather
+        // than as something a build tool printed.
+        if let Some(parsed) = ansi::parse_command_line(message, table) {
+            buckets[current].push(parsed);
+            continue;
+        }
         let body = ansi::strip_workflow_commands(message);
         // A line that was blank apart from its stamp is blank output, so it
         // keeps its place and the step's spacing survives.
@@ -2564,7 +2571,7 @@ mod tests {
         assert_eq!(
             steps[1].log,
             "with:\n  repository: sn0w12/gitau\n  git switch -\nHEAD is now at e27a631\n\
-             [command]/usr/bin/git log -1 --format=%H"
+             /usr/bin/git log -1 --format=%H"
         );
         assert_eq!(steps[2].log, "with:\nnode: v24.21.0");
         assert_eq!(steps[3].log, "npm ci\nfound 0 vulnerabilities");
@@ -2769,10 +2776,31 @@ mod tests {
     #[test]
     fn ansi_colour_is_split_out_of_the_log_text() {
         let steps = slice(&real_steps(), REAL_LOG);
-        // The install step's first line is the cyan `npm ci` echo.
-        assert_eq!(steps[3].spans_by_line[0], vec![0, 6, 1]);
+        // The install step's first line is the cyan `npm ci` echo. The style id
+        // is resolved rather than hardcoded, since ids depend on the order
+        // styles were interned in.
+        let spans = steps[3].spans_by_line[0].clone();
+        assert_eq!(spans.len(), 3);
+        assert_eq!(&spans[0..2], [0, 6]);
         assert!(steps[3].log.starts_with("npm ci"));
         assert_eq!(steps[4].spans_by_line, vec![Vec::<u32>::new(); 2]);
+    }
+
+    #[test]
+    fn a_command_line_is_shown_without_its_prefix_in_blue() {
+        let steps = slice(&real_steps(), REAL_LOG);
+        // The checkout step's last line is a command the runner echoed.
+        let checkout = &steps[1];
+        assert!(
+            checkout.log.ends_with("/usr/bin/git log -1 --format=%H"),
+            "the prefix was not stripped: {:?}",
+            checkout.log
+        );
+        assert!(!checkout.log.contains("[command]"));
+        let last = checkout.spans_by_line.last().expect("the line has spans");
+        assert_eq!(last.len(), 3, "the command line is not styled");
+        let command_len = checkout.log.lines().last().unwrap().chars().count() as u32;
+        assert_eq!(&last[0..2], [0, command_len]);
     }
 
     #[test]

@@ -177,6 +177,49 @@ pub fn strip_workflow_commands(line: &str) -> String {
         .fold(line.to_string(), |out, marker| out.replace(marker, ""))
 }
 
+/// The prefix the runner puts on the shell command it ran, which is how a
+/// reader tells a command the runner executed from a command a tool printed.
+const COMMAND_PREFIX: &str = "[command]";
+
+/// The style a `[command]` line is shown in. GitHub dims these to separate
+/// them from a tool's own output, and blue reads the same way here while
+/// staying distinct from the cyan and green a build tool uses.
+fn command_style() -> AnsiStyle {
+    AnsiStyle {
+        color: Some(AnsiColor::Indexed(4)),
+        ..AnsiStyle::default()
+    }
+}
+
+/// Strips the `[command]` prefix from a line, returning the command it marks.
+///
+/// The prefix is only a marker, so showing it adds noise to every line the
+/// runner echoes, and the line is styled separately by
+/// [`parse_command_line`] instead.
+pub fn strip_command_prefix(line: &str) -> Option<&str> {
+    line.strip_prefix(COMMAND_PREFIX)
+}
+
+/// Parses a line the runner marked as a command, dropping the prefix and
+/// styling what remains so it reads as the runner's own line.
+pub fn parse_command_line(line: &str, table: &mut AnsiTable) -> Option<ParsedLine> {
+    let command = strip_command_prefix(line)?;
+    // The style id is interned once, so every command line shares one entry
+    // however many the log has.
+    let id = table.id_for(command_style())?;
+    let text = command.to_string();
+    let spans = if text.is_empty() {
+        Vec::new()
+    } else {
+        vec![
+            0,
+            text.chars().map(char::len_utf16).sum::<usize>() as u32,
+            id,
+        ]
+    };
+    Some(ParsedLine { text, spans })
+}
+
 /// Splits a log line into runs of constant style, dropping the escapes. A
 /// styled run becomes one span triple, which is the format `HighlightedLine`
 /// already consumes for code fences and diffs.
@@ -427,6 +470,51 @@ mod tests {
             "Run actions/checkout@v7"
         );
         assert_eq!(strip_workflow_commands("##[endgroup]"), "");
+    }
+
+    #[test]
+    fn a_command_prefix_is_dropped_and_the_line_is_blue() {
+        let mut table = AnsiTable::default();
+        let line = parse_command_line("[command]/usr/bin/git log -1 --format=%H", &mut table)
+            .expect("the prefix marks a command");
+        assert_eq!(line.text, "/usr/bin/git log -1 --format=%H");
+        assert_eq!(line.spans.len(), 3);
+        // The whole of what is left is the span, since the prefix is gone.
+        let len = line.text.chars().map(char::len_utf16).sum::<usize>() as u32;
+        assert_eq!(&line.spans[0..2], [0, len]);
+
+        let id = line.spans[2] as usize;
+        let style = table.styles()[id - 1].clone();
+        // Blue in both themes, so the line reads the same either way.
+        assert_eq!(style.light, "#0969da");
+        assert_eq!(style.dark, "#58a6ff");
+    }
+
+    #[test]
+    fn a_command_prefix_keeps_the_rest_of_the_line_intact() {
+        // A command can carry a colour of its own, and the prefix must not
+        // swallow the text or the escape that follows it.
+        let mut table = AnsiTable::default();
+        let line = parse_command_line("[command]\u{1b}[32mgit init", &mut table)
+            .expect("the prefix marks a command");
+        assert_eq!(strip_command_prefix("[command]git init"), Some("git init"));
+        assert!(line.text.contains("git init"));
+    }
+
+    #[test]
+    fn a_line_without_the_prefix_is_not_a_command() {
+        let mut table = AnsiTable::default();
+        assert!(parse_command_line("git init", &mut table).is_none());
+        assert!(parse_command_line("##[command]git init", &mut table).is_none());
+        assert_eq!(strip_command_prefix("##[command]git init"), None);
+    }
+
+    #[test]
+    fn an_empty_command_is_dropped() {
+        let mut table = AnsiTable::default();
+        let line = parse_command_line("[command]", &mut table).expect("still a command");
+        assert_eq!(line.text, "");
+        assert!(line.spans.is_empty(), "an empty line has no span");
     }
 
     #[test]
