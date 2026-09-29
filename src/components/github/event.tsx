@@ -89,7 +89,7 @@ export function TimelineEvent({
     return (
         <>
             <MessageSpacer />
-            <div className="ui-selectable flex items-center gap-1 px-1.5 py-1 text-sm">
+            <div className="ui-selectable flex items-center gap-1 px-1.5 pt-1 pb-0.5 text-sm">
                 <div className="ml-0.5 flex size-5.5 items-center justify-center rounded-full bg-primary text-background">
                     <EventIcon kind={kind} />
                 </div>
