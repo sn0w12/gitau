@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { Fragment, useRef } from "react";
 
 import { ChecksSection } from "@/components/github/checks";
+import { TimelineCommit } from "@/components/github/commits";
 import { TimelineEvent } from "@/components/github/event";
 import {
     ConversationInput,
@@ -67,6 +68,7 @@ import type {
     GithubCheckRun,
     GithubIssueComment,
     GithubIssueEvent,
+    GithubPullRequestCommit,
     GithubPullRequestDetail,
     GithubPullRequestReview,
     GithubPullRequestReviewComment,
@@ -145,6 +147,9 @@ function TimelineRow({
                 onDelete={() => actions.onDeleteComment(comment.id)}
             />
         );
+    }
+    if (item.kind === "commit") {
+        return <TimelineCommit commit={item.commit} last={last} />;
     }
     if (item.kind === "review") {
         return (
@@ -236,6 +241,7 @@ function PullRequestContent({
     owner,
     repo,
     pull,
+    commits,
     comments,
     events,
     reviews,
@@ -251,6 +257,7 @@ function PullRequestContent({
     owner: string;
     repo: string;
     pull: GithubPullRequestDetail;
+    commits: GithubPullRequestCommit[];
     comments: GithubIssueComment[];
     events: GithubIssueEvent[];
     reviews: GithubPullRequestReview[];
@@ -274,6 +281,7 @@ function PullRequestContent({
     const status = pullRequestStatusOf(pull);
     const isOpen = issueStatusOf(pull.state) === "open";
     const timeline = buildPullTimeline(pull, {
+        commits,
         comments,
         events,
         reviews,
@@ -521,6 +529,7 @@ export function PullRequestPage() {
         detail,
         comments,
         events,
+        commits,
         reviews,
         reviewComments,
         checks,
@@ -608,6 +617,7 @@ export function PullRequestPage() {
             owner={coords?.owner ?? ""}
             repo={coords?.repo ?? ""}
             pull={detail.data}
+            commits={commits.data ?? []}
             comments={comments.data ?? []}
             events={events.data ?? []}
             reviews={reviews.data ?? []}

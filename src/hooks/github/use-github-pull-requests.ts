@@ -20,6 +20,7 @@ import {
     checkRunQuery,
     checkRunsQuery,
     infiniteRepoPullsQuery,
+    pullCommitsQuery,
     pullRequestQuery,
     pullReviewCommentsQuery,
     pullReviewsQuery,
@@ -56,7 +57,7 @@ export function useRepoPullRequests(
 }
 
 /**
- * One pull request plus its conversation, timeline events, submitted
+ * One pull request plus its commits, conversation, timeline events, submitted
  * reviews, and inline diff comments. The conversation and event reads go
  * through the issue endpoints, which serve pull request numbers too.
  */
@@ -77,6 +78,9 @@ export function usePullRequest(
     const events = useQuery(
         issueEventsQuery({ backend }, owner, repo, number, enabled)
     );
+    const commits = useQuery(
+        pullCommitsQuery({ backend }, owner, repo, number, enabled)
+    );
     const reviews = useQuery(
         pullReviewsQuery({ backend }, owner, repo, number, enabled)
     );
@@ -96,6 +100,7 @@ export function usePullRequest(
         detail,
         comments,
         events,
+        commits,
         reviews,
         reviewComments,
         checks,

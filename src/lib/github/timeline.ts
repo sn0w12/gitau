@@ -1,6 +1,7 @@
 import type {
     GithubIssueComment,
     GithubIssueEvent,
+    GithubPullRequestCommit,
     GithubPullRequestReview,
     GithubPullRequestReviewComment,
     GithubUser,
@@ -15,6 +16,12 @@ export type TimelineItem =
     | { kind: "body"; createdAt: string }
     | { kind: "comment"; createdAt: string; comment: GithubIssueComment }
     | { kind: "event"; createdAt: string; event: GithubIssueEvent }
+    | {
+          kind: "commit";
+          /** The author date, since a commit carries no comment time. */
+          createdAt: string;
+          commit: GithubPullRequestCommit;
+      }
     | {
           kind: "review";
           createdAt: string;
@@ -61,12 +68,21 @@ function mergeTimeline(groups: TimelineItem[][]): TimelineItem[] {
     return groups.flat().sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
+/** The opening message leads the thread whatever else says, since it is what
+ * the thread is about. Its creation time can sit after a comment that landed
+ * on a backdated commit. */
+function leadingBody(thread: TimelineThread): {
+    kind: "body";
+    createdAt: string;
+} {
+    return { kind: "body", createdAt: thread.createdAt };
+}
+
 export function buildIssueTimeline(
     thread: TimelineThread,
     { comments, events }: TimelineParts
 ): IssueTimelineItem[] {
-    return mergeTimeline([
-        [{ kind: "body", createdAt: thread.createdAt }],
+    const rest = mergeTimeline([
         comments.map((comment): TimelineItem => ({
             kind: "comment",
             createdAt: comment.createdAt,
@@ -80,19 +96,20 @@ export function buildIssueTimeline(
                 event,
             })),
     ]) as IssueTimelineItem[];
+    return [leadingBody(thread), ...rest];
 }
 
-/** One chronological stream of a pull request: the opening body, then
- * comments, timeline events, and submitted reviews. A review carries its own
- * inline comments.
+/** One chronological stream of a pull request: the opening body, then the
+ * commits on the head branch, comments, timeline events, and submitted
+ * reviews. A review carries its own inline comments.
  *
  * Inline comments are nested under their review rather than merged into the
  * stream: a reviewer creates them before submitting, so their timestamps
  * precede the review and a flat sort puts every suggestion above the summary
- * that introduces it. */
-export function buildPullTimeline(
+ * that introduces it. */ export function buildPullTimeline(
     thread: TimelineThread,
     parts: TimelineParts & {
+        commits: GithubPullRequestCommit[];
         reviews: GithubPullRequestReview[];
         reviewComments: GithubPullRequestReviewComment[];
     }
@@ -122,6 +139,11 @@ export function buildPullTimeline(
             createdAt: comment.createdAt,
             comment,
         })),
+        ...parts.commits.map((commit): TimelineItem => ({
+            kind: "commit",
+            createdAt: commit.authoredAt,
+            commit,
+        })),
         ...parts.events
             .filter((event) => !HIDDEN_EVENT_KINDS.has(event.kind))
             .map((event): TimelineItem => ({
@@ -135,7 +157,6 @@ export function buildPullTimeline(
             review,
             comments: nested.get(review.id) ?? [],
         })),
-        { kind: "body", createdAt: thread.createdAt },
     ];
     for (const comment of orphaned) {
         items.push({
@@ -144,7 +165,8 @@ export function buildPullTimeline(
             comment,
         });
     }
-    return items.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    items.sort(byCreatedAt);
+    return [leadingBody(thread), ...items];
 }
 
 export function isTimelineMessage(item: TimelineItem): boolean {
@@ -161,6 +183,8 @@ export function timelineKey(item: TimelineItem): string {
             return `comment-${item.comment.id}`;
         case "event":
             return `event-${item.event.id}`;
+        case "commit":
+            return `commit-${item.commit.sha}`;
         case "review":
             return `review-${item.review.id}`;
         case "reviewComment":

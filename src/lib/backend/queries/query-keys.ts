@@ -85,6 +85,8 @@ export const githubKeys = {
         ["github", "pull", owner, repo, number] as const,
     pullReviews: (owner: string, repo: string, number: number) =>
         ["github", "pull", owner, repo, number, "reviews"] as const,
+    pullCommits: (owner: string, repo: string, number: number) =>
+        ["github", "pull", owner, repo, number, "commits"] as const,
     pullReviewComments: (owner: string, repo: string, number: number) =>
         ["github", "pull", owner, repo, number, "review-comments"] as const,
     /** Keyed by the head commit, since that is what CI reports against. */

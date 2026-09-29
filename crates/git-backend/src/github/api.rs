@@ -10,11 +10,11 @@ use super::{
     AccountProfile, GitHubError, GithubActionStep, GithubCheckAnnotation, GithubCheckRun,
     GithubCheckRunDetail, GithubCheckRunLog, GithubCheckRunOutput, GithubIssueComment,
     GithubIssueDetail, GithubIssueEvent, GithubLabel, GithubNotification, GithubOrg,
-    GithubPullRequestDetail, GithubPullRequestListItem, GithubPullRequestRef,
-    GithubPullRequestReview, GithubPullRequestReviewComment, GithubRepoPermissions, GithubUser,
-    GithubWorkflowRun, MergePullRequestBody, MergePullRequestResult, NotificationPage,
-    PullRequestMergeMethod, SearchIssueItem, SearchIssuePage, SearchPullRequestPage,
-    UpdateIssueBody, UpdatePullRequestBody,
+    GithubPullRequestCommit, GithubPullRequestDetail, GithubPullRequestListItem,
+    GithubPullRequestRef, GithubPullRequestReview, GithubPullRequestReviewComment,
+    GithubRepoPermissions, GithubUser, GithubWorkflowRun, MergePullRequestBody,
+    MergePullRequestResult, NotificationPage, PullRequestMergeMethod, SearchIssueItem,
+    SearchIssuePage, SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody,
 };
 
 /// Object-safe async surface: boxed futures let tests inject fakes without
@@ -94,6 +94,14 @@ pub trait GithubApi: Send + Sync {
         repo: &str,
         number: u64,
     ) -> GithubFuture<Vec<GithubPullRequestReview>>;
+    /// Commits on the pull request's head branch, oldest first.
+    fn list_pull_commits(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> GithubFuture<Vec<GithubPullRequestCommit>>;
     /// Inline diff comments, including replies to other review comments.
     fn list_pull_review_comments(
         &self,
@@ -512,6 +520,37 @@ struct RawPull {
     changed_files: u64,
     #[serde(default)]
     commits: u64,
+}
+
+/// The commits endpoint nests the message and dates under `commit`, with
+/// `author`/`committer` holding a linked account only when the email matches
+/// one, so the git-level author is what fills the gap.
+#[derive(Debug, Deserialize)]
+struct RawPullCommit {
+    #[serde(default)]
+    sha: String,
+    #[serde(default)]
+    commit: Option<RawCommitDetail>,
+    #[serde(default)]
+    author: Option<RawIssueUser>,
+    #[serde(default)]
+    html_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawCommitDetail {
+    #[serde(default)]
+    message: String,
+    #[serde(default)]
+    author: Option<RawCommitSignature>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawCommitSignature {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    date: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1299,6 +1338,28 @@ fn map_pull_detail(raw: RawPull) -> GithubPullRequestDetail {
     }
 }
 
+/// Commits come back oldest first, and a commit made outside GitHub has no
+/// linked account, so the git author name stands in for the login.
+fn map_pull_commit(raw: RawPullCommit) -> GithubPullRequestCommit {
+    let detail = raw.commit.unwrap_or_else(|| RawCommitDetail {
+        message: String::new(),
+        author: None,
+    });
+    let signature = detail.author.unwrap_or_else(|| RawCommitSignature {
+        name: String::new(),
+        date: None,
+    });
+    let account = raw.author.map(|user| (user.login, user.avatar_url));
+    let (login, avatar_url) = account.unwrap_or((signature.name, String::new()));
+    GithubPullRequestCommit {
+        sha: raw.sha,
+        message: detail.message,
+        author: crate::api::github::GithubUser { login, avatar_url },
+        authored_at: signature.date.unwrap_or_default(),
+        html_url: raw.html_url.unwrap_or_default(),
+    }
+}
+
 fn map_pull_review(raw: RawPullReview) -> GithubPullRequestReview {
     GithubPullRequestReview {
         id: raw.id,
@@ -1887,6 +1948,40 @@ impl GithubApi for HttpGithubApi {
                 let raw: Vec<RawPullReview> = serde_json::from_str(&body).map_err(malformed)?;
                 let has_more = page_has_more(&headers, raw.len());
                 items.extend(raw.into_iter().map(map_pull_review));
+                if !has_more {
+                    break;
+                }
+            }
+            Ok(items)
+        })
+    }
+
+    fn list_pull_commits(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> GithubFuture<Vec<GithubPullRequestCommit>> {
+        let client = self.client.clone();
+        let authorization = bearer(token);
+        let url = format!("{API_ROOT}/repos/{owner}/{repo}/pulls/{number}/commits");
+        Box::pin(async move {
+            let mut items = Vec::new();
+            for page in 1..=MAX_ISSUE_PAGES {
+                let (body, headers) = send_full(
+                    client
+                        .get(&url)
+                        .header("Authorization", authorization.clone())
+                        .query(&[
+                            ("per_page", ISSUES_PER_PAGE.to_string()),
+                            ("page", page.to_string()),
+                        ]),
+                )
+                .await?;
+                let raw: Vec<RawPullCommit> = serde_json::from_str(&body).map_err(malformed)?;
+                let has_more = page_has_more(&headers, raw.len());
+                items.extend(raw.into_iter().map(map_pull_commit));
                 if !has_more {
                     break;
                 }
@@ -3045,6 +3140,62 @@ mod tests {
         assert_eq!(mapped.state, "CHANGES_REQUESTED");
         assert_eq!(mapped.author.login, "hubot");
         assert_eq!(mapped.body, "please fix");
+    }
+
+    #[test]
+    fn maps_pull_commits() {
+        let raw: RawPullCommit = serde_json::from_value(serde_json::json!({
+            "sha": "abc123",
+            "commit": {
+                "message": "Fix the thing\n\nWhy it mattered.",
+                "author": { "name": "Hubot", "date": "2026-09-03T12:00:00Z" }
+            },
+            "author": { "login": "hubot", "avatar_url": "https://a/2" },
+            "html_url": "https://github.com/octocat/repo/commit/abc123"
+        }))
+        .unwrap();
+        let mapped = map_pull_commit(raw);
+        assert_eq!(mapped.sha, "abc123");
+        assert_eq!(mapped.message, "Fix the thing\n\nWhy it mattered.");
+        assert_eq!(mapped.author.login, "hubot");
+        assert_eq!(mapped.author.avatar_url, "https://a/2");
+        assert_eq!(mapped.authored_at, "2026-09-03T12:00:00Z");
+        assert_eq!(
+            mapped.html_url,
+            "https://github.com/octocat/repo/commit/abc123"
+        );
+    }
+
+    /// A commit whose email matches no account has no `author`, so the git
+    /// author name is what the row shows.
+    #[test]
+    fn unlinked_pull_commit_falls_back_to_the_git_author() {
+        let raw: RawPullCommit = serde_json::from_value(serde_json::json!({
+            "sha": "def456",
+            "commit": {
+                "message": "From a laptop",
+                "author": { "name": "Someone Else", "date": "2026-09-04T09:30:00Z" }
+            },
+            "author": null
+        }))
+        .unwrap();
+        let mapped = map_pull_commit(raw);
+        assert_eq!(mapped.author.login, "Someone Else");
+        assert_eq!(mapped.author.avatar_url, "");
+        assert_eq!(mapped.html_url, "");
+    }
+
+    /// A commit payload with nothing but a sha still deserializes, so one
+    /// malformed row cannot take the whole list down.
+    #[test]
+    fn pull_commit_tolerates_a_missing_commit_object() {
+        let raw: RawPullCommit =
+            serde_json::from_value(serde_json::json!({ "sha": "000" })).unwrap();
+        let mapped = map_pull_commit(raw);
+        assert_eq!(mapped.sha, "000");
+        assert_eq!(mapped.message, "");
+        assert_eq!(mapped.author.login, "");
+        assert_eq!(mapped.authored_at, "");
     }
 
     /// The IPC DTO is camelCase but GitHub's merge endpoint takes

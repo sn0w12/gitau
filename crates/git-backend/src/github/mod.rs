@@ -23,11 +23,12 @@ pub use crate::api::github::{
     AccountProfile, DeviceFlowStart, GithubActionStep, GithubCheckAnnotation, GithubCheckRun,
     GithubCheckRunDetail, GithubCheckRunLog, GithubCheckRunOutput, GithubIssueComment,
     GithubIssueDetail, GithubIssueEvent, GithubIssueListItem, GithubLabel, GithubNotification,
-    GithubOrg, GithubPullRequestDetail, GithubPullRequestListItem, GithubPullRequestRef,
-    GithubPullRequestReview, GithubPullRequestReviewComment, GithubRepoPermissions, GithubUser,
-    GithubWorkflowRun, MergePullRequestBody, MergePullRequestResult, NotificationPage,
-    PublishRepositoryRequest, PublishResult, PullRequestMergeMethod, SearchIssueItem,
-    SearchIssuePage, SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody,
+    GithubOrg, GithubPullRequestCommit, GithubPullRequestDetail, GithubPullRequestListItem,
+    GithubPullRequestRef, GithubPullRequestReview, GithubPullRequestReviewComment,
+    GithubRepoPermissions, GithubUser, GithubWorkflowRun, MergePullRequestBody,
+    MergePullRequestResult, NotificationPage, PublishRepositoryRequest, PublishResult,
+    PullRequestMergeMethod, SearchIssueItem, SearchIssuePage, SearchPullRequestPage,
+    UpdateIssueBody, UpdatePullRequestBody,
 };
 pub use api::{CreateRepoBody, CreatedRepository, GithubApi, HttpGithubApi};
 pub use token_store::{KeyringTokenStore, MemoryTokenStore, TokenStore};
@@ -469,6 +470,22 @@ impl GitHubAuth {
         Ok(self
             .api
             .list_pull_reviews(&token, owner, repo, number)
+            .await?)
+    }
+
+    /// Commits on the pull request's head branch, oldest first.
+    pub async fn list_pull_commits(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<Vec<GithubPullRequestCommit>> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .list_pull_commits(&token, owner, repo, number)
             .await?)
     }
 
@@ -1032,6 +1049,16 @@ mod tests {
                 _repo: &str,
                 _number: u64,
             ) -> api::GithubFuture<Vec<GithubPullRequestReview>> {
+                unreachable!()
+            }
+
+            fn list_pull_commits(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _number: u64,
+            ) -> api::GithubFuture<Vec<GithubPullRequestCommit>> {
                 unreachable!()
             }
 

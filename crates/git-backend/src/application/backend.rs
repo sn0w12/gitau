@@ -10,11 +10,11 @@ use tokio::sync::mpsc;
 use crate::api::changes::{DiscardRequest, StageRequest, StatusOptions};
 use crate::api::github::{
     AccountProfile, DeviceFlowStart, GithubCheckRun, GithubCheckRunDetail, GithubCheckRunLog,
-    GithubIssueComment, GithubIssueDetail, GithubIssueEvent, GithubOrg, GithubPullRequestDetail,
-    GithubPullRequestReview, GithubPullRequestReviewComment, GithubRepoPermissions,
-    GithubWorkflowRun, MergePullRequestBody, MergePullRequestResult, NotificationPage,
-    PublishRepositoryRequest, PublishResult, SearchIssuePage, SearchPullRequestPage,
-    UpdateIssueBody, UpdatePullRequestBody,
+    GithubIssueComment, GithubIssueDetail, GithubIssueEvent, GithubOrg, GithubPullRequestCommit,
+    GithubPullRequestDetail, GithubPullRequestReview, GithubPullRequestReviewComment,
+    GithubRepoPermissions, GithubWorkflowRun, MergePullRequestBody, MergePullRequestResult,
+    NotificationPage, PublishRepositoryRequest, PublishResult, SearchIssuePage,
+    SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody,
 };
 use crate::api::graph::GraphQuery;
 use crate::api::highlight::HighlightedSnippet;
@@ -1933,6 +1933,16 @@ impl Backend {
         number: u64,
     ) -> Result<Vec<GithubPullRequestReview>> {
         self.github.list_pull_reviews(&owner, &repo, number).await
+    }
+
+    /// Commits on the pull request's head branch, oldest first.
+    pub async fn github_list_pull_commits(
+        &self,
+        owner: String,
+        repo: String,
+        number: u64,
+    ) -> Result<Vec<GithubPullRequestCommit>> {
+        self.github.list_pull_commits(&owner, &repo, number).await
     }
 
     pub async fn github_list_pull_review_comments(

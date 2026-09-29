@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type {
     GithubIssueComment,
     GithubIssueEvent,
+    GithubPullRequestCommit,
     GithubPullRequestReview,
     GithubPullRequestReviewComment,
     GithubUser,
@@ -76,6 +77,16 @@ function reviewComment(
     };
 }
 
+function commit(sha: string, authoredAt: string): GithubPullRequestCommit {
+    return {
+        sha,
+        message: `work on ${sha}`,
+        author: user("hubot"),
+        authoredAt,
+        htmlUrl: "",
+    };
+}
+
 describe("buildIssueTimeline", () => {
     it("orders the body, comments, and events by timestamp", () => {
         const timeline = buildIssueTimeline(THREAD, {
@@ -119,6 +130,7 @@ describe("buildIssueTimeline", () => {
 describe("buildPullTimeline", () => {
     it("interleaves reviews and inline comments with the conversation", () => {
         const timeline = buildPullTimeline(THREAD, {
+            commits: [],
             comments: [comment(1, "2026-09-02T00:00:00Z")],
             events: [event("merged", "2026-09-05T00:00:00Z")],
             reviews: [review(7, "2026-09-03T00:00:00Z")],
@@ -133,8 +145,45 @@ describe("buildPullTimeline", () => {
         ]);
     });
 
+    it("interleaves the head branch's commits into the conversation", () => {
+        const timeline = buildPullTimeline(THREAD, {
+            commits: [
+                commit("aaa", "2026-09-02T00:00:00Z"),
+                commit("bbb", "2026-09-04T00:00:00Z"),
+            ],
+            comments: [comment(1, "2026-09-03T00:00:00Z")],
+            events: [],
+            reviews: [],
+            reviewComments: [],
+        });
+        expect(timeline.map((item) => item.kind)).toEqual([
+            "body",
+            "commit",
+            "comment",
+            "commit",
+        ]);
+    });
+
+    /** A commit can be backdated or rebased, so a comment on it can land
+     * before the pull request was opened. The description still leads. */
+    it("keeps the opening body on top when a row predates it", () => {
+        const timeline = buildPullTimeline(THREAD, {
+            commits: [commit("aaa", "2026-08-30T00:00:00Z")],
+            comments: [comment(1, "2026-08-31T00:00:00Z")],
+            events: [],
+            reviews: [],
+            reviewComments: [],
+        });
+        expect(timeline.map((item) => item.kind)).toEqual([
+            "body",
+            "commit",
+            "comment",
+        ]);
+    });
+
     it("gives every row a distinct key", () => {
         const timeline = buildPullTimeline(THREAD, {
+            commits: [commit("abc123", "2026-09-03T00:00:00Z")],
             comments: [comment(1, "2026-09-02T00:00:00Z")],
             events: [event("labeled", "2026-09-05T00:00:00Z")],
             reviews: [review(1, "2026-09-03T00:00:00Z")],
@@ -149,6 +198,7 @@ describe("buildPullTimeline", () => {
 describe("isTimelineMessage", () => {
     it("treats the body and comments as stackable messages", () => {
         const timeline = buildPullTimeline(THREAD, {
+            commits: [commit("abc123", "2026-09-03T00:00:00Z")],
             comments: [comment(1, "2026-09-02T00:00:00Z")],
             events: [event("labeled", "2026-09-03T00:00:00Z")],
             reviews: [review(2, "2026-09-04T00:00:00Z")],

@@ -25,6 +25,7 @@ import type {
     GithubIssueDetail,
     GithubIssueEvent,
     GithubOrg,
+    GithubPullRequestCommit,
     GithubPullRequestDetail,
     GithubPullRequestReview,
     GithubPullRequestReviewComment,
@@ -684,6 +685,11 @@ function createRawBackendClient() {
             listPullReviews: (owner: string, repo: string, number: number) =>
                 invokeCommand<GithubPullRequestReview[]>(
                     "github_list_pull_reviews",
+                    { args: { owner, repo, number } }
+                ),
+            listPullCommits: (owner: string, repo: string, number: number) =>
+                invokeCommand<GithubPullRequestCommit[]>(
+                    "github_list_pull_commits",
                     { args: { owner, repo, number } }
                 ),
             listPullReviewComments: (

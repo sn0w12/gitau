@@ -903,6 +903,17 @@ export interface GithubPullRequestDetail {
     commits: number;
 }
 
+/** One commit on a pull request's head branch. `author.login` falls back to
+ * the git author name when the commit is not linked to a GitHub account, in
+ * which case `author.avatarUrl` is empty. */
+export interface GithubPullRequestCommit {
+    sha: string;
+    message: string;
+    author: GithubUser;
+    authoredAt: string;
+    htmlUrl: string;
+}
+
 /** One submitted review. `state` is GitHub's raw verdict. */
 export interface GithubPullRequestReview {
     id: number;

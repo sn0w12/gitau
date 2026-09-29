@@ -270,6 +270,7 @@ pub fn run() {
             commands::github::github_list_pull_requests,
             commands::github::github_get_pull,
             commands::github::github_list_pull_reviews,
+            commands::github::github_list_pull_commits,
             commands::github::github_list_pull_review_comments,
             commands::github::github_update_pull,
             commands::github::github_merge_pull,

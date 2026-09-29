@@ -2,11 +2,11 @@ use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
 use git_backend::api::github::{
     AccountProfile, DeviceFlowStart, GithubCheckRun, GithubCheckRunDetail, GithubCheckRunLog,
-    GithubIssueComment, GithubIssueDetail, GithubIssueEvent, GithubOrg, GithubPullRequestDetail,
-    GithubPullRequestReview, GithubPullRequestReviewComment, GithubRepoPermissions,
-    GithubWorkflowRun, MergePullRequestBody, MergePullRequestResult, NotificationPage,
-    PublishRepositoryRequest, PublishResult, SearchIssuePage, SearchPullRequestPage,
-    UpdateIssueBody, UpdatePullRequestBody,
+    GithubIssueComment, GithubIssueDetail, GithubIssueEvent, GithubOrg, GithubPullRequestCommit,
+    GithubPullRequestDetail, GithubPullRequestReview, GithubPullRequestReviewComment,
+    GithubRepoPermissions, GithubWorkflowRun, MergePullRequestBody, MergePullRequestResult,
+    NotificationPage, PublishRepositoryRequest, PublishResult, SearchIssuePage,
+    SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody,
 };
 
 /// The connected account, `None` while signed out.
@@ -225,6 +225,21 @@ pub async fn github_list_pull_reviews(
     state
         .backend
         .github_list_pull_reviews(owner, repo, number)
+        .await
+        .map_err(to_serialized)
+}
+
+/// Commits on the pull request's head branch, oldest first.
+#[tauri::command]
+pub async fn github_list_pull_commits(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    number: u64,
+) -> CommandResult<Vec<GithubPullRequestCommit>> {
+    state
+        .backend
+        .github_list_pull_commits(owner, repo, number)
         .await
         .map_err(to_serialized)
 }

@@ -7,9 +7,10 @@ use std::sync::{Arc, Mutex};
 use git_backend::Backend;
 use git_backend::api::github::{
     AccountProfile, DeviceFlowStart, GithubCheckRun, GithubCheckRunDetail, GithubCheckRunLog,
-    GithubOrg, GithubPullRequestDetail, GithubPullRequestReview, GithubPullRequestReviewComment,
-    GithubWorkflowRun, MergePullRequestBody, MergePullRequestResult, NotificationPage,
-    SearchIssuePage, SearchPullRequestPage, UpdatePullRequestBody,
+    GithubOrg, GithubPullRequestCommit, GithubPullRequestDetail, GithubPullRequestReview,
+    GithubPullRequestReviewComment, GithubWorkflowRun, MergePullRequestBody,
+    MergePullRequestResult, NotificationPage, SearchIssuePage, SearchPullRequestPage,
+    UpdatePullRequestBody,
 };
 use git_backend::github::api::{GithubApi, GithubFuture};
 use git_backend::github::device_flow::{DeviceCodeResponse, TokenPoll};
@@ -200,6 +201,16 @@ impl GithubApi for FakeApi {
         _repo: &str,
         _number: u64,
     ) -> GithubFuture<Vec<GithubPullRequestReview>> {
+        Box::pin(async { Ok(vec![]) })
+    }
+
+    fn list_pull_commits(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _number: u64,
+    ) -> GithubFuture<Vec<GithubPullRequestCommit>> {
         Box::pin(async { Ok(vec![]) })
     }
 

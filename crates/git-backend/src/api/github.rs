@@ -415,6 +415,19 @@ pub struct GithubPullRequestDetail {
     pub commits: u64,
 }
 
+/// One commit on a pull request's head branch. `author` falls back to the
+/// git author name when the commit is not linked to a GitHub account, so a
+/// row always names someone.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestCommit {
+    pub sha: String,
+    pub message: String,
+    pub author: GithubUser,
+    pub authored_at: String,
+    pub html_url: String,
+}
+
 /// One submitted review. `state` is GitHub's raw verdict: `APPROVED`,
 /// `CHANGES_REQUESTED`, `COMMENTED`, or `DISMISSED`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

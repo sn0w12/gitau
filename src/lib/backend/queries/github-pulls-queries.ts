@@ -192,6 +192,31 @@ export function pullReviewsQuery(
     });
 }
 
+/** Commits on the pull request's head branch, oldest first, interleaved into
+ * the conversation by the timeline builder. */
+export function pullCommitsQuery(
+    deps: GithubPullsDeps,
+    owner: string | null,
+    repo: string | null,
+    number: number | null,
+    enabled: boolean
+) {
+    return queryOptions({
+        queryKey: githubKeys.pullCommits(owner ?? "", repo ?? "", number ?? 0),
+        queryFn: async () =>
+            expectOk(
+                await deps.backend.github.listPullCommits(
+                    owner ?? "",
+                    repo ?? "",
+                    number ?? 0
+                )
+            ),
+        staleTime: 30_000,
+        retry: false,
+        enabled: enabled && owner != null && repo != null && number != null,
+    });
+}
+
 export function pullReviewCommentsQuery(
     deps: GithubPullsDeps,
     owner: string | null,
