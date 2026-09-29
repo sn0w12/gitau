@@ -100,7 +100,7 @@ function checkAppearance(run: GithubCheckRun): {
         };
     }
     return {
-        icon: <Check className="size-4" />,
+        icon: <X className="size-4" />,
         className: "text-destructive",
         label: "Failed",
     };
@@ -750,7 +750,7 @@ function workflowAppearance(run: GithubWorkflowRun): {
         };
     }
     return {
-        icon: <Check className="size-4" />,
+        icon: <X className="size-4" />,
         className: "text-destructive",
         label: "Failed",
     };
