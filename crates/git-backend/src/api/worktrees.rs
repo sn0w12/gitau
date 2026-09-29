@@ -12,6 +12,10 @@ pub struct WorktreeInfo {
     pub branch: Option<String>,
     /// True for the tree this repository session is bound to.
     pub is_current: bool,
+    /// True for the synthetic entry describing the repository's own tree,
+    /// which is not a linked worktree. A linked tree that happens to be the
+    /// session's tree has `is_current` but not `is_primary`.
+    pub is_primary: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub locked_by: Option<String>,
     /// True when the tree's checkout directory no longer exists on disk.

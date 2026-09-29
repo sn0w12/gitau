@@ -9,17 +9,38 @@ use crate::error::{GitError, Result};
 const PRIMARY_TREE_NAME: &str = "main";
 
 pub fn list_worktrees(repo: &git2::Repository) -> Result<Vec<WorktreeInfo>> {
-    let main_path = canonical_or_self(repo.workdir().map(Path::to_path_buf));
+    // The primary entry always describes the repository's main worktree, never
+    // whichever tree this session happens to be bound to. A session opened on a
+    // linked worktree shares the common git dir, whose parent is the main
+    // worktree; reporting the session's own tree here would label that linked
+    // tree twice and hide where the repository actually lives.
+    let session_root = canonical_or_self(repo.workdir().map(Path::to_path_buf));
+    let main_root = match &session_root {
+        Some(_) => repo.commondir().parent().map(Path::to_path_buf),
+        None => Some(repo.commondir().to_path_buf()),
+    }
+    .and_then(|path| std::fs::canonicalize(&path).ok().or(Some(path)))
+    .or(session_root.clone());
+
     let mut out = Vec::new();
 
-    if let Some(path) = main_path {
+    if let Some(path) = main_root.clone() {
+        let is_current = session_root.as_deref() == Some(path.as_path());
+        let branch = if is_current {
+            head_branch_shorthand(repo)
+        } else {
+            git2::Repository::open(&path)
+                .ok()
+                .and_then(|main| head_branch_shorthand(&main))
+        };
         out.push(WorktreeInfo {
             name: PRIMARY_TREE_NAME.to_owned(),
             path: path.to_string_lossy().into_owned(),
-            branch: head_branch_shorthand(repo),
-            is_current: true,
+            branch,
+            is_current,
+            is_primary: true,
             locked_by: None,
-            is_prunable: false,
+            is_prunable: !path.exists(),
         });
     }
 
@@ -191,6 +212,7 @@ fn describe_linked(repo: &git2::Repository, name: &str) -> Result<Option<Worktre
         path: wt_path.to_string_lossy().into_owned(),
         branch,
         is_current,
+        is_primary: false,
         locked_by: locked,
         is_prunable: !wt_path.exists(),
     }))
@@ -235,6 +257,65 @@ mod tests {
         // Keep the tempdir alive by forgetting it, mirroring TestRepo.
         std::mem::forget(dir);
         crate::engines::git2::Git2Session::new(root)
+    }
+
+    #[test]
+    fn primary_entry_is_the_main_worktree_from_a_linked_session() -> Result<()> {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("repo");
+        std::fs::create_dir_all(&root).unwrap();
+        let repo = git2::Repository::init(&root).unwrap();
+        let mut index = repo.index().unwrap();
+        std::fs::write(root.join("a.txt"), "a").unwrap();
+        index
+            .add_all(["*"], git2::IndexAddOption::DEFAULT, None)
+            .unwrap();
+        index.write().unwrap();
+        let tree = index.write_tree().unwrap();
+        let sig = git2::Signature::now("T", "t@e").unwrap();
+        repo.commit(
+            Some("HEAD"),
+            &sig,
+            &sig,
+            "init",
+            &repo.find_tree(tree).unwrap(),
+            &[],
+        )
+        .unwrap();
+        let linked = root.join("linked");
+        repo.worktree("linked", &linked, None).unwrap();
+        drop(repo);
+        std::mem::forget(dir);
+
+        // A session bound to the linked tree must still report the main
+        // worktree as primary, and must not claim it is the current tree.
+        let linked_repo = git2::Repository::open_from_worktree(
+            &git2::Repository::open(&root)
+                .unwrap()
+                .find_worktree("linked")
+                .unwrap(),
+        )
+        .unwrap();
+        let list = list_worktrees(&linked_repo)?;
+        let primary = list
+            .iter()
+            .find(|info| info.is_primary)
+            .expect("primary entry");
+
+        assert_eq!(
+            std::fs::canonicalize(&primary.path).unwrap(),
+            std::fs::canonicalize(&root).unwrap()
+        );
+        assert!(!primary.is_current);
+
+        let linked_entry = list
+            .iter()
+            .find(|info| info.name == "linked")
+            .expect("linked entry");
+        assert!(linked_entry.is_current);
+        assert!(!linked_entry.is_primary);
+        assert_ne!(primary.name, linked_entry.name);
+        Ok(())
     }
 
     #[test]

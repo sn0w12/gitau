@@ -121,7 +121,7 @@ export function DialogHeader({
 }: useRender.ComponentProps<"div">): React.ReactElement {
     const defaultProps = {
         className: cn(
-            "flex flex-col gap-2 p-6 in-[[data-slot=dialog-popup]:has([data-slot=dialog-panel])]:pb-3 max-sm:pb-4",
+            "flex flex-col gap-2 p-6 in-[[data-slot=dialog-popup]:has([data-slot=dialog-panel])]:pb-2 max-sm:pb-4",
             className
         ),
         "data-slot": "dialog-header",

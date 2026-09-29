@@ -282,6 +282,8 @@ export interface WorktreeInfo {
     /** Short branch name checked out in this tree, when attached. */
     branch?: string;
     isCurrent: boolean;
+    /** True only for the synthetic entry for the repository's own tree. */
+    isPrimary: boolean;
     lockedBy?: string;
     /** Checkout directory no longer exists on disk. */
     isPrunable: boolean;
