@@ -77,8 +77,32 @@ export const githubKeys = {
         ["github", "notifications", login] as const,
     searchIssues: (login: string) =>
         ["github", "search-issues", login] as const,
+    searchPullRequests: (login: string) =>
+        ["github", "search-pull-requests", login] as const,
     issues: (owner: string, repo: string, state: string, labels: string) =>
         ["github", "issues", owner, repo, state, labels] as const,
+    pulls: (owner: string, repo: string, state: string, labels: string) =>
+        ["github", "pulls", owner, repo, state, labels] as const,
+    pullRequest: (owner: string, repo: string, number: number) =>
+        ["github", "pull", owner, repo, number] as const,
+    pullReviews: (owner: string, repo: string, number: number) =>
+        ["github", "pull", owner, repo, number, "reviews"] as const,
+    pullCommits: (owner: string, repo: string, number: number) =>
+        ["github", "pull", owner, repo, number, "commits"] as const,
+    pullReviewComments: (owner: string, repo: string, number: number) =>
+        ["github", "pull", owner, repo, number, "review-comments"] as const,
+    /** Keyed by the head commit, since that is what CI reports against. */
+    checkRuns: (owner: string, repo: string, sha: string) =>
+        ["github", "commit", owner, repo, sha, "checks"] as const,
+    /** Same commit, same reason: reporters still on the statuses API. */
+    commitStatuses: (owner: string, repo: string, sha: string) =>
+        ["github", "commit", owner, repo, sha, "statuses"] as const,
+    checkRun: (owner: string, repo: string, checkRunId: number) =>
+        ["github", "check-run", owner, repo, checkRunId] as const,
+    checkRunLog: (owner: string, repo: string, checkRunId: number) =>
+        ["github", "check-run-log", owner, repo, checkRunId] as const,
+    workflowRuns: (owner: string, repo: string, sha: string) =>
+        ["github", "commit", owner, repo, sha, "workflows"] as const,
     issueDetail: (owner: string, repo: string, number: number) =>
         ["github", "issue", owner, repo, number] as const,
     issueComments: (owner: string, repo: string, number: number) =>

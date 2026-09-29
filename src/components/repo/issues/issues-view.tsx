@@ -1,8 +1,9 @@
 import { CircleDot } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { LabelBadge } from "@/components/github/label-badge";
+import { issueStatusOf, StatusBadge } from "@/components/github/status-badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     Empty,
@@ -37,28 +38,8 @@ import {
 } from "@/hooks/github/use-github-issues";
 import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
 import type { GithubIssueListItem, GithubLabel } from "@/lib/backend/protocol";
-import { getTextColor } from "@/lib/utils";
-
-import { issueStatusOf, StatusBadge } from "../../issues/status-badge";
 
 type TabState = "open" | "closed";
-
-export function LabelBadge({ label }: { label: GithubLabel }) {
-    return (
-        <Badge
-            className={
-                getTextColor(label.color) === "bright"
-                    ? "text-background dark:text-foreground"
-                    : "text-foreground dark:text-background"
-            }
-            style={{
-                backgroundColor: `#${label.color}`,
-            }}
-        >
-            {label.name}
-        </Badge>
-    );
-}
 
 function AssigneeStack({
     assignees,
@@ -165,7 +146,7 @@ export function IssuesView({ repoId }: { repoId: number }) {
                         </Select>
                     </div>
                 </div>
-                <Frame className="w-full">
+                <Frame className="min-h-0 w-full flex-1">
                     <TabsPanel
                         className="flex min-h-0 flex-1 flex-col"
                         value="open"
@@ -371,9 +352,7 @@ function IssuesTable({
                                 {issue.title}
                             </TableCell>
                             <TableCell>
-                                <StatusBadge
-                                    status={issueStatusOf(issue.state)}
-                                />
+                                <StatusBadge status={issueStatusOf(issue)} />
                             </TableCell>
                             <TableCell className="space-x-1">
                                 {issue.labels.map((label) => (

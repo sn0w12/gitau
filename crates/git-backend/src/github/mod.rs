@@ -14,15 +14,21 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use crate::api::remotes::{CredentialKind, CredentialRequest};
 use crate::error::{GitError, Result};
 
+mod ansi;
 pub mod api;
 pub mod device_flow;
 pub mod token_store;
 
 pub use crate::api::github::{
-    AccountProfile, DeviceFlowStart, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
-    GithubIssueListItem, GithubLabel, GithubNotification, GithubOrg, GithubRepoPermissions,
-    GithubUser, NotificationPage, PublishRepositoryRequest, PublishResult, SearchIssueItem,
-    SearchIssuePage, UpdateIssueBody,
+    AccountProfile, DeviceFlowStart, GithubActionStep, GithubCheckAnnotation, GithubCheckRun,
+    GithubCheckRunDetail, GithubCheckRunLog, GithubCheckRunOutput, GithubCommitStatus,
+    GithubIssueComment, GithubIssueDetail, GithubIssueEvent, GithubIssueListItem, GithubLabel,
+    GithubNotification, GithubOrg, GithubPullRequestCommit, GithubPullRequestDetail,
+    GithubPullRequestListItem, GithubPullRequestRef, GithubPullRequestReview,
+    GithubPullRequestReviewComment, GithubRepoPermissions, GithubUser, GithubWorkflowRun,
+    MergePullRequestBody, MergePullRequestResult, NotificationPage, PublishRepositoryRequest,
+    PublishResult, PullRequestMergeMethod, SearchIssueItem, SearchIssuePage, SearchPullRequestPage,
+    ThreadStateReason, UpdateIssueBody, UpdatePullRequestBody,
 };
 pub use api::{CreateRepoBody, CreatedRepository, GithubApi, HttpGithubApi};
 pub use token_store::{KeyringTokenStore, MemoryTokenStore, TokenStore};
@@ -420,6 +426,197 @@ impl GitHubAuth {
             remote: "github.com".into(),
         })?;
         Ok(self.api.search_issues(&token, page).await?)
+    }
+
+    /// Pull requests of a repository, open/closed/all, paginated.
+    pub async fn list_pull_requests(
+        &self,
+        owner: &str,
+        repo: &str,
+        state: &str,
+        labels: &[String],
+        page: u32,
+    ) -> Result<SearchPullRequestPage> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .list_pull_requests(&token, owner, repo, state, labels, page)
+            .await?)
+    }
+
+    pub async fn get_pull(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<GithubPullRequestDetail> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self.api.get_pull(&token, owner, repo, number).await?)
+    }
+
+    pub async fn list_pull_reviews(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<Vec<GithubPullRequestReview>> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .list_pull_reviews(&token, owner, repo, number)
+            .await?)
+    }
+
+    /// Commits on the pull request's head branch, oldest first.
+    pub async fn list_pull_commits(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<Vec<GithubPullRequestCommit>> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .list_pull_commits(&token, owner, repo, number)
+            .await?)
+    }
+
+    pub async fn list_pull_review_comments(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<Vec<GithubPullRequestReviewComment>> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .list_pull_review_comments(&token, owner, repo, number)
+            .await?)
+    }
+
+    pub async fn update_pull(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        body: &UpdatePullRequestBody,
+    ) -> Result<GithubPullRequestDetail> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .update_pull(&token, owner, repo, number, body)
+            .await?)
+    }
+
+    pub async fn merge_pull(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        body: &MergePullRequestBody,
+    ) -> Result<MergePullRequestResult> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .merge_pull(&token, owner, repo, number, body)
+            .await?)
+    }
+
+    pub async fn list_check_runs(
+        &self,
+        owner: &str,
+        repo: &str,
+        sha: &str,
+    ) -> Result<Vec<GithubCheckRun>> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self.api.list_check_runs(&token, owner, repo, sha).await?)
+    }
+
+    pub async fn get_check_run(
+        &self,
+        owner: &str,
+        repo: &str,
+        check_run_id: u64,
+    ) -> Result<GithubCheckRunDetail> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .get_check_run(&token, owner, repo, check_run_id)
+            .await?)
+    }
+
+    /// A run's job log, split per step, mirroring GitHub's job view.
+    pub async fn get_check_run_log(
+        &self,
+        owner: &str,
+        repo: &str,
+        check_run_id: u64,
+    ) -> Result<GithubCheckRunLog> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .get_check_run_log(&token, owner, repo, check_run_id)
+            .await?)
+    }
+
+    pub async fn list_workflow_runs(
+        &self,
+        owner: &str,
+        repo: &str,
+        sha: &str,
+    ) -> Result<Vec<GithubWorkflowRun>> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .list_workflow_runs(&token, owner, repo, sha)
+            .await?)
+    }
+
+    /// Pull requests across all of GitHub matching
+    /// `is:pr involves:@me sort:updated-desc`.
+    pub async fn search_pull_requests(&self, page: u32) -> Result<SearchPullRequestPage> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self.api.search_pull_requests(&token, page).await?)
+    }
+
+    /// Commit statuses for a commit, one per reporter.
+    pub async fn list_commit_statuses(
+        &self,
+        owner: &str,
+        repo: &str,
+        sha: &str,
+    ) -> Result<Vec<GithubCommitStatus>> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self
+            .api
+            .list_commit_statuses(&token, owner, repo, sha)
+            .await?)
     }
 
     pub async fn get_issue(
@@ -845,6 +1042,138 @@ mod tests {
                 _token: &str,
                 _page: u32,
             ) -> api::GithubFuture<SearchIssuePage> {
+                unreachable!()
+            }
+
+            fn search_pull_requests(
+                &self,
+                _token: &str,
+                _page: u32,
+            ) -> api::GithubFuture<SearchPullRequestPage> {
+                unreachable!()
+            }
+
+            fn list_commit_statuses(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _sha: &str,
+            ) -> api::GithubFuture<Vec<GithubCommitStatus>> {
+                unreachable!()
+            }
+
+            fn list_pull_requests(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _state: &str,
+                _labels: &[String],
+                _page: u32,
+            ) -> api::GithubFuture<SearchPullRequestPage> {
+                unreachable!()
+            }
+
+            fn get_pull(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _number: u64,
+            ) -> api::GithubFuture<GithubPullRequestDetail> {
+                unreachable!()
+            }
+
+            fn list_pull_reviews(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _number: u64,
+            ) -> api::GithubFuture<Vec<GithubPullRequestReview>> {
+                unreachable!()
+            }
+
+            fn list_pull_commits(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _number: u64,
+            ) -> api::GithubFuture<Vec<GithubPullRequestCommit>> {
+                unreachable!()
+            }
+
+            fn list_pull_review_comments(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _number: u64,
+            ) -> api::GithubFuture<Vec<GithubPullRequestReviewComment>> {
+                unreachable!()
+            }
+
+            fn update_pull(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _number: u64,
+                _body: &UpdatePullRequestBody,
+            ) -> api::GithubFuture<GithubPullRequestDetail> {
+                unreachable!()
+            }
+
+            fn merge_pull(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _number: u64,
+                _body: &MergePullRequestBody,
+            ) -> api::GithubFuture<MergePullRequestResult> {
+                unreachable!()
+            }
+
+            fn list_check_runs(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _sha: &str,
+            ) -> api::GithubFuture<Vec<GithubCheckRun>> {
+                unreachable!()
+            }
+
+            fn get_check_run(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _check_run_id: u64,
+            ) -> api::GithubFuture<GithubCheckRunDetail> {
+                unreachable!()
+            }
+
+            fn get_check_run_log(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _check_run_id: u64,
+            ) -> api::GithubFuture<GithubCheckRunLog> {
+                unreachable!()
+            }
+
+            fn list_workflow_runs(
+                &self,
+                _token: &str,
+                _owner: &str,
+                _repo: &str,
+                _sha: &str,
+            ) -> api::GithubFuture<Vec<GithubWorkflowRun>> {
                 unreachable!()
             }
 

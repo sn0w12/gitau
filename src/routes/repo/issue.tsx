@@ -3,12 +3,26 @@ import { useSelector } from "@tanstack/react-store";
 import { X } from "lucide-react";
 import { Fragment, useRef } from "react";
 
-import { IssueEvent } from "@/components/issues/event";
-import { IssueInput, type IssueInputHandle } from "@/components/issues/input";
-import { IssueMessage, MessageSpacer } from "@/components/issues/message";
-import { issueStatusOf, StatusBadge } from "@/components/issues/status-badge";
-import { LabelBadge } from "@/components/repo/issues/issues-view";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { TimelineEvent } from "@/components/github/event";
+import {
+    ConversationInput,
+    type ConversationInputHandle,
+} from "@/components/github/input";
+import { MessageSpacer, TimelineMessage } from "@/components/github/message";
+import {
+    isOpenThread,
+    issueStatusOf,
+    StatusBadge,
+} from "@/components/github/status-badge";
+import {
+    AvatarStack,
+    ComposerSkeleton,
+    EventSkeleton,
+    IssueSidebarSkeleton,
+    LabelList,
+    MessageSkeleton,
+    SidebarBlock,
+} from "@/components/github/thread-chrome";
 import { Button } from "@/components/ui/button";
 import {
     Empty,
@@ -16,7 +30,7 @@ import {
     EmptyHeader,
     EmptyTitle,
 } from "@/components/ui/empty";
-import { Frame, FrameHeader, FramePanel } from "@/components/ui/frame";
+import { Frame } from "@/components/ui/frame";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGithubAccount } from "@/hooks/github/use-github-account";
@@ -37,86 +51,16 @@ import type {
     GithubIssueComment,
     GithubIssueDetail,
     GithubIssueEvent,
-    GithubUser,
 } from "@/lib/backend/protocol";
+import {
+    buildIssueTimeline,
+    isTimelineMessage,
+    timelineKey,
+    timelineParticipants,
+    type IssueTimelineItem,
+} from "@/lib/github/timeline";
 import { toastError } from "@/lib/toast-error";
 import { repositoryStore } from "@/stores/repository-store";
-
-function initials(login: string): string {
-    return login.slice(0, 1).toUpperCase() || "?";
-}
-
-function AvatarStack({ users }: { users: GithubUser[] }) {
-    if (users.length === 0) {
-        return <span className="text-sm text-muted-foreground">None</span>;
-    }
-    return (
-        <div className="flex -space-x-[0.4rem]">
-            {users.map((user) => (
-                <Avatar key={user.login} className="size-6 ring-2 ring-card">
-                    <AvatarImage src={user.avatarUrl || undefined} />
-                    <AvatarFallback>{initials(user.login)}</AvatarFallback>
-                </Avatar>
-            ))}
-        </div>
-    );
-}
-
-type TimelineItem =
-    | { kind: "body"; createdAt: string; comment: null; event: null }
-    | {
-          kind: "comment";
-          createdAt: string;
-          comment: GithubIssueComment;
-          event: null;
-      }
-    | {
-          kind: "event";
-          createdAt: string;
-          comment: null;
-          event: GithubIssueEvent;
-      };
-
-const HIDDEN_EVENT_KINDS = new Set([
-    "subscribed",
-    "unsubscribed",
-    "mentioned",
-    "referenced",
-    "cross-referenced",
-]);
-
-function buildTimeline(
-    issue: GithubIssueDetail,
-    comments: GithubIssueComment[],
-    events: GithubIssueEvent[]
-): TimelineItem[] {
-    return [
-        {
-            kind: "body",
-            createdAt: issue.createdAt,
-            comment: null,
-            event: null,
-        } as TimelineItem,
-        ...comments.map((comment): TimelineItem => ({
-            kind: "comment",
-            createdAt: comment.createdAt,
-            comment,
-            event: null,
-        })),
-        ...events
-            .filter((event) => !HIDDEN_EVENT_KINDS.has(event.kind))
-            .map((event): TimelineItem => ({
-                kind: "event",
-                createdAt: event.createdAt,
-                comment: null,
-                event,
-            })),
-    ].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-}
-
-function isMessage(item: TimelineItem): boolean {
-    return item.kind === "body" || item.kind === "comment";
-}
 
 interface MessageActions {
     canQuote: boolean;
@@ -127,65 +71,6 @@ interface MessageActions {
     onDeleteComment: (commentId: number) => Promise<void>;
 }
 
-function TimelineBody({
-    issue,
-    owner,
-    repo,
-    actions,
-}: {
-    issue: GithubIssueDetail;
-    owner: string;
-    repo: string;
-    actions: MessageActions;
-}) {
-    return (
-        <IssueMessage
-            text={issue.body || "_No description_"}
-            author={issue.author.login}
-            avatarUrl={issue.author.avatarUrl || undefined}
-            createdAt={issue.createdAt}
-            link={issue.htmlUrl || undefined}
-            owner={owner}
-            repo={repo}
-            canQuote={actions.canQuote}
-            onQuote={actions.onQuote}
-            canEdit={actions.canEdit(issue.author.login)}
-            onSave={actions.onSaveBody}
-        />
-    );
-}
-
-function TimelineComment({
-    comment,
-    owner,
-    repo,
-    actions,
-}: {
-    comment: GithubIssueComment;
-    owner: string;
-    repo: string;
-    actions: MessageActions;
-}) {
-    return (
-        <IssueMessage
-            text={comment.body}
-            author={comment.author.login}
-            avatarUrl={comment.author.avatarUrl || undefined}
-            createdAt={comment.createdAt}
-            actionLabel="commented on"
-            link={comment.htmlUrl || undefined}
-            owner={owner}
-            repo={repo}
-            canQuote={actions.canQuote}
-            onQuote={actions.onQuote}
-            canEdit={actions.canEdit(comment.author.login)}
-            onSave={(body) => actions.onSaveComment(comment.id, body)}
-            canDelete={actions.canEdit(comment.author.login)}
-            onDelete={() => actions.onDeleteComment(comment.id)}
-        />
-    );
-}
-
 function TimelineRow({
     item,
     last,
@@ -194,34 +79,54 @@ function TimelineRow({
     repo,
     actions,
 }: {
-    item: TimelineItem;
+    item: IssueTimelineItem;
     last: boolean;
     issue: GithubIssueDetail;
     owner: string;
     repo: string;
     actions: MessageActions;
 }) {
-    if (item.kind === "body")
+    if (item.kind === "body") {
         return (
-            <TimelineBody
-                issue={issue}
+            <TimelineMessage
+                text={issue.body || "_No description_"}
+                author={issue.author.login}
+                avatarUrl={issue.author.avatarUrl || undefined}
+                createdAt={issue.createdAt}
+                link={issue.htmlUrl || undefined}
                 owner={owner}
                 repo={repo}
-                actions={actions}
+                canQuote={actions.canQuote}
+                onQuote={actions.onQuote}
+                canEdit={actions.canEdit(issue.author.login)}
+                onSave={actions.onSaveBody}
             />
         );
-    if (item.kind === "comment")
+    }
+    if (item.kind === "comment") {
+        const comment = item.comment;
         return (
-            <TimelineComment
-                comment={item.comment}
+            <TimelineMessage
+                text={comment.body}
+                author={comment.author.login}
+                avatarUrl={comment.author.avatarUrl || undefined}
+                createdAt={comment.createdAt}
+                actionLabel="commented on"
+                link={comment.htmlUrl || undefined}
                 owner={owner}
                 repo={repo}
-                actions={actions}
+                canQuote={actions.canQuote}
+                onQuote={actions.onQuote}
+                canEdit={actions.canEdit(comment.author.login)}
+                onSave={(body) => actions.onSaveComment(comment.id, body)}
+                canDelete={actions.canEdit(comment.author.login)}
+                onDelete={() => actions.onDeleteComment(comment.id)}
             />
         );
+    }
     const event = item.event;
     return (
-        <IssueEvent
+        <TimelineEvent
             last={last}
             kind={event.kind}
             actor={event.actor}
@@ -239,85 +144,20 @@ function IssueSidebar({
     participants,
 }: {
     issue: GithubIssueDetail;
-    participants: GithubUser[];
+    participants: ReturnType<typeof timelineParticipants>;
 }) {
     return (
         <Frame className="flex h-fit w-full flex-col">
-            <FramePanel className="flex flex-col p-2 pt-1">
-                <span className="ui-selectable">Assignees</span>
+            <SidebarBlock label="Assignees">
                 <AvatarStack users={issue.assignees} />
-            </FramePanel>
-            <FramePanel className="flex flex-col p-2 pt-1">
-                <span className="ui-selectable">Labels</span>
-                {issue.labels.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">None</div>
-                ) : (
-                    <div className="space-x-1">
-                        {issue.labels.map((label) => (
-                            <LabelBadge key={label.name} label={label} />
-                        ))}
-                    </div>
-                )}
-            </FramePanel>
-            <FramePanel className="flex flex-col p-2 pt-1">
-                <span className="ui-selectable">Participants</span>
+            </SidebarBlock>
+            <SidebarBlock label="Labels">
+                <LabelList labels={issue.labels} />
+            </SidebarBlock>
+            <SidebarBlock label="Participants">
                 <AvatarStack users={participants} />
-            </FramePanel>
+            </SidebarBlock>
         </Frame>
-    );
-}
-
-/** Message-shaped placeholder mirroring IssueMessage's Frame layout. */
-function MessageSkeleton({ lines }: { lines: number }) {
-    const widths = ["w-full", "w-11/12", "w-2/3"];
-    return (
-        <Frame className="ui-selectable">
-            <FrameHeader className="flex flex-row items-center gap-1 px-2 py-1.5">
-                <Skeleton className="size-6 rounded-full" />
-                <Skeleton className="h-4 w-40" />
-            </FrameHeader>
-            <FramePanel className="px-3 py-2">
-                <div className="flex flex-col gap-2">
-                    {Array.from({ length: lines }, (_, index) => (
-                        <Skeleton
-                            key={index}
-                            className={`h-4 ${widths[index % widths.length]}`}
-                        />
-                    ))}
-                </div>
-            </FramePanel>
-        </Frame>
-    );
-}
-
-/** Composer-shaped placeholder mirroring IssueInput's layout. */
-function ComposerSkeleton() {
-    return (
-        <div className="w-full">
-            <Frame>
-                <FrameHeader className="flex flex-row justify-between px-2 py-2">
-                    <div className="flex gap-3">
-                        <Skeleton className="h-4 w-12" />
-                        <Skeleton className="h-4 w-14" />
-                    </div>
-                    <div className="flex gap-1">
-                        {[0, 1, 2, 3, 4].map((index) => (
-                            <Skeleton
-                                key={index}
-                                className="size-6 rounded-md"
-                            />
-                        ))}
-                    </div>
-                </FrameHeader>
-                <FramePanel className="px-3 py-2">
-                    <Skeleton className="h-20 w-full" />
-                </FramePanel>
-            </Frame>
-            <div className="flex justify-end gap-1 pt-2">
-                <Skeleton className="h-8 w-24 rounded-lg" />
-                <Skeleton className="h-8 w-20 rounded-lg" />
-            </div>
-        </div>
     );
 }
 
@@ -345,23 +185,12 @@ function IssueContent({
     const updateComment = useUpdateIssueComment();
     const deleteComment = useDeleteIssueComment();
     const permissions = useRepoPermissions(owner, repo);
-    const composerRef = useRef<IssueInputHandle>(null);
-    const mutating = createComment.pending || updateIssue.pending;
-    const open = issueStatusOf(issue.state) === "open";
-    const timeline = buildTimeline(issue, comments, events);
-    // Comment authors repeat (one per comment) and overlap the backend
-    // list, so merge order-preservingly by login.
-    const participants = (() => {
-        const seen = new Set<string>();
-        return [...issue.participants, ...comments.map((c) => c.author)].filter(
-            (user) => {
-                const key = user.login.toLowerCase();
-                if (key === "" || seen.has(key)) return false;
-                seen.add(key);
-                return true;
-            }
-        );
-    })();
+    const composerRef = useRef<ConversationInputHandle>(null);
+    const mutating =
+        createComment.pending || updateIssue.pending || updateComment.pending;
+    const open = isOpenThread(issue);
+    const timeline = buildIssueTimeline(issue, { comments, events });
+    const participants = timelineParticipants(issue.participants, comments);
 
     const handleComment = async (body: string) => {
         try {
@@ -398,9 +227,7 @@ function IssueContent({
         canEdit,
         // Rejections propagate to the message, which toasts once.
         onSaveBody: async (body) => {
-            await updateIssue.updateIssue(owner, repo, issue.number, {
-                body,
-            });
+            await updateIssue.updateIssue(owner, repo, issue.number, { body });
         },
         onSaveComment: async (commentId, body) => {
             await updateComment.updateComment(
@@ -432,11 +259,16 @@ function IssueContent({
                         #{issue.number}
                     </span>
                     <StatusBadge
-                        status={issueStatusOf(issue.state)}
+                        status={issueStatusOf(issue)}
                         className="mb-1.5 self-end"
                     />
                 </div>
-                <Button variant="outline" size="icon" onClick={goBack}>
+                <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={goBack}
+                    aria-label="Back to issues"
+                >
                     <X />
                 </Button>
             </header>
@@ -445,21 +277,13 @@ function IssueContent({
                     <ScrollArea scrollFade scrollbarGutter className="pr-1">
                         {timeline.map((item, index) => {
                             const prev = index > 0 ? timeline[index - 1] : null;
-                            const stackedMessage =
-                                isMessage(item) &&
+                            const stacked =
+                                isTimelineMessage(item) &&
                                 prev !== null &&
-                                isMessage(prev);
+                                isTimelineMessage(prev);
                             return (
-                                <Fragment
-                                    key={
-                                        item.kind === "body"
-                                            ? "body"
-                                            : item.kind === "comment"
-                                              ? `comment-${item.comment.id}`
-                                              : `event-${item.event.id}`
-                                    }
-                                >
-                                    {stackedMessage ? <MessageSpacer /> : null}
+                                <Fragment key={timelineKey(item)}>
+                                    {stacked ? <MessageSpacer /> : null}
                                     <TimelineRow
                                         item={item}
                                         last={index === timeline.length - 1}
@@ -473,7 +297,7 @@ function IssueContent({
                         })}
                         <MessageSpacer />
                         {signedIn ? (
-                            <IssueInput
+                            <ConversationInput
                                 pending={mutating}
                                 stateLabel={
                                     open ? "Close issue" : "Reopen issue"
@@ -557,7 +381,7 @@ export function IssuePage() {
 
     if (account.isLoading || detail.isLoading) {
         return (
-            <div className="container flex h-full min-h-0 flex-col p-1 pt-2">
+            <div className="container flex h-full min-h-0 flex-col px-1 py-2">
                 <header className="ui-selectable flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <Skeleton className="h-8 w-72" />
@@ -568,45 +392,19 @@ export function IssuePage() {
                         <X />
                     </Button>
                 </header>
-                <div className="mt-2 grid min-h-0 flex-1 grid-cols-3 gap-2">
+                <div className="mt-2 grid min-h-0 flex-1 grid-cols-3">
                     <div className="col-span-2 flex min-h-0 w-full flex-col">
-                        <ScrollArea>
+                        <ScrollArea scrollFade scrollbarGutter className="pr-1">
                             <MessageSkeleton lines={3} />
-                            <div className="ml-4 h-1.5 w-0.5 bg-muted" />
-                            <div className="ui-selectable flex items-center gap-1 px-1.5 py-1">
-                                <Skeleton className="size-6 rounded-full" />
-                                <Skeleton className="size-6 rounded-full" />
-                                <Skeleton className="h-4 w-48" />
-                            </div>
-                            <div className="ml-4 h-1.5 w-0.5 bg-muted" />
+                            <EventSkeleton />
                             <MessageSkeleton lines={2} />
                             <MessageSpacer />
                             <ComposerSkeleton />
                         </ScrollArea>
                     </div>
-                    <Frame className="flex h-fit w-full flex-col">
-                        <FramePanel className="p-2 pt-1">
-                            <span className="ui-selectable">Assignees</span>
-                            <div className="flex -space-x-[0.4rem]">
-                                <Skeleton className="size-6 rounded-full ring-2 ring-card" />
-                                <Skeleton className="size-6 rounded-full ring-2 ring-card" />
-                            </div>
-                        </FramePanel>
-                        <FramePanel className="p-2 pt-1">
-                            <span className="ui-selectable">Labels</span>
-                            <div className="flex gap-1">
-                                <Skeleton className="h-5 w-14 rounded-full" />
-                                <Skeleton className="h-5 w-20 rounded-full" />
-                            </div>
-                        </FramePanel>
-                        <FramePanel className="p-2 pt-1">
-                            <span className="ui-selectable">Participants</span>
-                            <div className="flex -space-x-[0.4rem]">
-                                <Skeleton className="size-6 rounded-full ring-2 ring-card" />
-                                <Skeleton className="size-6 rounded-full ring-2 ring-card" />
-                            </div>
-                        </FramePanel>
-                    </Frame>
+                    <div className="flex flex-col gap-1">
+                        <IssueSidebarSkeleton />
+                    </div>
                 </div>
             </div>
         );

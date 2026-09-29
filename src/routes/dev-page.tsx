@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useRef, useState } from "react";
 
-import { CustomMarkdown } from "@/components/issues/markdown";
+import { CustomMarkdown } from "@/components/github/markdown";
 import { CloneRepoDialog } from "@/components/repo/dialogs/clone-dialog";
 import { CloneProgressPanel } from "@/components/repo/dialogs/clone-progress-panel";
 import { NewRepoDialog } from "@/components/repo/dialogs/new-repo-dialog";
@@ -409,8 +409,36 @@ const MARKDOWN_SAMPLES: MarkdownSample[] = [
         source: "![Tracked host](https://github.com/images/modules/logos_page/Octicons-155.png)\n\n![Untracked host](https://example.com/image.png)",
     },
     {
-        title: "Raw HTML stays literal",
-        source: "<b>not bold</b> and <script>alert(1)</script> are shown as typed.",
+        title: "Safe HTML",
+        source: [
+            "Dependabot wraps its release notes in a disclosure:",
+            "",
+            "<details>",
+            "<summary>Release notes</summary>",
+            "",
+            "## 19.2.7",
+            "",
+            "- Fixed a thing",
+            "- Fixed another",
+            "",
+            "</details>",
+            "",
+            "Inline html is allowlisted: <b>bold</b>, <i>italic</i>, <kbd>Ctrl</kbd>, <sub>sub</sub>, and a",
+            'break<br />here. <img src="https://github.com/images/modules/logos_page/Octicons-163.png" width="32" alt="octicon" />',
+            "",
+            "Escaped tags stay literal: \\<b>not bold\\</b>",
+        ].join("\n"),
+    },
+    {
+        title: "Unsafe HTML is dropped",
+        source: [
+            "A <script>alert(1)</script> tag and its body disappear, as do event",
+            "handlers and script urls:",
+            "",
+            '<b onclick="steal()">not clickable</b>',
+            "",
+            "[not a link](javascript:alert(1))",
+        ].join("\n"),
     },
     {
         title: "Unsupported syntax",

@@ -4,7 +4,11 @@ import { CircleDot, Inbox, RotateCw } from "lucide-react";
 import { useMemo } from "react";
 
 import { ExternalLink } from "@/components/external-link";
-import { LabelBadge } from "@/components/repo/issues/issues-view";
+import { LabelBadge } from "@/components/github/label-badge";
+import {
+    issueStatusOf,
+    ThreadStatusIcon,
+} from "@/components/github/status-badge";
 import { Button } from "@/components/ui/button";
 import {
     Empty,
@@ -28,8 +32,9 @@ import { Spinner } from "@/components/ui/spinner";
 import { useGithubAccount } from "@/hooks/github/use-github-account";
 import {
     useGithubSearchIssues,
-    useLocalIssueRepoMap,
+    useLocalRepoMap,
 } from "@/hooks/github/use-github-issues";
+import { useOpenThread } from "@/hooks/github/use-open-thread";
 import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
 import type { SearchIssueItem } from "@/lib/backend/protocol";
 import { GitBackendError } from "@/lib/backend/transport/invoke";
@@ -45,7 +50,7 @@ export function IssuesPage() {
     const router = useActiveTabRouter();
     const account = useGithubAccount();
     const search = useGithubSearchIssues();
-    const localIssueRepos = useLocalIssueRepoMap();
+    const localRepos = useLocalRepoMap();
 
     const issues = search.issues;
     const groups = useMemo(() => {
@@ -213,9 +218,7 @@ export function IssuesPage() {
                                                 ) : null}
                                                 <IssuesRow
                                                     issue={issue}
-                                                    localIssueRepos={
-                                                        localIssueRepos
-                                                    }
+                                                    localRepos={localRepos}
                                                 />
                                             </div>
                                         ))}
@@ -233,57 +236,47 @@ export function IssuesPage() {
 
 function IssuesRow({
     issue,
-    localIssueRepos,
+    localRepos,
 }: {
     issue: SearchIssueItem;
-    localIssueRepos: Map<string, number>;
+    localRepos: Map<string, string>;
 }) {
-    const router = useActiveTabRouter();
+    const openThread = useOpenThread();
 
     const issueTarget = parseIssueUrl(issue.htmlUrl);
-    const inAppRepoId = issueTarget
-        ? localIssueRepos.get(
+    const repoPath = issueTarget
+        ? localRepos.get(
               `${issueTarget.owner.toLowerCase()}/${issueTarget.repo.toLowerCase()}`
           )
         : undefined;
 
-    const openInApp = () => {
-        if (inAppRepoId === undefined || !issueTarget) return;
-        router?.navigate({
-            to: `/repo/${inAppRepoId}/issue/${issueTarget.number}`,
-        });
-    };
-
     const title =
-        inAppRepoId !== undefined ? (
+        repoPath !== undefined && issueTarget ? (
             <button
                 type="button"
-                onClick={openInApp}
-                className="flex min-w-0 cursor-pointer items-center gap-1 truncate text-left font-medium hover:underline"
+                onClick={() =>
+                    void openThread(repoPath, "issue", issueTarget.number)
+                }
+                className="flex min-w-0 cursor-pointer items-center gap-1 text-left font-medium hover:underline"
             >
-                <span className="truncate">{issue.title || "(no title)"}</span>
+                <span className="min-w-0 truncate">
+                    {issue.title || "(no title)"}
+                </span>
             </button>
         ) : (
-            <ExternalLink href={issue.htmlUrl} className="truncate font-medium">
-                {issue.title || "(no title)"}
+            <ExternalLink href={issue.htmlUrl} className="min-w-0 font-medium">
+                <span className="min-w-0 truncate">
+                    {issue.title || "(no title)"}
+                </span>
             </ExternalLink>
         );
 
-    const isOpen = issue.state.toLowerCase() === "open";
     return (
         <div className="flex items-center gap-2 px-2 py-2">
-            <span
-                className={
-                    isOpen
-                        ? "shrink-0 text-success [&_svg:not([class*='size-'])]:size-4"
-                        : "shrink-0 text-info [&_svg:not([class*='size-'])]:size-4"
-                }
-            >
-                <CircleDot />
-            </span>
+            <ThreadStatusIcon status={issueStatusOf(issue)} />
             <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                    <span className="truncate text-sm">{title}</span>
+                    <div className="flex min-w-0 flex-1 text-sm">{title}</div>
                     <div className="flex shrink-0 flex-wrap gap-1">
                         {issue.labels.map((label) => (
                             <LabelBadge key={label.name} label={label} />
@@ -292,6 +285,7 @@ function IssuesRow({
                 </div>
                 <p className="truncate text-xs text-muted-foreground">
                     #{issue.number}
+                    {issue.author ? ` · ${issue.author}` : ""}
                     {issue.updatedAt
                         ? ` · ${formatRelativeDate(issue.updatedAt)}`
                         : ""}

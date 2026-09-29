@@ -4,6 +4,7 @@ import type { RemoteInfo } from "@/lib/backend/protocol";
 import {
     parseGithubCoords,
     parseIssueUrl,
+    parsePullUrl,
     pickGithubCoords,
 } from "@/lib/github/repo-coords";
 
@@ -74,5 +75,26 @@ describe("parseIssueUrl", () => {
             parseIssueUrl("https://github.com/octo/repo/pull/42")
         ).toBeNull();
         expect(parseIssueUrl(undefined)).toBeNull();
+    });
+});
+
+describe("parsePullUrl", () => {
+    it("parses web and api urls", () => {
+        expect(parsePullUrl("https://github.com/octo/repo/pull/42")).toEqual({
+            owner: "octo",
+            repo: "repo",
+            number: 42,
+        });
+        expect(
+            parsePullUrl("https://api.github.com/repos/octo/repo/pulls/7")
+        ).toEqual({ owner: "octo", repo: "repo", number: 7 });
+    });
+
+    it("rejects issue and non-pull urls", () => {
+        expect(
+            parsePullUrl("https://github.com/octo/repo/issues/42")
+        ).toBeNull();
+        expect(parsePullUrl("https://github.com/octo/repo")).toBeNull();
+        expect(parsePullUrl(undefined)).toBeNull();
     });
 });

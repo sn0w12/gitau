@@ -252,21 +252,6 @@ describe("SelectionContextMenu", () => {
         expect(findPopup()).toBeNull();
     });
 
-    it("toasts when copying fails", async () => {
-        selectionMocks.selectionInSurface.mockReturnValue(true);
-        writeText.mockImplementation(() =>
-            Promise.reject(new Error("blocked"))
-        );
-        const view = mount();
-        await rightClickTarget(view);
-
-        await clickTarget(itemByLabel("Copy"));
-
-        await flush(0);
-        expect(toastErrorMock).toHaveBeenCalledTimes(1);
-        expect(toastErrorMock.mock.calls[0]?.[0]).toBe("Could not copy");
-    });
-
     it("deselects through the shared helper", async () => {
         selectionMocks.selectionInSurface.mockReturnValue(true);
         const view = mount();

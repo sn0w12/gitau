@@ -48,14 +48,15 @@ import {
     useMarkNotificationRead,
     useResolveSubjectUrl,
 } from "@/hooks/github/use-github-inbox";
-import { useLocalIssueRepoMap } from "@/hooks/github/use-github-issues";
+import { useLocalRepoMap } from "@/hooks/github/use-github-issues";
+import { useOpenThread } from "@/hooks/github/use-open-thread";
 import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
 import type { GithubNotification } from "@/lib/backend/protocol";
 import { GitBackendError } from "@/lib/backend/transport/invoke";
-import { parseIssueUrl } from "@/lib/github/repo-coords";
+import { parseIssueUrl, parsePullUrl } from "@/lib/github/repo-coords";
 import { openExternal } from "@/lib/open-external";
 import { toastError } from "@/lib/toast-error";
-import { formatRelativeDate } from "@/lib/utils";
+import { cn, formatRelativeDate } from "@/lib/utils";
 
 type InboxFilter = "all" | "unread" | "mention" | "review_requested" | "assign";
 
@@ -128,7 +129,7 @@ export function InboxPage() {
     const { confirm } = useConfirm();
     // Open repos keyed by `owner/repo` for in-app issue links; threads
     // whose repo is not open fall back to the browser.
-    const localIssueRepos = useLocalIssueRepoMap();
+    const localRepos = useLocalRepoMap();
 
     const threads = useMemo(
         () => inbox.threads.filter((thread) => matchesFilter(thread, filter)),
@@ -371,9 +372,7 @@ export function InboxPage() {
                                                             thread.id
                                                         )
                                                     }
-                                                    localIssueRepos={
-                                                        localIssueRepos
-                                                    }
+                                                    localRepos={localRepos}
                                                 />
                                             </div>
                                         ))}
@@ -393,26 +392,29 @@ function InboxRow({
     thread,
     marking,
     onMarkRead,
-    localIssueRepos,
+    localRepos,
 }: {
     thread: GithubNotification;
     marking: boolean;
     onMarkRead: () => void;
-    localIssueRepos: Map<string, number>;
+    localRepos: Map<string, string>;
 }) {
-    const router = useActiveTabRouter();
     const resolve = useResolveSubjectUrl();
+    const openThread = useOpenThread();
     const [resolving, setResolving] = useState(false);
 
-    // Issue threads whose repo is open resolve to the in-app issue page;
-    // everything else keeps the external browser behavior.
-    const issueTarget =
+    // Issue and pull request threads whose repo is in the app resolve to the
+    // in-app thread page; everything else keeps the external browser
+    // behavior.
+    const threadTarget =
         thread.subjectType === "Issue"
             ? parseIssueUrl(thread.htmlUrl ?? thread.subjectUrl ?? undefined)
-            : null;
-    const inAppRepoId = issueTarget
-        ? localIssueRepos.get(
-              `${issueTarget.owner.toLowerCase()}/${issueTarget.repo.toLowerCase()}`
+            : thread.subjectType === "PullRequest"
+              ? parsePullUrl(thread.htmlUrl ?? thread.subjectUrl ?? undefined)
+              : null;
+    const repoPath = threadTarget
+        ? localRepos.get(
+              `${threadTarget.owner.toLowerCase()}/${threadTarget.repo.toLowerCase()}`
           )
         : undefined;
 
@@ -434,40 +436,38 @@ function InboxRow({
         }
     };
 
-    const openInApp = () => {
-        if (inAppRepoId === undefined || !issueTarget) return;
-        if (thread.unread) onMarkRead();
-        router?.navigate({
-            to: `/repo/${inAppRepoId}/issue/${issueTarget.number}`,
-        });
-    };
-
     const title =
-        inAppRepoId !== undefined ? (
+        repoPath !== undefined && threadTarget ? (
             <button
                 type="button"
-                onClick={openInApp}
-                className="flex min-w-0 cursor-pointer items-center gap-1 truncate text-left font-medium hover:underline"
+                onClick={() => {
+                    if (thread.unread) onMarkRead();
+                    void openThread(
+                        repoPath,
+                        thread.subjectType === "PullRequest" ? "pull" : "issue",
+                        threadTarget.number
+                    );
+                }}
+                className="flex min-w-0 cursor-pointer items-center gap-1 text-left font-medium hover:underline"
             >
-                <span className="truncate">
+                <span className="min-w-0 truncate">
                     {thread.subjectTitle || "(no title)"}
                 </span>
             </button>
         ) : thread.htmlUrl ? (
-            <ExternalLink
-                href={thread.htmlUrl}
-                className="truncate font-medium"
-            >
-                {thread.subjectTitle || "(no title)"}
+            <ExternalLink href={thread.htmlUrl} className="min-w-0 font-medium">
+                <span className="min-w-0 truncate">
+                    {thread.subjectTitle || "(no title)"}
+                </span>
             </ExternalLink>
         ) : (
             <button
                 type="button"
                 disabled={resolving || !thread.subjectUrl}
                 onClick={() => void openResolved()}
-                className="flex min-w-0 cursor-pointer items-center gap-1 truncate text-left font-medium hover:underline disabled:pointer-events-none disabled:opacity-100"
+                className="flex min-w-0 cursor-pointer items-center gap-1 text-left font-medium hover:underline disabled:pointer-events-none disabled:opacity-100"
             >
-                <span className="truncate">
+                <span className="min-w-0 truncate">
                     {thread.subjectTitle || "(no title)"}
                 </span>
             </button>
@@ -475,18 +475,15 @@ function InboxRow({
     return (
         <div className="flex items-center gap-2 px-2 py-2">
             <span
-                aria-hidden={!thread.unread}
-                className={
-                    thread.unread
-                        ? "size-2 shrink-0 rounded-full bg-primary"
-                        : "size-2 shrink-0"
-                }
-            />
-            <span className="shrink-0 text-muted-foreground [&_svg:not([class*='size-'])]:size-4">
+                className={cn(
+                    "shrink-0 [&_svg:not([class*='size-'])]:size-4",
+                    thread.unread ? "text-primary" : "text-muted-foreground"
+                )}
+            >
                 <SubjectIcon type={thread.subjectType} />
             </span>
             <div className="min-w-0 flex-1">
-                <div className="truncate text-sm">{title}</div>
+                <div className="flex min-w-0 text-sm">{title}</div>
                 <p className="truncate text-xs text-muted-foreground">
                     {formatSubjectType(thread.subjectType)}
                     {thread.updatedAt

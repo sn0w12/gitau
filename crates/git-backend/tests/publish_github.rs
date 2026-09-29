@@ -6,7 +6,11 @@ use std::sync::{Arc, Mutex};
 
 use git_backend::Backend;
 use git_backend::api::github::{
-    AccountProfile, DeviceFlowStart, GithubOrg, NotificationPage, SearchIssuePage,
+    AccountProfile, DeviceFlowStart, GithubCheckRun, GithubCheckRunDetail, GithubCheckRunLog,
+    GithubCommitStatus, GithubOrg, GithubPullRequestCommit, GithubPullRequestDetail,
+    GithubPullRequestReview, GithubPullRequestReviewComment, GithubWorkflowRun,
+    MergePullRequestBody, MergePullRequestResult, NotificationPage, SearchIssuePage,
+    SearchPullRequestPage, UpdatePullRequestBody,
 };
 use git_backend::github::api::{GithubApi, GithubFuture};
 use git_backend::github::device_flow::{DeviceCodeResponse, TokenPoll};
@@ -156,6 +160,170 @@ impl GithubApi for FakeApi {
                 has_more: false,
             })
         })
+    }
+
+    fn search_pull_requests(
+        &self,
+        _token: &str,
+        _page: u32,
+    ) -> GithubFuture<SearchPullRequestPage> {
+        Box::pin(async {
+            Ok(SearchPullRequestPage {
+                items: vec![],
+                page: 1,
+                has_more: false,
+            })
+        })
+    }
+
+    fn list_pull_requests(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _state: &str,
+        _labels: &[String],
+        _page: u32,
+    ) -> GithubFuture<SearchPullRequestPage> {
+        Box::pin(async {
+            Ok(SearchPullRequestPage {
+                items: vec![],
+                page: 1,
+                has_more: false,
+            })
+        })
+    }
+
+    fn get_pull(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _number: u64,
+    ) -> GithubFuture<GithubPullRequestDetail> {
+        Box::pin(async {
+            Err(git_backend::github::GitHubError::NotFound {
+                message: "not implemented in fake".into(),
+            })
+        })
+    }
+
+    fn list_commit_statuses(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _sha: &str,
+    ) -> GithubFuture<Vec<GithubCommitStatus>> {
+        Box::pin(async { Ok(vec![]) })
+    }
+
+    fn list_pull_reviews(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _number: u64,
+    ) -> GithubFuture<Vec<GithubPullRequestReview>> {
+        Box::pin(async { Ok(vec![]) })
+    }
+
+    fn list_pull_commits(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _number: u64,
+    ) -> GithubFuture<Vec<GithubPullRequestCommit>> {
+        Box::pin(async { Ok(vec![]) })
+    }
+
+    fn list_pull_review_comments(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _number: u64,
+    ) -> GithubFuture<Vec<GithubPullRequestReviewComment>> {
+        Box::pin(async { Ok(vec![]) })
+    }
+
+    fn update_pull(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _number: u64,
+        _body: &UpdatePullRequestBody,
+    ) -> GithubFuture<GithubPullRequestDetail> {
+        Box::pin(async {
+            Err(git_backend::github::GitHubError::NotFound {
+                message: "not implemented in fake".into(),
+            })
+        })
+    }
+
+    fn merge_pull(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _number: u64,
+        _body: &MergePullRequestBody,
+    ) -> GithubFuture<MergePullRequestResult> {
+        Box::pin(async {
+            Err(git_backend::github::GitHubError::NotFound {
+                message: "not implemented in fake".into(),
+            })
+        })
+    }
+
+    fn list_check_runs(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _sha: &str,
+    ) -> GithubFuture<Vec<GithubCheckRun>> {
+        Box::pin(async { Ok(vec![]) })
+    }
+
+    fn get_check_run(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _check_run_id: u64,
+    ) -> GithubFuture<GithubCheckRunDetail> {
+        Box::pin(async {
+            Err(git_backend::github::GitHubError::NotFound {
+                message: "not implemented in fake".into(),
+            })
+        })
+    }
+
+    fn get_check_run_log(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _check_run_id: u64,
+    ) -> GithubFuture<GithubCheckRunLog> {
+        Box::pin(async {
+            Err(git_backend::github::GitHubError::NotFound {
+                message: "not implemented in fake".into(),
+            })
+        })
+    }
+
+    fn list_workflow_runs(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _sha: &str,
+    ) -> GithubFuture<Vec<GithubWorkflowRun>> {
+        Box::pin(async { Ok(vec![]) })
     }
 
     fn get_issue(

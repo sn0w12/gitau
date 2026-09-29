@@ -1,9 +1,12 @@
 use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
 use git_backend::api::github::{
-    AccountProfile, DeviceFlowStart, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
-    GithubOrg, GithubRepoPermissions, NotificationPage, PublishRepositoryRequest, PublishResult,
-    SearchIssuePage, UpdateIssueBody,
+    AccountProfile, DeviceFlowStart, GithubCheckRun, GithubCheckRunDetail, GithubCheckRunLog,
+    GithubCommitStatus, GithubIssueComment, GithubIssueDetail, GithubIssueEvent, GithubOrg,
+    GithubPullRequestCommit, GithubPullRequestDetail, GithubPullRequestReview,
+    GithubPullRequestReviewComment, GithubRepoPermissions, GithubWorkflowRun, MergePullRequestBody,
+    MergePullRequestResult, NotificationPage, PublishRepositoryRequest, PublishResult,
+    SearchIssuePage, SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody,
 };
 
 /// The connected account, `None` while signed out.
@@ -160,6 +163,30 @@ pub async fn github_list_issues(
         .map_err(to_serialized)
 }
 
+/// Pull requests of a GitHub repository. `state` is open/closed/all;
+/// `labels` matches pull requests carrying every named label.
+#[tauri::command]
+pub async fn github_list_pull_requests(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    pull_state: Option<String>,
+    labels: Option<Vec<String>>,
+    page: Option<u32>,
+) -> CommandResult<SearchPullRequestPage> {
+    state
+        .backend
+        .github_list_pull_requests(
+            owner,
+            repo,
+            pull_state.unwrap_or_else(|| "open".into()),
+            labels.unwrap_or_default(),
+            page.unwrap_or(1).max(1),
+        )
+        .await
+        .map_err(to_serialized)
+}
+
 /// Search issues across all of GitHub matching
 /// `is:issue involves:@me sort:updated-desc`.
 #[tauri::command]
@@ -170,6 +197,182 @@ pub async fn github_search_issues(
     state
         .backend
         .github_search_issues(page.unwrap_or(1).max(1))
+        .await
+        .map_err(to_serialized)
+}
+
+/// Search pull requests across all of GitHub matching
+/// `is:pr involves:@me sort:updated-desc`.
+#[tauri::command]
+pub async fn github_search_pull_requests(
+    state: SharedState<'_>,
+    page: Option<u32>,
+) -> CommandResult<SearchPullRequestPage> {
+    state
+        .backend
+        .github_search_pull_requests(page.unwrap_or(1).max(1))
+        .await
+        .map_err(to_serialized)
+}
+
+/// Commit statuses for a commit, one per reporter.
+#[tauri::command]
+pub async fn github_list_commit_statuses(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    sha: String,
+) -> CommandResult<Vec<GithubCommitStatus>> {
+    state
+        .backend
+        .github_list_commit_statuses(owner, repo, sha)
+        .await
+        .map_err(to_serialized)
+}
+
+#[tauri::command]
+pub async fn github_get_pull(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    number: u64,
+) -> CommandResult<GithubPullRequestDetail> {
+    state
+        .backend
+        .github_get_pull(owner, repo, number)
+        .await
+        .map_err(to_serialized)
+}
+
+#[tauri::command]
+pub async fn github_list_pull_reviews(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    number: u64,
+) -> CommandResult<Vec<GithubPullRequestReview>> {
+    state
+        .backend
+        .github_list_pull_reviews(owner, repo, number)
+        .await
+        .map_err(to_serialized)
+}
+
+/// Commits on the pull request's head branch, oldest first.
+#[tauri::command]
+pub async fn github_list_pull_commits(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    number: u64,
+) -> CommandResult<Vec<GithubPullRequestCommit>> {
+    state
+        .backend
+        .github_list_pull_commits(owner, repo, number)
+        .await
+        .map_err(to_serialized)
+}
+
+#[tauri::command]
+pub async fn github_list_pull_review_comments(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    number: u64,
+) -> CommandResult<Vec<GithubPullRequestReviewComment>> {
+    state
+        .backend
+        .github_list_pull_review_comments(owner, repo, number)
+        .await
+        .map_err(to_serialized)
+}
+
+#[tauri::command]
+pub async fn github_update_pull(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    number: u64,
+    body: UpdatePullRequestBody,
+) -> CommandResult<GithubPullRequestDetail> {
+    state
+        .backend
+        .github_update_pull(owner, repo, number, body)
+        .await
+        .map_err(to_serialized)
+}
+
+#[tauri::command]
+pub async fn github_merge_pull(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    number: u64,
+    body: MergePullRequestBody,
+) -> CommandResult<MergePullRequestResult> {
+    state
+        .backend
+        .github_merge_pull(owner, repo, number, body)
+        .await
+        .map_err(to_serialized)
+}
+
+/// CI check runs for a commit, which is a pull request's head sha.
+#[tauri::command]
+pub async fn github_list_check_runs(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    sha: String,
+) -> CommandResult<Vec<GithubCheckRun>> {
+    state
+        .backend
+        .github_list_check_runs(owner, repo, sha)
+        .await
+        .map_err(to_serialized)
+}
+
+/// One check run with its output, for the results dialog.
+#[tauri::command]
+pub async fn github_get_check_run(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    check_run_id: u64,
+) -> CommandResult<GithubCheckRunDetail> {
+    state
+        .backend
+        .github_get_check_run(owner, repo, check_run_id)
+        .await
+        .map_err(to_serialized)
+}
+
+/// A run's job log, split per step, mirroring GitHub's job view.
+#[tauri::command]
+pub async fn github_get_check_run_log(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    check_run_id: u64,
+) -> CommandResult<GithubCheckRunLog> {
+    state
+        .backend
+        .github_get_check_run_log(owner, repo, check_run_id)
+        .await
+        .map_err(to_serialized)
+}
+
+/// Workflow runs for a commit, newest first.
+#[tauri::command]
+pub async fn github_list_workflow_runs(
+    state: SharedState<'_>,
+    owner: String,
+    repo: String,
+    sha: String,
+) -> CommandResult<Vec<GithubWorkflowRun>> {
+    state
+        .backend
+        .github_list_workflow_runs(owner, repo, sha)
         .await
         .map_err(to_serialized)
 }

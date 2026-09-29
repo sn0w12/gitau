@@ -27,6 +27,7 @@ import { AccountPage } from "@/routes/account-page";
 import { DevPage } from "@/routes/dev-page";
 import { InboxPage } from "@/routes/inbox-page";
 import { IssuesPage } from "@/routes/issues-page";
+import { PullsPage } from "@/routes/pulls-page";
 import { RepoPage } from "@/routes/repo-page";
 import { SettingsPage } from "@/routes/settings-page";
 import { associateTabWithRepoPath, setTabTitle } from "@/stores/app-store";
@@ -34,6 +35,7 @@ import { getEntryByRepoId } from "@/stores/repository-store";
 
 import { HomePage } from "./home-page";
 import { IssuePage } from "./repo/issue";
+import { PullRequestPage } from "./repo/pull";
 
 /**
  * Fresh route-tree instances per call: routers mutate their route nodes
@@ -107,6 +109,13 @@ export function createTabRouteTree(options: { tabId?: string } = {}) {
         loader: () => applyTitle("Issues"),
     });
 
+    const pullsRoute = createRoute({
+        getParentRoute: () => rootRoute,
+        path: "/pulls",
+        component: PullsPage,
+        loader: () => applyTitle("Pull Requests"),
+    });
+
     // Playground for mocking features; never shipped to release builds.
     const devRoute = import.meta.env.DEV
         ? createRoute({
@@ -123,7 +132,9 @@ export function createTabRouteTree(options: { tabId?: string } = {}) {
         component: RepoPage,
         validateSearch: (search: Record<string, unknown>) => ({
             view:
-                search.view === "issues" || search.view === "graph"
+                search.view === "issues" ||
+                search.view === "pulls" ||
+                search.view === "graph"
                     ? search.view
                     : undefined,
         }),
@@ -180,14 +191,30 @@ export function createTabRouteTree(options: { tabId?: string } = {}) {
         },
     });
 
+    const repoPullRoute = createRoute({
+        getParentRoute: () => rootRoute,
+        path: "/repo/$repoId/pull/$pullId",
+        component: PullRequestPage,
+        loader: ({ params }) => {
+            applyTitle("Pull request", "pull-request");
+            if (tabId === null) return;
+            const path = getEntryByRepoId(Number(params.repoId))?.path;
+            if (path !== undefined) {
+                associateTabWithRepoPath(tabId, path);
+            }
+        },
+    });
+
     return rootRoute.addChildren([
         homeRoute,
         settingsRoute,
         accountRoute,
         inboxRoute,
         issuesRoute,
+        pullsRoute,
         ...(devRoute ? [devRoute] : []),
         repoRoute,
         repoIssueRoute,
+        repoPullRoute,
     ]);
 }

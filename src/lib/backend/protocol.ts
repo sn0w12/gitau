@@ -725,11 +725,25 @@ export interface NotificationPage {
     hasMore: boolean;
 }
 
+/** Why a thread ended, from GitHub's `state_reason`. A thread that was never
+ * closed carries no reason, and so does one GitHub reports as `reopened`,
+ * which describes a state rather than an ending. Anything unrecognised comes
+ * back as `none`, so a new value degrades to "closed" instead of failing the
+ * read. */
+export type ThreadStateReason =
+    | "none"
+    | "completed"
+    | "notPlanned"
+    | "duplicate";
+
 /** One issue from a GitHub search result. */
 export interface SearchIssueItem {
     number: number;
     title: string;
     state: string;
+    /** Separates an issue closed as fixed from one closed as stale, since
+     * both report `state: "closed"`. */
+    stateReason: ThreadStateReason;
     labels: GithubLabel[];
     commentCount: number;
     assignees: GithubUser[];
@@ -743,6 +757,33 @@ export interface SearchIssueItem {
  * response `Link` header. */
 export interface SearchIssuePage {
     items: SearchIssueItem[];
+    page: number;
+    hasMore: boolean;
+}
+
+/** One row of the pull requests list. `mergedAt` is the only signal that
+ * separates a merged pull request from a closed one: search reports both as
+ * `state: "closed"`. */
+export interface GithubPullRequestListItem {
+    number: number;
+    title: string;
+    state: string;
+    stateReason: ThreadStateReason;
+    labels: GithubLabel[];
+    commentCount: number;
+    assignees: GithubUser[];
+    author: GithubUser;
+    updatedAt: string;
+    mergedAt?: string | null;
+    htmlUrl: string;
+    /** `owner/repo` the pull request lives in. A cross-repo search derives
+     * it from the item URL, since search reports no repository name. */
+    repoFullName: string;
+}
+
+/** One 1-based page of pull request search results. */
+export interface SearchPullRequestPage {
+    items: GithubPullRequestListItem[];
     page: number;
     hasMore: boolean;
 }
@@ -782,6 +823,7 @@ export interface GithubIssueDetail {
     number: number;
     title: string;
     state: string;
+    stateReason: ThreadStateReason;
     body: string;
     author: GithubUser;
     labels: GithubLabel[];
@@ -838,6 +880,207 @@ export interface UpdateIssueBody {
 export interface GithubRepoPermissions {
     push: boolean;
     admin: boolean;
+}
+
+/** One side of a pull request. */
+export interface GithubPullRequestRef {
+    ref: string;
+    sha: string;
+    label: string;
+}
+
+/** Full pull request detail. Everything the issue projection carries plus
+ * what only the pulls endpoint reports. */
+export interface GithubPullRequestDetail {
+    number: number;
+    title: string;
+    state: string;
+    stateReason: ThreadStateReason;
+    body: string;
+    author: GithubUser;
+    labels: GithubLabel[];
+    /** Reviewers requested on the pull request. */
+    assignees: GithubUser[];
+    createdAt: string;
+    updatedAt: string;
+    htmlUrl: string;
+    draft: boolean;
+    /** Merge commit time. Set only once merged, which is also how a merged
+     * pull request is told apart from a closed one. */
+    mergedAt?: string | null;
+    /** null while GitHub is still computing the merge, so the UI must
+     * re-read before offering the merge button. */
+    mergeable?: boolean | null;
+    /** Why the merge landed where it did, e.g. `clean` or `blocked`. */
+    mergeableState: string;
+    head: GithubPullRequestRef;
+    base: GithubPullRequestRef;
+    additions: number;
+    deletions: number;
+    changedFiles: number;
+    commits: number;
+}
+
+/** One commit on a pull request's head branch. `author.login` falls back to
+ * the git author name when the commit is not linked to a GitHub account, in
+ * which case `author.avatarUrl` is empty. */
+export interface GithubPullRequestCommit {
+    sha: string;
+    message: string;
+    author: GithubUser;
+    authoredAt: string;
+    htmlUrl: string;
+}
+
+/** One submitted review. `state` is GitHub's raw verdict. */
+export interface GithubPullRequestReview {
+    id: number;
+    author: GithubUser;
+    state: string;
+    body: string;
+    submittedAt: string;
+    htmlUrl: string;
+}
+
+/** One inline comment anchored to a line in the diff. */
+export interface GithubPullRequestReviewComment {
+    id: number;
+    author: GithubUser;
+    body: string;
+    /** Repository-relative path the comment is anchored to. */
+    path: string;
+    /** Line in the new file; absent once the comment is outdated. */
+    line?: number;
+    diffHunk: string;
+    createdAt: string;
+    htmlUrl: string;
+    inReplyToId?: number;
+    /** The review this comment belongs to. A reviewer writes inline comments
+     * before submitting, so timestamps alone place them before their own
+     * review. */
+    pullRequestReviewId?: number;
+}
+
+/** The output a check run produced. Only the single-run read reports this. */
+export interface GithubCheckRunOutput {
+    title: string;
+    summary: string;
+    /** Raw log text, which can be very large. */
+    text: string;
+    annotationsCount: number;
+}
+
+/** One annotation on a check run. Test runners report failures here, so
+ * this is where the reason a run failed actually lives. */
+export interface GithubCheckAnnotation {
+    path: string;
+    startLine?: number;
+    endLine?: number;
+    startColumn?: number;
+    annotationLevel: string;
+    message: string;
+    title: string;
+}
+
+/** One step of a run's job, in the order it ran. */
+export interface GithubActionStep {
+    number: number;
+    name: string;
+    status: string;
+    conclusion?: string;
+    startedAt?: string;
+    completedAt?: string;
+    /** The log lines this step produced, sliced out of the job log by
+     * timestamp, with any ANSI colour escapes removed. */
+    log: string;
+    /** Span triples per line of `log`, indexing
+     * `GithubCheckRunLog.styles`. */
+    spansByLine: number[][];
+}
+
+/** A run's job log, split the way GitHub's job view splits it. The check run
+ * endpoint does not carry log text: `output.text` is null for Actions jobs and
+ * the real log only exists on the job. */
+export interface GithubCheckRunLog {
+    steps: GithubActionStep[];
+    /** The 1-based table every step's spans index into, carrying the log's own
+     * colours rather than any syntax theme. */
+    styles: SyntaxStyle[];
+    /** The job log exactly as the endpoint returned it, before any splitting. */
+    raw: string;
+    /** Set when the run has no job log to show, with the reason. */
+    unavailable?: string;
+}
+
+/** One check run with its output and annotations, for the results dialog. */
+export interface GithubCheckRunDetail extends GithubCheckRun {
+    output: GithubCheckRunOutput;
+    annotations: GithubCheckAnnotation[];
+}
+
+/** One CI check run on a commit. `status` is the progress
+ * (`queued`, `in_progress`, `completed`); `conclusion` is absent until it
+ * completes. Only the latest run per name is returned, so a workflow triggered
+ * by both a push and the pull request appears once. */
+export interface GithubCheckRun {
+    id: number;
+    name: string;
+    status: string;
+    conclusion?: string | null;
+    detailsUrl?: string | null;
+    startedAt: string;
+    completedAt?: string | null;
+}
+
+/** One commit status, the older sibling of a check run. Apps that never
+ * moved to the checks API report only here, and GitHub lists both in the same
+ * place. */
+export interface GithubCommitStatus {
+    id: number;
+    /** The reporter's name for the check, e.g. `CodeRabbit`. */
+    context: string;
+    /** `pending`, `success`, `failure`, or `error`. */
+    state: string;
+    /** Free text the reporter attaches, e.g. `Review in progress`. */
+    description: string;
+}
+
+/** One workflow run for a commit. Only the latest run per workflow name is
+ * returned, since a branch push and the pull request both trigger one. */
+export interface GithubWorkflowRun {
+    id: number;
+    name: string;
+    event: string;
+    status: string;
+    conclusion?: string | null;
+    runNumber: number;
+    headBranch: string;
+    htmlUrl: string;
+    createdAt: string;
+}
+
+/** Partial pull request update: fields left out are untouched. */
+export interface UpdatePullRequestBody {
+    state?: string;
+    body?: string;
+    base?: string;
+    draft?: boolean;
+}
+
+export type PullRequestMergeMethod = "merge" | "rebase" | "squash";
+
+/** Merge options. An absent title or message lets GitHub pick its own. */
+export interface MergePullRequestBody {
+    mergeMethod: PullRequestMergeMethod;
+    commitTitle?: string;
+    commitMessage?: string;
+}
+
+/** `merged` is false when GitHub accepted the call but declined to merge. */
+export interface MergePullRequestResult {
+    sha: string;
+    merged: boolean;
+    message: string;
 }
 
 /** A tab as persisted in the session document. `repoId` is process-local

@@ -9,9 +9,12 @@ use tokio::sync::mpsc;
 
 use crate::api::changes::{DiscardRequest, StageRequest, StatusOptions};
 use crate::api::github::{
-    AccountProfile, DeviceFlowStart, GithubIssueComment, GithubIssueDetail, GithubIssueEvent,
-    GithubOrg, GithubRepoPermissions, NotificationPage, PublishRepositoryRequest, PublishResult,
-    SearchIssuePage, UpdateIssueBody,
+    AccountProfile, DeviceFlowStart, GithubCheckRun, GithubCheckRunDetail, GithubCheckRunLog,
+    GithubCommitStatus, GithubIssueComment, GithubIssueDetail, GithubIssueEvent, GithubOrg,
+    GithubPullRequestCommit, GithubPullRequestDetail, GithubPullRequestReview,
+    GithubPullRequestReviewComment, GithubRepoPermissions, GithubWorkflowRun, MergePullRequestBody,
+    MergePullRequestResult, NotificationPage, PublishRepositoryRequest, PublishResult,
+    SearchIssuePage, SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody,
 };
 use crate::api::graph::GraphQuery;
 use crate::api::highlight::HighlightedSnippet;
@@ -467,7 +470,7 @@ impl Backend {
         let current_gen = entry.generation();
         let mut best: Option<(Generation, Arc<StatusReport>)> = None;
         for g in (1..current_gen.0).rev() {
-            let key = (Generation(g), options.clone());
+            let key = (Generation(g), *options);
             if let Some(CachedValue::Status(report)) = entry.cached("status", &key) {
                 if best.as_ref().is_none_or(|(bg, _)| g > bg.0) {
                     best = Some((Generation(g), report));
@@ -1891,10 +1894,150 @@ impl Backend {
             .await
     }
 
+    /// Pull requests of a GitHub repository, `state` is open/closed/all.
+    /// Paginated, 1-based pages.
+    pub async fn github_list_pull_requests(
+        &self,
+        owner: String,
+        repo: String,
+        state: String,
+        labels: Vec<String>,
+        page: u32,
+    ) -> Result<SearchPullRequestPage> {
+        self.github
+            .list_pull_requests(&owner, &repo, &state, &labels, page)
+            .await
+    }
+
     /// Search issues across all of GitHub matching
     /// `is:issue involves:@me sort:updated-desc`.
     pub async fn github_search_issues(&self, page: u32) -> Result<SearchIssuePage> {
         self.github.search_issues(page).await
+    }
+
+    /// Full pull request detail, including draft, mergeability, refs, and
+    /// diff stats.
+    pub async fn github_get_pull(
+        &self,
+        owner: String,
+        repo: String,
+        number: u64,
+    ) -> Result<GithubPullRequestDetail> {
+        self.github.get_pull(&owner, &repo, number).await
+    }
+
+    pub async fn github_list_pull_reviews(
+        &self,
+        owner: String,
+        repo: String,
+        number: u64,
+    ) -> Result<Vec<GithubPullRequestReview>> {
+        self.github.list_pull_reviews(&owner, &repo, number).await
+    }
+
+    /// Commits on the pull request's head branch, oldest first.
+    pub async fn github_list_pull_commits(
+        &self,
+        owner: String,
+        repo: String,
+        number: u64,
+    ) -> Result<Vec<GithubPullRequestCommit>> {
+        self.github.list_pull_commits(&owner, &repo, number).await
+    }
+
+    pub async fn github_list_pull_review_comments(
+        &self,
+        owner: String,
+        repo: String,
+        number: u64,
+    ) -> Result<Vec<GithubPullRequestReviewComment>> {
+        self.github
+            .list_pull_review_comments(&owner, &repo, number)
+            .await
+    }
+
+    /// Partial update to a pull request: state, base branch, or draft flag.
+    /// Every field left `None` is untouched.
+    pub async fn github_update_pull(
+        &self,
+        owner: String,
+        repo: String,
+        number: u64,
+        body: UpdatePullRequestBody,
+    ) -> Result<GithubPullRequestDetail> {
+        self.github.update_pull(&owner, &repo, number, &body).await
+    }
+
+    /// Merges a pull request into its base. Returns `merged: false` when
+    /// GitHub accepted the call but declined, for instance because a
+    /// branch protection rule blocks it.
+    pub async fn github_merge_pull(
+        &self,
+        owner: String,
+        repo: String,
+        number: u64,
+        body: MergePullRequestBody,
+    ) -> Result<MergePullRequestResult> {
+        self.github.merge_pull(&owner, &repo, number, &body).await
+    }
+
+    /// CI check runs for a commit, which is a pull request's head sha.
+    pub async fn github_list_check_runs(
+        &self,
+        owner: String,
+        repo: String,
+        sha: String,
+    ) -> Result<Vec<GithubCheckRun>> {
+        self.github.list_check_runs(&owner, &repo, &sha).await
+    }
+
+    /// One check run with its output, for the results dialog.
+    pub async fn github_get_check_run(
+        &self,
+        owner: String,
+        repo: String,
+        check_run_id: u64,
+    ) -> Result<GithubCheckRunDetail> {
+        self.github.get_check_run(&owner, &repo, check_run_id).await
+    }
+
+    /// A run's job log, split per step, mirroring GitHub's job view.
+    pub async fn github_get_check_run_log(
+        &self,
+        owner: String,
+        repo: String,
+        check_run_id: u64,
+    ) -> Result<GithubCheckRunLog> {
+        self.github
+            .get_check_run_log(&owner, &repo, check_run_id)
+            .await
+    }
+
+    /// Workflow runs for a commit, newest first.
+    pub async fn github_list_workflow_runs(
+        &self,
+        owner: String,
+        repo: String,
+        sha: String,
+    ) -> Result<Vec<GithubWorkflowRun>> {
+        self.github.list_workflow_runs(&owner, &repo, &sha).await
+    }
+
+    /// Search pull requests across all of GitHub matching
+    /// `is:pr involves:@me sort:updated-desc`.
+    pub async fn github_search_pull_requests(&self, page: u32) -> Result<SearchPullRequestPage> {
+        self.github.search_pull_requests(page).await
+    }
+
+    /// Commit statuses for a commit, one per reporter. Reporters that have
+    /// not moved to the checks API report only here.
+    pub async fn github_list_commit_statuses(
+        &self,
+        owner: String,
+        repo: String,
+        sha: String,
+    ) -> Result<Vec<GithubCommitStatus>> {
+        self.github.list_commit_statuses(&owner, &repo, &sha).await
     }
 
     pub async fn github_get_issue(

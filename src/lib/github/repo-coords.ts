@@ -61,9 +61,11 @@ export function pickGithubCoords(remotes: RemoteInfo[]): GithubCoords | null {
     return null;
 }
 
-export interface ParsedIssueUrl extends GithubCoords {
+export interface ParsedThreadUrl extends GithubCoords {
     number: number;
 }
+
+export type ParsedIssueUrl = ParsedThreadUrl;
 
 /**
  * Parses a GitHub issue web URL or API subject URL into coordinates plus
@@ -80,6 +82,28 @@ export function parseIssueUrl(url: string | undefined): ParsedIssueUrl | null {
     }
     const api = url.match(
         /^https?:\/\/api\.github\.com\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/issues\/(\d+)/i
+    );
+    if (api) {
+        return { owner: api[1], repo: api[2], number: Number(api[3]) };
+    }
+    return null;
+}
+
+/**
+ * The pull request counterpart of [`parseIssueUrl`]. Web:
+ * `https://github.com/o/r/pull/N`. API:
+ * `https://api.github.com/repos/o/r/pulls/N`.
+ */
+export function parsePullUrl(url: string | undefined): ParsedThreadUrl | null {
+    if (!url) return null;
+    const web = url.match(
+        /^https?:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/pull\/(\d+)/i
+    );
+    if (web) {
+        return { owner: web[1], repo: web[2], number: Number(web[3]) };
+    }
+    const api = url.match(
+        /^https?:\/\/api\.github\.com\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/pulls\/(\d+)/i
     );
     if (api) {
         return { owner: api[1], repo: api[2], number: Number(api[3]) };

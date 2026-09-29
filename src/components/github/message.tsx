@@ -8,10 +8,10 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import { toastManager } from "@/components/ui/toast";
 import { useConfirm } from "@/contexts/confirm-context";
+import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
 import { toastError } from "@/lib/toast-error";
-import { formatRelativeDate } from "@/lib/utils";
+import { formatRelativeDate, cn } from "@/lib/utils";
 
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { Button } from "../ui/button";
@@ -26,15 +26,6 @@ import {
 } from "../ui/menu";
 import { Textarea } from "../ui/textarea";
 import { CustomMarkdown } from "./markdown";
-
-async function copyText(text: string, title: string) {
-    try {
-        await navigator.clipboard.writeText(text);
-        toastManager.add({ title, type: "success" });
-    } catch (error) {
-        toastError("Could not copy", error);
-    }
-}
 
 interface MessageMenuState {
     link?: string;
@@ -59,6 +50,7 @@ function MessageMenu({
     deleting,
     onDelete,
 }: MessageMenuState) {
+    const copy = useCopyToClipboard();
     return (
         <Menu>
             <MenuTrigger
@@ -71,16 +63,12 @@ function MessageMenu({
             <MenuPopup>
                 <MenuGroup>
                     {link !== undefined ? (
-                        <MenuItem
-                            onClick={() => void copyText(link, "Copied link")}
-                        >
+                        <MenuItem onClick={() => copy.copyToClipboard(link)}>
                             <Link />
                             Copy Link
                         </MenuItem>
                     ) : null}
-                    <MenuItem
-                        onClick={() => void copyText(text, "Copied markdown")}
-                    >
+                    <MenuItem onClick={() => copy.copyToClipboard(text)}>
                         <SquareMinus />
                         Copy Markdown
                     </MenuItem>
@@ -157,7 +145,47 @@ function MessageEditor({
     );
 }
 
-export function IssueMessage({
+const ABSOLUTE_MENU_CLASS =
+    "absolute end-2.5 top-2.5 z-10 opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100";
+
+/** The avatar, name, and timestamp row that opens a message. */
+function MessageIdentity({
+    author,
+    avatarUrl,
+    initial,
+    createdAt,
+    actionLabel,
+    menu,
+}: {
+    author?: string;
+    avatarUrl?: string;
+    initial: string;
+    createdAt?: string;
+    actionLabel: string;
+    menu: React.ReactNode;
+}) {
+    return (
+        <FrameHeader className="flex flex-row items-center justify-between px-2 py-1.5">
+            <div className="flex items-center gap-1">
+                <Avatar className="size-6">
+                    <AvatarImage src={avatarUrl} />
+                    <AvatarFallback>{initial}</AvatarFallback>
+                </Avatar>
+                <span>
+                    {author ?? "Someone"}{" "}
+                    {createdAt ? (
+                        <span className="text-muted-foreground">
+                            {actionLabel} {formatRelativeDate(createdAt)}
+                        </span>
+                    ) : null}
+                </span>
+            </div>
+            {menu}
+        </FrameHeader>
+    );
+}
+
+export function TimelineMessage({
     text,
     author,
     avatarUrl,
@@ -173,16 +201,20 @@ export function IssueMessage({
     canDelete = false,
     onDelete,
     deleteTitle = "Delete this comment?",
-    deleteDescription = "The comment is removed from the issue. This cannot be undone.",
+    deleteDescription = "The comment is removed from the thread. This cannot be undone.",
+    showAuthor = true,
 }: {
     text: string;
     author?: string;
     avatarUrl?: string;
     createdAt?: string;
     actionLabel?: string;
+    /** False when the caller already renders its own identity row, such as a
+     * review comment carrying a path and line. */
+    showAuthor?: boolean;
     /** Web URL of the message; hides Copy Link when absent. */
     link?: string;
-    /** Repository of the issue, so `#123` references link out. */
+    /** Repository of the thread, so `#123` references link out. */
     owner?: string;
     repo?: string;
     canQuote?: boolean;
@@ -247,37 +279,41 @@ export function IssueMessage({
         }
     };
 
+    const menu = showMenu ? (
+        <MessageMenu
+            link={link}
+            text={text}
+            canQuote={canQuote}
+            onQuote={onQuote}
+            showEdit={showEdit}
+            onEdit={startEdit}
+            showDelete={showDelete}
+            deleting={deleting}
+            onDelete={deleteMessage}
+        />
+    ) : null;
+
     return (
-        <Frame className="ui-selectable text-sm">
-            <FrameHeader className="flex flex-row items-center justify-between px-2 py-1.5">
-                <div className="flex items-center gap-1">
-                    <Avatar className="size-6">
-                        <AvatarImage src={avatarUrl} />
-                        <AvatarFallback>{initial}</AvatarFallback>
-                    </Avatar>
-                    <span>
-                        {author ?? "Someone"}{" "}
-                        {createdAt ? (
-                            <span className="text-muted-foreground">
-                                {actionLabel} {formatRelativeDate(createdAt)}
-                            </span>
-                        ) : null}
-                    </span>
-                </div>
-                {showMenu ? (
-                    <MessageMenu
-                        link={link}
-                        text={text}
-                        canQuote={canQuote}
-                        onQuote={onQuote}
-                        showEdit={showEdit}
-                        onEdit={startEdit}
-                        showDelete={showDelete}
-                        deleting={deleting}
-                        onDelete={deleteMessage}
-                    />
-                ) : null}
-            </FrameHeader>
+        <Frame
+            className={cn(
+                "ui-selectable text-sm",
+                // With no identity row the menu has no header to sit in, so
+                // it floats over the body and appears on hover.
+                !showAuthor && "group/message relative"
+            )}
+        >
+            {showAuthor ? (
+                <MessageIdentity
+                    author={author}
+                    avatarUrl={avatarUrl}
+                    initial={initial}
+                    createdAt={createdAt}
+                    actionLabel={actionLabel}
+                    menu={menu}
+                />
+            ) : (
+                <div className={ABSOLUTE_MENU_CLASS}>{menu}</div>
+            )}
             <FramePanel className="px-3 py-2">
                 {editing ? (
                     <MessageEditor
@@ -297,6 +333,6 @@ export function IssueMessage({
     );
 }
 
-export function MessageSpacer() {
-    return <div className="ml-4 h-2 w-0.5 bg-muted" />;
+export function MessageSpacer({ className }: { className?: string }) {
+    return <div className={cn("ml-4.5 h-2 w-0.5 bg-muted", className)} />;
 }

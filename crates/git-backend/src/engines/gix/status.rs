@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 
 use gix::bstr::ByteSlice;
@@ -35,23 +34,12 @@ fn internal(err: impl std::fmt::Display) -> GitError {
 }
 
 pub fn status(session: &GixSession, opts: &ApiStatusOptions) -> Result<StatusReport> {
-    status_with_paths(session, opts, None)
-}
-
-/// Computes status for a subset of paths when `paths` is provided, enabling
-/// incremental updates after mutations. The pathspec filters both the staged
-/// and worktree sides so only affected files are checked.
-pub fn status_with_paths(
-    session: &GixSession,
-    opts: &ApiStatusOptions,
-    paths: Option<&[String]>,
-) -> Result<StatusReport> {
     // The staged and worktree sides are independent computations sharing only
     // the session, so overlap them on two threads. Each builds its own
     // thread-local handle; gix::Repository is not Sync.
     let (staged, worktree) = std::thread::scope(|scope| {
-        let staged = scope.spawn(|| staged_side(&session.thread_local(), paths));
-        let worktree = scope.spawn(|| worktree_side(session, &session.thread_local(), opts, paths));
+        let staged = scope.spawn(|| staged_side(&session.thread_local()));
+        let worktree = scope.spawn(|| worktree_side(session, &session.thread_local(), opts));
         let staged = staged
             .join()
             .unwrap_or_else(|e| std::panic::resume_unwind(e));
@@ -81,10 +69,7 @@ pub fn status_with_paths(
     })
 }
 
-fn staged_side(
-    repo: &gix::Repository,
-    paths: Option<&[String]>,
-) -> Result<(Vec<StatusEntry>, Vec<ConflictEntry>)> {
+fn staged_side(repo: &gix::Repository) -> Result<(Vec<StatusEntry>, Vec<ConflictEntry>)> {
     let mut entries: Vec<StatusEntry> = Vec::new();
     let conflicts: Vec<ConflictEntry> = Vec::new();
 
@@ -103,7 +88,6 @@ fn staged_side(
     };
     {
         let mut pathspec = crate::engines::gix::session::unrestricted_pathspec(repo)?;
-        let _ = &mut pathspec;
         repo.tree_index_status(
             &tree_id,
             &index,
@@ -125,7 +109,6 @@ fn worktree_side(
     session: &GixSession,
     repo: &gix::Repository,
     opts: &ApiStatusOptions,
-    paths: Option<&[String]>,
 ) -> Result<(Vec<StatusEntry>, Vec<ConflictEntry>)> {
     let mut entries: Vec<StatusEntry> = Vec::new();
     let mut conflicts: Vec<ConflictEntry> = Vec::new();
@@ -145,12 +128,10 @@ fn worktree_side(
         .map_err(internal)?;
     let should_interrupt = AtomicBool::new(false);
     let mut collector = Collector::default();
-    let pathspec: Vec<&gix::bstr::BStr> = paths
-        .map(|ps| ps.iter().map(|p| p.as_str().into()).collect())
-        .unwrap_or_default();
+    let no_pathspec: &[&gix::bstr::BStr] = &[];
     repo.index_worktree_status(
         &index,
-        pathspec.as_slice(),
+        no_pathspec,
         &mut collector,
         FastEq,
         submodule,

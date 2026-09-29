@@ -13,6 +13,7 @@ import { CatCurled, CatSitting, CatStretching } from "../icons/cat";
 import { CommitGraphView } from "./history/commit-graph-view";
 import { HistoryChartView } from "./history/history-chart-view";
 import { IssuesView } from "./issues/issues-view";
+import { PullRequestsView } from "./pulls/pulls-view";
 
 function stripChangeSide(changeId: string): string {
     const separator = changeId.indexOf(":");
@@ -142,6 +143,14 @@ export function MainRepoView({
         return (
             <div className="min-h-0 flex-1">
                 <IssuesView repoId={repoId} />
+            </div>
+        );
+    }
+
+    if (view === "pulls") {
+        return (
+            <div className="min-h-0 flex-1">
+                <PullRequestsView repoId={repoId} />
             </div>
         );
     }

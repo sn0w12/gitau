@@ -3,6 +3,7 @@ import * as React from "react";
 
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { Menu, MenuItem, MenuPopup, MenuShortcut } from "@/components/ui/menu";
+import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
 import {
     clearSelection,
     getSelectionText,
@@ -10,7 +11,6 @@ import {
     selectionInSurface,
 } from "@/lib/selection/text-selection";
 import { displayToken } from "@/lib/shortcuts";
-import { toastError } from "@/lib/toast-error";
 
 type SelectionSnapshot = {
     pointX: number;
@@ -112,12 +112,12 @@ export function SelectionContextMenu(): React.ReactElement | null {
         [snapshot]
     );
 
+    const { copyToClipboard } = useCopyToClipboard();
+
     if (!snapshot || !anchor) return null;
 
     const handleCopy = () => {
-        void navigator.clipboard.writeText(snapshot.text).catch((error) => {
-            toastError("Could not copy", error);
-        });
+        copyToClipboard(snapshot.text);
     };
 
     return (

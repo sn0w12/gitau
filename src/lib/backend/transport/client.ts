@@ -19,9 +19,17 @@ import type {
     DiffRequest,
     FileContent,
     GithubIssueComment,
+    GithubCheckRun,
+    GithubCheckRunDetail,
+    GithubCheckRunLog,
+    GithubCommitStatus,
     GithubIssueDetail,
     GithubIssueEvent,
     GithubOrg,
+    GithubPullRequestCommit,
+    GithubPullRequestDetail,
+    GithubPullRequestReview,
+    GithubPullRequestReviewComment,
     GithubRepoPermissions,
     GraphEvent,
     HighlightedSnippet,
@@ -35,7 +43,10 @@ import type {
     HistoryPageQuery,
     HookContent,
     HookRunResult,
+    GithubWorkflowRun,
     LicenseTemplateInfo,
+    MergePullRequestBody,
+    MergePullRequestResult,
     NotificationPage,
     Oid,
     OpenedRepository,
@@ -43,6 +54,7 @@ import type {
     PublishResult,
     PushOutcome,
     SearchIssuePage,
+    SearchPullRequestPage,
     RangeResult,
     RepoListing,
     RepoSnapshot,
@@ -60,6 +72,7 @@ import type {
     StatusReport,
     TagInfo,
     UpdateIssueBody,
+    UpdatePullRequestBody,
     ValuesSnapshot,
     WorkflowOutcome,
     WorktreeInfo,
@@ -655,10 +668,89 @@ function createRawBackendClient() {
                 invokeCommand<SearchIssuePage>("github_list_issues", {
                     args: { owner, repo, issueState, labels, page },
                 }),
+            listPullRequests: (
+                owner: string,
+                repo: string,
+                pullState?: string,
+                labels?: string[],
+                page?: number
+            ) =>
+                invokeCommand<SearchPullRequestPage>(
+                    "github_list_pull_requests",
+                    { args: { owner, repo, pullState, labels, page } }
+                ),
+            getPull: (owner: string, repo: string, number: number) =>
+                invokeCommand<GithubPullRequestDetail>("github_get_pull", {
+                    args: { owner, repo, number },
+                }),
+            listPullReviews: (owner: string, repo: string, number: number) =>
+                invokeCommand<GithubPullRequestReview[]>(
+                    "github_list_pull_reviews",
+                    { args: { owner, repo, number } }
+                ),
+            listPullCommits: (owner: string, repo: string, number: number) =>
+                invokeCommand<GithubPullRequestCommit[]>(
+                    "github_list_pull_commits",
+                    { args: { owner, repo, number } }
+                ),
+            listPullReviewComments: (
+                owner: string,
+                repo: string,
+                number: number
+            ) =>
+                invokeCommand<GithubPullRequestReviewComment[]>(
+                    "github_list_pull_review_comments",
+                    { args: { owner, repo, number } }
+                ),
+            updatePull: (
+                owner: string,
+                repo: string,
+                number: number,
+                body: UpdatePullRequestBody
+            ) =>
+                invokeCommand<GithubPullRequestDetail>("github_update_pull", {
+                    args: { owner, repo, number, body },
+                }),
+            mergePull: (
+                owner: string,
+                repo: string,
+                number: number,
+                body: MergePullRequestBody
+            ) =>
+                invokeCommand<MergePullRequestResult>("github_merge_pull", {
+                    args: { owner, repo, number, body },
+                }),
+            getCheckRun: (owner: string, repo: string, checkRunId: number) =>
+                invokeCommand<GithubCheckRunDetail>("github_get_check_run", {
+                    args: { owner, repo, checkRunId },
+                }),
+            getCheckRunLog: (owner: string, repo: string, checkRunId: number) =>
+                invokeCommand<GithubCheckRunLog>("github_get_check_run_log", {
+                    args: { owner, repo, checkRunId },
+                }),
+            listCheckRuns: (owner: string, repo: string, sha: string) =>
+                invokeCommand<GithubCheckRun[]>("github_list_check_runs", {
+                    args: { owner, repo, sha },
+                }),
+            listWorkflowRuns: (owner: string, repo: string, sha: string) =>
+                invokeCommand<GithubWorkflowRun[]>(
+                    "github_list_workflow_runs",
+                    { args: { owner, repo, sha } }
+                ),
+            listCommitStatuses: (owner: string, repo: string, sha: string) =>
+                invokeCommand<GithubCommitStatus[]>(
+                    "github_list_commit_statuses",
+                    { args: { owner, repo, sha } }
+                ),
             searchIssues: (page?: number) =>
                 invokeCommand<SearchIssuePage>("github_search_issues", {
                     args: { page },
                 }),
+            searchPullRequests: (page?: number) =>
+                invokeCommand<SearchPullRequestPage>(
+                    "github_search_pull_requests",
+                    { args: { page } }
+                ),
             getIssue: (owner: string, repo: string, number: number) =>
                 invokeCommand<GithubIssueDetail>("github_get_issue", {
                     args: { owner, repo, number },
