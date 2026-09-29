@@ -659,7 +659,7 @@ function parseDetails(context: BlockParseContext): BlockNode | undefined {
     if (DETAILS_OPEN.test(first) === false) return undefined;
 
     const summary = context.lines[context.index + 1]?.match(SUMMARY_LINE);
-    const bodyStart = context.index + 1 + (summary === undefined ? 0 : 1);
+    const bodyStart = context.index + 1 + (summary == null ? 0 : 1);
     let close = bodyStart;
     while (close < context.lines.length) {
         if (DETAILS_CLOSE.test(context.lines[close] ?? "")) break;

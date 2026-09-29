@@ -204,6 +204,17 @@ describe("safeHtmlExtension", () => {
         expect(details.properties?.["data-open"]).toBe("open");
     });
 
+    /** A `<summary>` is optional in html, so the body starts on the line
+     * right after the tag. */
+    it("keeps the first body line when there is no summary", () => {
+        const doc = parse("<details>\nfirst line\n\nsecond line\n\n</details>");
+        const details = doc.children[0];
+        if (details?.type !== "component")
+            throw new Error("expected a component");
+        expect(details.properties?.["data-summary"]).toBe("Details");
+        expect(JSON.stringify(details.children)).toContain("first line");
+    });
+
     it("maps a void tag to its real element", () => {
         const nodes = inline("line<br />break");
         const br = findTag(nodes, "br");
