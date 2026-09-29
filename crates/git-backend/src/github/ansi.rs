@@ -311,7 +311,15 @@ pub fn parse_line(line: &str, table: &mut AnsiTable, log_is_coloured: bool) -> P
 fn apply_sgr(params: &str, style: &mut AnsiStyle) {
     let codes: Vec<u8> = params
         .split(';')
-        .map(|part| part.parse::<u8>().unwrap_or(0))
+        .filter_map(|part| {
+            if part.is_empty() {
+                return Some(0);
+            }
+            part.parse::<u16>()
+                .ok()
+                .filter(|code| *code <= u8::MAX as u16)
+                .map(|code| code as u8)
+        })
         .collect();
     let mut index = 0;
     while index < codes.len() {
@@ -398,6 +406,13 @@ mod tests {
         let (lines, _) = parse("\u{1b}[1mbold\u{1b}[0m plain");
         assert_eq!(lines[0].text, "bold plain");
         assert_eq!(lines[0].spans, vec![0, 4, 1]);
+    }
+
+    #[test]
+    fn out_of_range_sgr_parameters_are_dropped_instead_of_resetting() {
+        let (lines, _) = parse("\u{1b}[1mbold\u{1b}[99999m still bold");
+        assert_eq!(lines[0].text, "bold still bold");
+        assert_eq!(lines[0].spans, vec![0, 4, 1, 4, 11, 1]);
     }
 
     #[test]
