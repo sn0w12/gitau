@@ -220,6 +220,18 @@ export function TimelineReviewComment({
     );
 }
 
+/** Whether a review carries a verdict, as opposed to being a comment-only
+ * review. A later `COMMENTED` never displaces a verdict the reviewer already
+ * gave. */
+function isVerdict(state: string): boolean {
+    const verdict = state.toUpperCase();
+    return (
+        verdict === "APPROVED" ||
+        verdict === "CHANGES_REQUESTED" ||
+        verdict === "DISMISSED"
+    );
+}
+
 /** Compact list of who reviewed and with what verdict, for the sidebar. A
  * reviewer can submit more than once, so their latest verdict wins. */
 export function ReviewSummary({
@@ -232,6 +244,10 @@ export function ReviewSummary({
     }
     const latest = new Map<string, GithubPullRequestReview>();
     for (const review of reviews) {
+        const seen = latest.get(review.author.login);
+        if (seen && isVerdict(seen.state) && !isVerdict(review.state)) {
+            continue;
+        }
         latest.set(review.author.login, review);
     }
     return (
