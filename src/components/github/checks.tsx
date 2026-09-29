@@ -435,41 +435,46 @@ function DumpJobLog({
                 onClick={async () => {
                     if (checkRunId == null) return;
                     setDumping(true);
-                    const outcome = await backend.github.getCheckRunLog(
-                        owner,
-                        repo,
-                        checkRunId
-                    );
-                    setDumping(false);
-                    if (!outcome.ok) {
-                        toastError("Could not read the log", outcome.error);
-                        return;
+                    try {
+                        const outcome = await backend.github.getCheckRunLog(
+                            owner,
+                            repo,
+                            checkRunId
+                        );
+                        if (!outcome.ok) {
+                            toastError("Could not read the log", outcome.error);
+                            return;
+                        }
+                        const { raw, steps } = outcome.value;
+                        const header = steps
+                            .map((step) =>
+                                [
+                                    `number: ${step.number}`,
+                                    `name: ${step.name}`,
+                                    `status: ${step.status}`,
+                                    `conclusion: ${step.conclusion ?? ""}`,
+                                    `started_at: ${step.startedAt ?? ""}`,
+                                    `completed_at: ${step.completedAt ?? ""}`,
+                                ].join("\t")
+                            )
+                            .join("\n");
+                        const text = [
+                            "=== steps (check run / job id " +
+                                checkRunId +
+                                ") ===",
+                            header,
+                            "",
+                            "=== raw log ===",
+                            raw,
+                        ].join("\n");
+                        copyToClipboard(text);
+                        toastManager.add({
+                            title: `Copied ${text.length} chars`,
+                            type: "success",
+                        });
+                    } finally {
+                        setDumping(false);
                     }
-                    const { raw, steps } = outcome.value;
-                    const header = steps
-                        .map((step) =>
-                            [
-                                `number: ${step.number}`,
-                                `name: ${step.name}`,
-                                `status: ${step.status}`,
-                                `conclusion: ${step.conclusion ?? ""}`,
-                                `started_at: ${step.startedAt ?? ""}`,
-                                `completed_at: ${step.completedAt ?? ""}`,
-                            ].join("\t")
-                        )
-                        .join("\n");
-                    const text = [
-                        "=== steps (check run / job id " + checkRunId + ") ===",
-                        header,
-                        "",
-                        "=== raw log ===",
-                        raw,
-                    ].join("\n");
-                    copyToClipboard(text);
-                    toastManager.add({
-                        title: `Copied ${text.length} chars`,
-                        type: "success",
-                    });
                 }}
             >
                 Dump job log
