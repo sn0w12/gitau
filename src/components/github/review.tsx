@@ -4,6 +4,7 @@ import {
     MessageSquareWarning,
     X,
 } from "lucide-react";
+import { Fragment } from "react";
 
 import { CodeBlock } from "@/components/github/code-block";
 import { MessageSpacer, TimelineMessage } from "@/components/github/message";
@@ -122,17 +123,16 @@ export function TimelineReview({
                     </>
                 ) : null}
                 {comments.map((comment) => (
-                    <>
+                    <Fragment key={comment.id}>
                         <MessageSpacer />
                         <TimelineReviewComment
-                            key={comment.id}
                             comment={comment}
                             owner={owner}
                             repo={repo}
                             canQuote={canQuote}
                             onQuote={onQuote}
                         />
-                    </>
+                    </Fragment>
                 ))}
             </div>
         </>
