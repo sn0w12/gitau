@@ -177,12 +177,20 @@ export function useCheckRunLog(
 
 type PullInput = { owner: string; repo: string; number: number };
 
-/** Invalidates the whole pull request scope: the detail, its reviews, and
- * the repo's pull request list, which the merged state changes. */
+/** Invalidates the whole pull request scope: the detail, its reviews, the
+ * issue-keyed conversation and timeline the pull page reads, the repo's pull
+ * request list, and the search results, all of which the merged state
+ * changes. */
 function invalidatePull(queryClient: QueryClient, input: PullInput): void {
     void queryClient.invalidateQueries({ queryKey: ["github", "pulls"] });
     void queryClient.invalidateQueries({
+        queryKey: ["github", "search-pull-requests"],
+    });
+    void queryClient.invalidateQueries({
         queryKey: githubKeys.pullRequest(input.owner, input.repo, input.number),
+    });
+    void queryClient.invalidateQueries({
+        queryKey: githubKeys.issueDetail(input.owner, input.repo, input.number),
     });
     void queryClient.invalidateQueries({
         queryKey: githubKeys.pullReviews(input.owner, input.repo, input.number),
