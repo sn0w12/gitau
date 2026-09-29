@@ -96,6 +96,20 @@ export function pullRequestQuery(
     });
 }
 
+/** CI only changes while the page is open, so runs are polled until every one
+ * reports a conclusion. A pull request whose checks already finished stops
+ * costing requests, which is the state a reader usually leaves it in. */
+const CHECKS_POLL_MS = 10_000;
+
+function pollUntilSettled(
+    runs: { status: string }[] | undefined
+): number | false {
+    if (runs === undefined) return false;
+    return runs.some((run) => run.status !== "completed")
+        ? CHECKS_POLL_MS
+        : false;
+}
+
 export function checkRunsQuery(
     deps: GithubPullsDeps,
     owner: string | null,
@@ -114,6 +128,7 @@ export function checkRunsQuery(
                 )
             ),
         staleTime: 15_000,
+        refetchInterval: (query) => pollUntilSettled(query.state.data),
         retry: false,
         enabled: enabled && owner != null && repo != null && !!sha,
     });
@@ -189,6 +204,7 @@ export function workflowRunsQuery(
                 )
             ),
         staleTime: 15_000,
+        refetchInterval: (query) => pollUntilSettled(query.state.data),
         retry: false,
         enabled: enabled && owner != null && repo != null && !!sha,
     });
