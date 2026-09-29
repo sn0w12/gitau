@@ -6,8 +6,10 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "@/components/ui/tooltip";
 import { useHighlightedSnippet } from "@/hooks/highlight/use-highlighted-snippet";
 import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
 import type { DiffRow } from "@/lib/backend/protocol";
+import { cn } from "@/lib/utils";
 
 import { HighlightedLine } from "../diff/highlight-line";
+import { KIND_ROW_BORDER_CLASS, KIND_ROW_CLASS } from "../diff/rows";
 import { Frame, FramePanel } from "../ui/frame";
 
 /** The one-character diff marker at the head of a hunk line. */
@@ -132,9 +134,18 @@ export function CodeBlock({
                                       }
                                     : undefined;
                             return (
-                                <div key={index}>
+                                <div
+                                    key={index}
+                                    className={cn(
+                                        "border-l-3 border-transparent",
+                                        marker === "+" &&
+                                            `${KIND_ROW_CLASS["addition"]} ${KIND_ROW_BORDER_CLASS["addition"]}`,
+                                        marker === "-" &&
+                                            `${KIND_ROW_CLASS["deletion"]} ${KIND_ROW_BORDER_CLASS["deletion"]}`
+                                    )}
+                                >
                                     {marker === null ? null : (
-                                        <span className="inline-block w-4 shrink-0 text-muted-foreground select-none">
+                                        <span className="ml-1 inline-block w-4 shrink-0 text-muted-foreground select-none">
                                             {marker}
                                         </span>
                                     )}
