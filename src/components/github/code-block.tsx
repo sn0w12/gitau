@@ -9,7 +9,11 @@ import type { DiffRow } from "@/lib/backend/protocol";
 import { cn } from "@/lib/utils";
 
 import { HighlightedLine } from "../diff/highlight-line";
-import { KIND_ROW_BORDER_CLASS, KIND_ROW_CLASS } from "../diff/rows";
+import {
+    DIFF_ROW_HEIGHT,
+    KIND_ROW_BORDER_CLASS,
+    KIND_ROW_CLASS,
+} from "../diff/rows";
 import { Frame, FramePanel } from "../ui/frame";
 
 /** The one-character diff marker at the head of a hunk line. */
@@ -97,7 +101,7 @@ export function CodeBlock({
                     overscrollContain
                     className="[&_[data-slot=scroll-area-viewport]]:max-h-96"
                 >
-                    <div className="ui-selectable p-2 whitespace-pre">
+                    <div className="ui-selectable w-max min-w-full p-2 whitespace-pre">
                         {lines.map((rawLine, index) => {
                             // Spans are computed on the line without its
                             // terminator; a stray \r would render a phantom
@@ -136,8 +140,9 @@ export function CodeBlock({
                             return (
                                 <div
                                     key={index}
+                                    style={{ height: DIFF_ROW_HEIGHT }}
                                     className={cn(
-                                        "border-l-3 border-transparent",
+                                        "w-full border-l-3 border-transparent",
                                         marker === "+" &&
                                             `${KIND_ROW_CLASS["addition"]} ${KIND_ROW_BORDER_CLASS["addition"]}`,
                                         marker === "-" &&
