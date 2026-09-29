@@ -24,7 +24,7 @@ function initials(login: string): string {
 }
 
 /** GitHub's review verdicts. `PENDING` never reaches the submitted-reviews
- * list, so it is not handled. */
+ * list, so the default branch only covers states GitHub adds later. */
 function reviewAppearance(state: string): {
     icon: React.ReactNode;
     label: string;
@@ -42,6 +42,12 @@ function reviewAppearance(state: string): {
                 icon: <MessageSquareWarning className="size-4" />,
                 label: "requested changes",
                 className: "text-destructive",
+            };
+        case "COMMENTED":
+            return {
+                icon: <MessageSquareWarning className="size-4" />,
+                label: "reviewed",
+                className: "text-muted-foreground",
             };
         case "DISMISSED":
             return {
