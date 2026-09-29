@@ -1,10 +1,14 @@
 "use no memo";
 
-import { CircleDot, Inbox, RotateCw } from "lucide-react";
+import { GitPullRequestArrow, RotateCw } from "lucide-react";
 import { useMemo } from "react";
 
 import { ExternalLink } from "@/components/external-link";
 import { LabelBadge } from "@/components/github/label-badge";
+import {
+    pullRequestStatusOf,
+    StatusBadge,
+} from "@/components/github/status-badge";
 import { Button } from "@/components/ui/button";
 import {
     Empty,
@@ -26,39 +30,37 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { useGithubAccount } from "@/hooks/github/use-github-account";
-import {
-    useGithubSearchIssues,
-    useLocalRepoMap,
-} from "@/hooks/github/use-github-issues";
+import { useLocalRepoMap } from "@/hooks/github/use-github-issues";
+import { useGithubSearchPullRequests } from "@/hooks/github/use-github-pull-requests";
 import { useOpenThread } from "@/hooks/github/use-open-thread";
 import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
-import type { SearchIssueItem } from "@/lib/backend/protocol";
+import type { GithubPullRequestListItem } from "@/lib/backend/protocol";
 import { GitBackendError } from "@/lib/backend/transport/invoke";
-import { parseIssueUrl } from "@/lib/github/repo-coords";
+import { parsePullUrl } from "@/lib/github/repo-coords";
 import { formatRelativeDate } from "@/lib/utils";
 
 /**
- * Signed-in GitHub issues matching `is:issue involves:@me
- * sort:updated-desc`, newest first, paged from the backend 100 items
- * at a time. Styled like the inbox page.
+ * Signed-in GitHub pull requests matching `is:pr involves:@me
+ * sort:updated-desc`, newest first, paged from the backend 100 items at a
+ * time. Styled like the inbox and issues pages.
  */
-export function IssuesPage() {
+export function PullsPage() {
     const router = useActiveTabRouter();
     const account = useGithubAccount();
-    const search = useGithubSearchIssues();
+    const search = useGithubSearchPullRequests();
     const localRepos = useLocalRepoMap();
 
-    const issues = search.issues;
+    const pulls = search.pulls;
     const groups = useMemo(() => {
-        const byRepo = new Map<string, SearchIssueItem[]>();
-        for (const issue of issues) {
-            const key = issue.repoFullName || "Unknown repository";
+        const byRepo = new Map<string, GithubPullRequestListItem[]>();
+        for (const pull of pulls) {
+            const key = pull.repoFullName || "Unknown repository";
             const list = byRepo.get(key);
-            if (list) list.push(issue);
-            else byRepo.set(key, [issue]);
+            if (list) list.push(pull);
+            else byRepo.set(key, [pull]);
         }
         return [...byRepo.entries()];
-    }, [issues]);
+    }, [pulls]);
     const showScopeHint =
         search.error instanceof GitBackendError && !search.error.retryable;
 
@@ -82,13 +84,13 @@ export function IssuesPage() {
                 <FrameHeader className="px-3 py-1.5">
                     <div className="flex items-center gap-2">
                         <FrameTitle className="text-base font-semibold">
-                            Issues
+                            Pull Requests
                         </FrameTitle>
                         <div className="ml-auto flex items-center gap-2">
                             <Button
                                 variant="ghost"
                                 size="icon-sm"
-                                aria-label="Refresh issues"
+                                aria-label="Refresh pull requests"
                                 disabled={search.isFetching}
                                 loading={search.isFetching}
                                 onClick={() => void search.refetch()}
@@ -98,11 +100,11 @@ export function IssuesPage() {
                         </div>
                     </div>
                     <FrameDescription className="text-sm text-muted-foreground">
-                        GitHub issues involving you, sorted by most recently
-                        updated.
+                        GitHub pull requests involving you, sorted by most
+                        recently updated.
                     </FrameDescription>
                 </FrameHeader>
-                <FramePanel data-testid="issues-panel" className="min-h-0 p-2">
+                <FramePanel data-testid="pulls-panel" className="min-h-0 p-2">
                     <ScrollArea scrollFade fill>
                         {account.isLoading ? (
                             <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
@@ -112,12 +114,13 @@ export function IssuesPage() {
                         ) : !account.data ? (
                             <Empty>
                                 <EmptyMedia variant="icon">
-                                    <Inbox />
+                                    <GitPullRequestArrow />
                                 </EmptyMedia>
                                 <EmptyHeader>
                                     <EmptyTitle>Connect GitHub</EmptyTitle>
                                     <EmptyDescription>
-                                        Sign in to see issues that involve you.
+                                        Sign in to see pull requests that
+                                        involve you.
                                     </EmptyDescription>
                                 </EmptyHeader>
                                 <EmptyContent>
@@ -149,14 +152,14 @@ export function IssuesPage() {
                                 >
                                     {search.error instanceof Error
                                         ? search.error.message
-                                        : "Could not load issues"}
+                                        : "Could not load pull requests"}
                                 </p>
                                 {showScopeHint ? (
                                     <p className="max-w-sm text-sm text-muted-foreground">
                                         Tokens granted before the repo
-                                        permission existed cannot search issues.
-                                        Sign out and back in on the Account page
-                                        to grant it.
+                                        permission existed cannot search pull
+                                        requests. Sign out and back in on the
+                                        Account page to grant it.
                                     </p>
                                 ) : null}
                                 <div className="flex items-center gap-2">
@@ -182,17 +185,19 @@ export function IssuesPage() {
                                     ) : null}
                                 </div>
                             </div>
-                        ) : issues.length === 0 ? (
+                        ) : pulls.length === 0 ? (
                             <div className="flex flex-col">
                                 <Empty>
                                     <EmptyMedia variant="icon">
-                                        <CircleDot />
+                                        <GitPullRequestArrow />
                                     </EmptyMedia>
                                     <EmptyHeader>
-                                        <EmptyTitle>No issues found</EmptyTitle>
+                                        <EmptyTitle>
+                                            No pull requests found
+                                        </EmptyTitle>
                                         <EmptyDescription>
-                                            No issues involving you on the
-                                            loaded pages.
+                                            No pull requests involving you on
+                                            the loaded pages.
                                         </EmptyDescription>
                                     </EmptyHeader>
                                 </Empty>
@@ -200,20 +205,20 @@ export function IssuesPage() {
                             </div>
                         ) : (
                             <div className="flex flex-col">
-                                {groups.map(([repo, repoIssues]) => (
+                                {groups.map(([repo, repoPulls]) => (
                                     <section key={repo}>
                                         <h2 className="px-2 pt-2 pb-1 text-sm font-semibold text-muted-foreground">
                                             {repo}
                                         </h2>
-                                        {repoIssues.map((issue, index) => (
+                                        {repoPulls.map((pull, index) => (
                                             <div
-                                                key={`${issue.repoFullName}-${issue.number}`}
+                                                key={`${pull.repoFullName}-${pull.number}`}
                                             >
                                                 {index > 0 ? (
                                                     <Separator />
                                                 ) : null}
-                                                <IssuesRow
-                                                    issue={issue}
+                                                <PullsRow
+                                                    pull={pull}
                                                     localRepos={localRepos}
                                                 />
                                             </div>
@@ -230,64 +235,57 @@ export function IssuesPage() {
     );
 }
 
-function IssuesRow({
-    issue,
+function PullsRow({
+    pull,
     localRepos,
 }: {
-    issue: SearchIssueItem;
+    pull: GithubPullRequestListItem;
     localRepos: Map<string, string>;
 }) {
     const openThread = useOpenThread();
 
-    const issueTarget = parseIssueUrl(issue.htmlUrl);
-    const repoPath = issueTarget
+    const target = parsePullUrl(pull.htmlUrl);
+    const repoPath = target
         ? localRepos.get(
-              `${issueTarget.owner.toLowerCase()}/${issueTarget.repo.toLowerCase()}`
+              `${target.owner.toLowerCase()}/${target.repo.toLowerCase()}`
           )
         : undefined;
 
     const title =
-        repoPath !== undefined && issueTarget ? (
+        repoPath !== undefined ? (
             <button
                 type="button"
-                onClick={() =>
-                    void openThread(repoPath, "issue", issueTarget.number)
-                }
+                onClick={() => void openThread(repoPath, "pull", pull.number)}
                 className="flex min-w-0 cursor-pointer items-center gap-1 truncate text-left font-medium hover:underline"
             >
-                <span className="truncate">{issue.title || "(no title)"}</span>
+                <span className="truncate">{pull.title || "(no title)"}</span>
             </button>
         ) : (
-            <ExternalLink href={issue.htmlUrl} className="truncate font-medium">
-                {issue.title || "(no title)"}
+            <ExternalLink href={pull.htmlUrl} className="truncate font-medium">
+                {pull.title || "(no title)"}
             </ExternalLink>
         );
 
-    const isOpen = issue.state.toLowerCase() === "open";
     return (
         <div className="flex items-center gap-2 px-2 py-2">
-            <span
-                className={
-                    isOpen
-                        ? "shrink-0 text-success [&_svg:not([class*='size-'])]:size-4"
-                        : "shrink-0 text-info [&_svg:not([class*='size-'])]:size-4"
-                }
-            >
-                <CircleDot />
-            </span>
+            <StatusBadge
+                status={pullRequestStatusOf(pull)}
+                className="shrink-0"
+            />
             <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                     <span className="truncate text-sm">{title}</span>
                     <div className="flex shrink-0 flex-wrap gap-1">
-                        {issue.labels.map((label) => (
+                        {pull.labels.map((label) => (
                             <LabelBadge key={label.name} label={label} />
                         ))}
                     </div>
                 </div>
                 <p className="truncate text-xs text-muted-foreground">
-                    #{issue.number}
-                    {issue.updatedAt
-                        ? ` · ${formatRelativeDate(issue.updatedAt)}`
+                    #{pull.number}
+                    {pull.author.login ? ` · ${pull.author.login}` : ""}
+                    {pull.updatedAt
+                        ? ` · ${formatRelativeDate(pull.updatedAt)}`
                         : ""}
                 </p>
             </div>

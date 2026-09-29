@@ -201,6 +201,20 @@ pub async fn github_search_issues(
         .map_err(to_serialized)
 }
 
+/// Search pull requests across all of GitHub matching
+/// `is:pr involves:@me sort:updated-desc`.
+#[tauri::command]
+pub async fn github_search_pull_requests(
+    state: SharedState<'_>,
+    page: Option<u32>,
+) -> CommandResult<SearchPullRequestPage> {
+    state
+        .backend
+        .github_search_pull_requests(page.unwrap_or(1).max(1))
+        .await
+        .map_err(to_serialized)
+}
+
 #[tauri::command]
 pub async fn github_get_pull(
     state: SharedState<'_>,

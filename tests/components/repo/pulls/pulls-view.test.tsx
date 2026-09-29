@@ -48,6 +48,7 @@ function pull(
         updatedAt: new Date(Date.now() - 60_000).toISOString(),
         mergedAt: null,
         htmlUrl: "https://github.com/octocat/repo/pull/42",
+        repoFullName: "octocat/repo",
         ...overrides,
     };
 }

@@ -594,6 +594,15 @@ impl GitHubAuth {
             .await?)
     }
 
+    /// Pull requests across all of GitHub matching
+    /// `is:pr involves:@me sort:updated-desc`.
+    pub async fn search_pull_requests(&self, page: u32) -> Result<SearchPullRequestPage> {
+        let token = self.token().ok_or(GitError::AuthenticationRequired {
+            remote: "github.com".into(),
+        })?;
+        Ok(self.api.search_pull_requests(&token, page).await?)
+    }
+
     pub async fn get_issue(
         &self,
         owner: &str,
@@ -1017,6 +1026,14 @@ mod tests {
                 _token: &str,
                 _page: u32,
             ) -> api::GithubFuture<SearchIssuePage> {
+                unreachable!()
+            }
+
+            fn search_pull_requests(
+                &self,
+                _token: &str,
+                _page: u32,
+            ) -> api::GithubFuture<SearchPullRequestPage> {
                 unreachable!()
             }
 

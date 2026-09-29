@@ -1,4 +1,4 @@
-import { GitMerge } from "lucide-react";
+import { CircleDashed, CircleDot, CircleSlash, GitMerge } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 
@@ -13,6 +13,16 @@ const statusLabel: Record<ThreadStatus, string> = {
     draft: "Draft",
     merged: "Merged",
     open: "Open",
+};
+
+/** One glyph per state, so a status reads without its label. The open dot
+ * matches the issue rows, and draft reads as unfinished rather than
+ * rejected. */
+const statusIcon: Record<ThreadStatus, React.ReactNode> = {
+    closed: <CircleSlash />,
+    draft: <CircleDashed />,
+    merged: <GitMerge />,
+    open: <CircleDot />,
 };
 
 const statusVariant: Record<ThreadStatus, "info" | "secondary" | "success"> = {
@@ -48,7 +58,7 @@ export function StatusBadge({
 }) {
     return (
         <Badge variant={statusVariant[status]} className={className}>
-            {status === "merged" ? <GitMerge /> : null}
+            {statusIcon[status]}
             {statusLabel[status]}
         </Badge>
     );

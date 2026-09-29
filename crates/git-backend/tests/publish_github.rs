@@ -162,6 +162,20 @@ impl GithubApi for FakeApi {
         })
     }
 
+    fn search_pull_requests(
+        &self,
+        _token: &str,
+        _page: u32,
+    ) -> GithubFuture<SearchPullRequestPage> {
+        Box::pin(async {
+            Ok(SearchPullRequestPage {
+                items: vec![],
+                page: 1,
+                has_more: false,
+            })
+        })
+    }
+
     fn list_pull_requests(
         &self,
         _token: &str,

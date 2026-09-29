@@ -279,6 +279,7 @@ pub fn run() {
             commands::github::github_get_check_run_log,
             commands::github::github_list_workflow_runs,
             commands::github::github_search_issues,
+            commands::github::github_search_pull_requests,
             commands::github::github_get_issue,
             commands::github::github_list_issue_comments,
             commands::github::github_list_issue_events,

@@ -45,6 +45,31 @@ export function infiniteRepoPullsQuery(
     });
 }
 
+/**
+ * Accumulating pull requests matching `is:pr involves:@me
+ * sort:updated-desc` across all of GitHub, newest first. Scoped by account
+ * login so one account never reads another account's cached pages.
+ */
+export function infiniteSearchPullRequestsQuery(
+    deps: GithubPullsDeps,
+    login: string | null,
+    enabled: boolean
+) {
+    return infiniteQueryOptions({
+        queryKey: githubKeys.searchPullRequests(login ?? ""),
+        queryFn: async ({ pageParam }) =>
+            expectOk(await deps.backend.github.searchPullRequests(pageParam)),
+        initialPageParam: 1,
+        getNextPageParam: (lastPage) =>
+            lastPage.hasMore ? lastPage.page + 1 : undefined,
+        staleTime: 30_000,
+        gcTime: 5 * 60_000,
+        refetchInterval: 60_000,
+        retry: false,
+        enabled: enabled && login != null,
+    });
+}
+
 /** Full pull request detail: draft, mergeability, refs, and diff stats.
  * GitHub computes mergeability in the background, so a cached read can still
  * carry `mergeable: null`. */

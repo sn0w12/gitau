@@ -2023,6 +2023,12 @@ impl Backend {
         self.github.list_workflow_runs(&owner, &repo, &sha).await
     }
 
+    /// Search pull requests across all of GitHub matching
+    /// `is:pr involves:@me sort:updated-desc`.
+    pub async fn github_search_pull_requests(&self, page: u32) -> Result<SearchPullRequestPage> {
+        self.github.search_pull_requests(page).await
+    }
+
     pub async fn github_get_issue(
         &self,
         owner: String,

@@ -740,6 +740,11 @@ function createRawBackendClient() {
                 invokeCommand<SearchIssuePage>("github_search_issues", {
                     args: { page },
                 }),
+            searchPullRequests: (page?: number) =>
+                invokeCommand<SearchPullRequestPage>(
+                    "github_search_pull_requests",
+                    { args: { page } }
+                ),
             getIssue: (owner: string, repo: string, number: number) =>
                 invokeCommand<GithubIssueDetail>("github_get_issue", {
                     args: { owner, repo, number },

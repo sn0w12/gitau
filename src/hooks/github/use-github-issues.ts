@@ -60,39 +60,34 @@ export function useRepoIssues(
 }
 
 /**
- * Maps `owner/repo` (lowercased) to the session repoId of open repos whose
- * remotes point at github.com. Only bound repos map: the issue route needs
- * a session repoId. Warms one cached remotes read per open repo.
+ * Maps `owner/repo` (lowercased) to the durable path of every repository in
+ * the app whose remotes point at github.com, open or not. The path is the
+ * identity that survives restarts, so a thread in a repo nobody has clicked
+ * yet still opens in-app. Warms one cached remotes read per known repo.
  */
-export function useLocalIssueRepoMap(): Map<string, number> {
+export function useLocalRepoMap(): Map<string, string> {
     const { backend } = useAppServices();
-    const openRepos = useSelector(repositoryStore, (state) => {
-        const out: { path: string; repoId: number }[] = [];
-        for (const [path, entry] of state.entries) {
-            if (entry.repoId !== undefined) {
-                out.push({ path, repoId: entry.repoId });
-            }
-        }
-        return out;
-    });
+    const knownRepos = useSelector(repositoryStore, (state) =>
+        [...state.entries.values()].map((entry) => entry.path)
+    );
     const remotes = useQueries({
-        queries: openRepos.map((repo) => ({
-            ...remotesByPathQuery({ backend }, repo.path),
+        queries: knownRepos.map((path) => ({
+            ...remotesByPathQuery({ backend }, path),
         })),
     });
     return useMemo(() => {
-        const map = new Map<string, number>();
-        openRepos.forEach((repo, index) => {
+        const map = new Map<string, string>();
+        knownRepos.forEach((path, index) => {
             const coords = pickGithubCoords(remotes[index]?.data ?? []);
             if (coords) {
                 map.set(
                     `${coords.owner.toLowerCase()}/${coords.repo.toLowerCase()}`,
-                    repo.repoId
+                    path
                 );
             }
         });
         return map;
-    }, [openRepos, remotes]);
+    }, [knownRepos, remotes]);
 }
 
 /** The signed-in user's access on a repository, for gating moderation. */

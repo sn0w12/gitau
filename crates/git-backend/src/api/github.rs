@@ -141,6 +141,9 @@ pub struct GithubPullRequestListItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub merged_at: Option<String>,
     pub html_url: String,
+    /// `owner/repo` the pull request lives in. A cross-repo search has to
+    /// derive it from the item URL, since search reports no repository name.
+    pub repo_full_name: String,
 }
 
 /// One page of pull request search results.

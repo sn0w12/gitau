@@ -13,7 +13,7 @@ import {
     Settings,
     User,
 } from "lucide-react";
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CloneRepoDialog } from "@/components/repo/dialogs/clone-dialog";
@@ -42,7 +42,6 @@ import { RestrictToList } from "./dnd/restrict-to-list";
 import { RepoLabel } from "./repo/repo-label";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Badge } from "./ui/badge";
-import type { ButtonProps } from "./ui/button";
 import { ContextMenuShortcut } from "./ui/context-menu";
 import { Menu, MenuGroup, MenuItem, MenuPopup, MenuTrigger } from "./ui/menu";
 import { ScrollArea } from "./ui/scroll-area";
@@ -95,11 +94,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <SidebarContent className="gap-1">
                     <SidebarGroup className="gap-1">
                         <InboxSidebarItem />
-                        <SidebarAction
-                            icon={<GitPullRequestArrow />}
-                            title="Pull Requests"
-                            payload={pullRequestsPayload}
-                        />
+                        <PullRequestsSidebarItem />
                         <IssuesSidebarItem />
                     </SidebarGroup>
                     <SidebarSeparator className="data-[orientation=horizontal]:w-auto" />
@@ -122,33 +117,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <TooltipPayloadHost handle={handle} side="right" />
             </TooltipProvider>
         </Sidebar>
-    );
-}
-
-function SidebarAction({
-    icon,
-    title,
-    payload,
-    variant = "ghost",
-}: {
-    icon: ReactNode;
-    title: string;
-    payload: () => React.JSX.Element;
-    variant?: ButtonProps["variant"];
-}) {
-    return (
-        <SidebarMenuItem>
-            <TooltipTrigger
-                handle={handle}
-                payload={payload}
-                render={
-                    <SidebarMenuButton variant={variant}>
-                        {icon}
-                        <span>{title}</span>
-                    </SidebarMenuButton>
-                }
-            />
-        </SidebarMenuItem>
     );
 }
 
@@ -185,6 +153,27 @@ function InboxSidebarItem() {
                     {unread > 99 ? "99+" : exact ? unread : `${unread}+`}
                 </Badge>
             ) : null}
+        </SidebarMenuItem>
+    );
+}
+
+function PullRequestsSidebarItem() {
+    const router = useActiveTabRouter();
+    return (
+        <SidebarMenuItem>
+            <TooltipTrigger
+                handle={handle}
+                payload={pullRequestsPayload}
+                render={
+                    <SidebarMenuButton
+                        variant="ghost"
+                        onClick={() => void router?.navigate({ to: "/pulls" })}
+                    >
+                        <GitPullRequestArrow />
+                        <span>Pull Requests</span>
+                    </SidebarMenuButton>
+                }
+            />
         </SidebarMenuItem>
     );
 }

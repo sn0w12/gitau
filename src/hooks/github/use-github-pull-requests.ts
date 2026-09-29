@@ -20,6 +20,7 @@ import {
     checkRunQuery,
     checkRunsQuery,
     infiniteRepoPullsQuery,
+    infiniteSearchPullRequestsQuery,
     pullCommitsQuery,
     pullRequestQuery,
     pullReviewCommentsQuery,
@@ -54,6 +55,26 @@ export function useRepoPullRequests(
     );
     const pulls = (query.data?.pages ?? []).flatMap((page) => page.items);
     return { ...query, pulls, coords };
+}
+
+/**
+ * Pull requests across all of GitHub matching `is:pr involves:@me
+ * sort:updated-desc`, paginated. This is what the standalone pull requests
+ * page lists; the repository-scoped `useRepoPullRequests` is the repo tab.
+ */
+export function useGithubSearchPullRequests() {
+    const { backend } = useAppServices();
+    const account = useGithubAccount();
+    const login = account.data?.login ?? null;
+    const query = useInfiniteQuery(
+        infiniteSearchPullRequestsQuery(
+            { backend },
+            login,
+            account.data != null
+        )
+    );
+    const pulls = (query.data?.pages ?? []).flatMap((page) => page.items);
+    return { ...query, pulls };
 }
 
 /**

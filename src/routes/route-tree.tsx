@@ -27,6 +27,7 @@ import { AccountPage } from "@/routes/account-page";
 import { DevPage } from "@/routes/dev-page";
 import { InboxPage } from "@/routes/inbox-page";
 import { IssuesPage } from "@/routes/issues-page";
+import { PullsPage } from "@/routes/pulls-page";
 import { RepoPage } from "@/routes/repo-page";
 import { SettingsPage } from "@/routes/settings-page";
 import { associateTabWithRepoPath, setTabTitle } from "@/stores/app-store";
@@ -106,6 +107,13 @@ export function createTabRouteTree(options: { tabId?: string } = {}) {
         path: "/issues",
         component: IssuesPage,
         loader: () => applyTitle("Issues"),
+    });
+
+    const pullsRoute = createRoute({
+        getParentRoute: () => rootRoute,
+        path: "/pulls",
+        component: PullsPage,
+        loader: () => applyTitle("Pull Requests"),
     });
 
     // Playground for mocking features; never shipped to release builds.
@@ -203,6 +211,7 @@ export function createTabRouteTree(options: { tabId?: string } = {}) {
         accountRoute,
         inboxRoute,
         issuesRoute,
+        pullsRoute,
         ...(devRoute ? [devRoute] : []),
         repoRoute,
         repoIssueRoute,

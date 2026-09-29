@@ -48,7 +48,8 @@ import {
     useMarkNotificationRead,
     useResolveSubjectUrl,
 } from "@/hooks/github/use-github-inbox";
-import { useLocalIssueRepoMap } from "@/hooks/github/use-github-issues";
+import { useLocalRepoMap } from "@/hooks/github/use-github-issues";
+import { useOpenThread } from "@/hooks/github/use-open-thread";
 import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
 import type { GithubNotification } from "@/lib/backend/protocol";
 import { GitBackendError } from "@/lib/backend/transport/invoke";
@@ -128,7 +129,7 @@ export function InboxPage() {
     const { confirm } = useConfirm();
     // Open repos keyed by `owner/repo` for in-app issue links; threads
     // whose repo is not open fall back to the browser.
-    const localIssueRepos = useLocalIssueRepoMap();
+    const localRepos = useLocalRepoMap();
 
     const threads = useMemo(
         () => inbox.threads.filter((thread) => matchesFilter(thread, filter)),
@@ -371,9 +372,7 @@ export function InboxPage() {
                                                             thread.id
                                                         )
                                                     }
-                                                    localIssueRepos={
-                                                        localIssueRepos
-                                                    }
+                                                    localRepos={localRepos}
                                                 />
                                             </div>
                                         ))}
@@ -393,18 +392,18 @@ function InboxRow({
     thread,
     marking,
     onMarkRead,
-    localIssueRepos,
+    localRepos,
 }: {
     thread: GithubNotification;
     marking: boolean;
     onMarkRead: () => void;
-    localIssueRepos: Map<string, number>;
+    localRepos: Map<string, string>;
 }) {
-    const router = useActiveTabRouter();
     const resolve = useResolveSubjectUrl();
+    const openThread = useOpenThread();
     const [resolving, setResolving] = useState(false);
 
-    // Issue and pull request threads whose repo is open resolve to the
+    // Issue and pull request threads whose repo is in the app resolve to the
     // in-app thread page; everything else keeps the external browser
     // behavior.
     const threadTarget =
@@ -413,8 +412,8 @@ function InboxRow({
             : thread.subjectType === "PullRequest"
               ? parsePullUrl(thread.htmlUrl ?? thread.subjectUrl ?? undefined)
               : null;
-    const inAppRepoId = threadTarget
-        ? localIssueRepos.get(
+    const repoPath = threadTarget
+        ? localRepos.get(
               `${threadTarget.owner.toLowerCase()}/${threadTarget.repo.toLowerCase()}`
           )
         : undefined;
@@ -437,22 +436,18 @@ function InboxRow({
         }
     };
 
-    const openInApp = () => {
-        if (inAppRepoId === undefined || !threadTarget) return;
-        if (thread.unread) onMarkRead();
-        router?.navigate({
-            to:
-                thread.subjectType === "PullRequest"
-                    ? `/repo/${inAppRepoId}/pull/${threadTarget.number}`
-                    : `/repo/${inAppRepoId}/issue/${threadTarget.number}`,
-        });
-    };
-
     const title =
-        inAppRepoId !== undefined ? (
+        repoPath !== undefined && threadTarget ? (
             <button
                 type="button"
-                onClick={openInApp}
+                onClick={() => {
+                    if (thread.unread) onMarkRead();
+                    void openThread(
+                        repoPath,
+                        thread.subjectType === "PullRequest" ? "pull" : "issue",
+                        threadTarget.number
+                    );
+                }}
                 className="flex min-w-0 cursor-pointer items-center gap-1 truncate text-left font-medium hover:underline"
             >
                 <span className="truncate">

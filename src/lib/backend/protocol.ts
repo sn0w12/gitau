@@ -763,6 +763,9 @@ export interface GithubPullRequestListItem {
     updatedAt: string;
     mergedAt?: string | null;
     htmlUrl: string;
+    /** `owner/repo` the pull request lives in. A cross-repo search derives
+     * it from the item URL, since search reports no repository name. */
+    repoFullName: string;
 }
 
 /** One 1-based page of pull request search results. */
