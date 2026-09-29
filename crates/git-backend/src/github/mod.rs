@@ -28,7 +28,7 @@ pub use crate::api::github::{
     GithubRepoPermissions, GithubUser, GithubWorkflowRun, MergePullRequestBody,
     MergePullRequestResult, NotificationPage, PublishRepositoryRequest, PublishResult,
     PullRequestMergeMethod, SearchIssueItem, SearchIssuePage, SearchPullRequestPage,
-    UpdateIssueBody, UpdatePullRequestBody,
+    ThreadStateReason, UpdateIssueBody, UpdatePullRequestBody,
 };
 pub use api::{CreateRepoBody, CreatedRepository, GithubApi, HttpGithubApi};
 pub use token_store::{KeyringTokenStore, MemoryTokenStore, TokenStore};

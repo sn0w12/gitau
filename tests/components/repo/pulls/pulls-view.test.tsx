@@ -41,6 +41,7 @@ function pull(
         number: 42,
         title: "Add a thing",
         state: "open",
+        stateReason: "none",
         labels: [{ name: "enhancement", color: "a2eeef" }],
         commentCount: 3,
         assignees: [],

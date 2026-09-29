@@ -1,7 +1,7 @@
 import { GitMerge } from "lucide-react";
 import { useState } from "react";
 
-import { issueStatusOf } from "@/components/github/status-badge";
+import { isOpenThread } from "@/components/github/status-badge";
 import { SidebarBlock } from "@/components/github/thread-chrome";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,7 @@ export const MERGE_METHOD_LABEL: Record<PullRequestMergeMethod, string> = {
  * Why a merge cannot go ahead, in GitHub's own terms. Null when it can.
  */
 export function mergeBlocker(pull: GithubPullRequestDetail): string | null {
-    if (issueStatusOf(pull.state) !== "open") {
+    if (!isOpenThread(pull)) {
         return "This pull request is closed.";
     }
     if (pull.draft) return "Mark this ready for review to merge it.";
@@ -67,7 +67,7 @@ export function PullHeaderActions({
     const [method, setMethod] = useState<PullRequestMergeMethod>("merge");
     const blocker = mergeBlocker(pull);
 
-    if (!canPush || issueStatusOf(pull.state) !== "open") return null;
+    if (!canPush || !isOpenThread(pull)) return null;
 
     if (pull.draft) {
         return (

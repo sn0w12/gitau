@@ -96,6 +96,24 @@ pub struct NotificationPage {
     pub has_more: bool,
 }
 
+/// Why a thread ended, from GitHub's `state_reason`. A thread that was never
+/// closed carries no reason, and so does one GitHub reports as `reopened`,
+/// which describes a state rather than an ending. Anything unrecognised is
+/// [`ThreadStateReason::None`], so a new value degrades to "closed" instead
+/// of failing the read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum ThreadStateReason {
+    #[default]
+    None,
+    /// Closed as fixed or delivered.
+    Completed,
+    /// Closed without the work being done, GitHub's "won't fix" / stale.
+    NotPlanned,
+    /// Closed in favour of another thread.
+    Duplicate,
+}
+
 /// One issue from a GitHub search result. Search items carry `html_url`
 /// and `repository_url` instead of a nested `repository.full_name`, so
 /// the repo name is derived from the URL.
@@ -105,6 +123,7 @@ pub struct SearchIssueItem {
     pub number: u64,
     pub title: String,
     pub state: String,
+    pub state_reason: ThreadStateReason,
     pub labels: Vec<GithubLabel>,
     pub comment_count: u64,
     pub assignees: Vec<GithubUser>,
@@ -133,6 +152,7 @@ pub struct GithubPullRequestListItem {
     pub number: u64,
     pub title: String,
     pub state: String,
+    pub state_reason: ThreadStateReason,
     pub labels: Vec<GithubLabel>,
     pub comment_count: u64,
     pub assignees: Vec<GithubUser>,
@@ -193,6 +213,7 @@ pub struct GithubIssueDetail {
     pub number: u64,
     pub title: String,
     pub state: String,
+    pub state_reason: ThreadStateReason,
     pub body: String,
     pub author: GithubUser,
     pub labels: Vec<GithubLabel>,
@@ -390,6 +411,7 @@ pub struct GithubPullRequestDetail {
     pub number: u64,
     pub title: String,
     pub state: String,
+    pub state_reason: ThreadStateReason,
     pub body: String,
     pub author: GithubUser,
     pub labels: Vec<GithubLabel>,

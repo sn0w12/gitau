@@ -727,11 +727,25 @@ export interface NotificationPage {
     hasMore: boolean;
 }
 
+/** Why a thread ended, from GitHub's `state_reason`. A thread that was never
+ * closed carries no reason, and so does one GitHub reports as `reopened`,
+ * which describes a state rather than an ending. Anything unrecognised comes
+ * back as `none`, so a new value degrades to "closed" instead of failing the
+ * read. */
+export type ThreadStateReason =
+    | "none"
+    | "completed"
+    | "notPlanned"
+    | "duplicate";
+
 /** One issue from a GitHub search result. */
 export interface SearchIssueItem {
     number: number;
     title: string;
     state: string;
+    /** Separates an issue closed as fixed from one closed as stale, since
+     * both report `state: "closed"`. */
+    stateReason: ThreadStateReason;
     labels: GithubLabel[];
     commentCount: number;
     assignees: GithubUser[];
@@ -756,6 +770,7 @@ export interface GithubPullRequestListItem {
     number: number;
     title: string;
     state: string;
+    stateReason: ThreadStateReason;
     labels: GithubLabel[];
     commentCount: number;
     assignees: GithubUser[];
@@ -810,6 +825,7 @@ export interface GithubIssueDetail {
     number: number;
     title: string;
     state: string;
+    stateReason: ThreadStateReason;
     body: string;
     author: GithubUser;
     labels: GithubLabel[];
@@ -881,6 +897,7 @@ export interface GithubPullRequestDetail {
     number: number;
     title: string;
     state: string;
+    stateReason: ThreadStateReason;
     body: string;
     author: GithubUser;
     labels: GithubLabel[];

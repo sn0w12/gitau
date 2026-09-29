@@ -9,7 +9,11 @@ import {
     type ConversationInputHandle,
 } from "@/components/github/input";
 import { MessageSpacer, TimelineMessage } from "@/components/github/message";
-import { issueStatusOf, StatusBadge } from "@/components/github/status-badge";
+import {
+    isOpenThread,
+    issueStatusOf,
+    StatusBadge,
+} from "@/components/github/status-badge";
 import {
     AvatarStack,
     ComposerSkeleton,
@@ -184,7 +188,7 @@ function IssueContent({
     const composerRef = useRef<ConversationInputHandle>(null);
     const mutating =
         createComment.pending || updateIssue.pending || updateComment.pending;
-    const open = issueStatusOf(issue.state) === "open";
+    const open = isOpenThread(issue);
     const timeline = buildIssueTimeline(issue, { comments, events });
     const participants = timelineParticipants(issue.participants, comments);
 
@@ -255,7 +259,7 @@ function IssueContent({
                         #{issue.number}
                     </span>
                     <StatusBadge
-                        status={issueStatusOf(issue.state)}
+                        status={issueStatusOf(issue)}
                         className="mb-1.5 self-end"
                     />
                 </div>

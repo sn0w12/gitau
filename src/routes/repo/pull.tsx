@@ -22,7 +22,7 @@ import {
     TimelineReviewComment,
 } from "@/components/github/review";
 import {
-    issueStatusOf,
+    isOpenThread,
     pullRequestStatusOf,
     StatusBadge,
 } from "@/components/github/status-badge";
@@ -279,7 +279,7 @@ function PullRequestContent({
     const composerRef = useRef<ConversationInputHandle>(null);
 
     const status = pullRequestStatusOf(pull);
-    const isOpen = issueStatusOf(pull.state) === "open";
+    const isOpen = isOpenThread(pull);
     const timeline = buildPullTimeline(pull, {
         commits,
         comments,

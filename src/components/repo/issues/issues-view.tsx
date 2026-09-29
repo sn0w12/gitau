@@ -352,9 +352,7 @@ function IssuesTable({
                                 {issue.title}
                             </TableCell>
                             <TableCell>
-                                <StatusBadge
-                                    status={issueStatusOf(issue.state)}
-                                />
+                                <StatusBadge status={issueStatusOf(issue)} />
                             </TableCell>
                             <TableCell className="space-x-1">
                                 {issue.labels.map((label) => (

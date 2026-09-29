@@ -39,6 +39,7 @@ function pull(
         number: 42,
         title: "Add a thing",
         state: "open",
+        stateReason: "none",
         labels: [{ name: "enhancement", color: "a2eeef" }],
         commentCount: 3,
         assignees: [],
@@ -316,6 +317,36 @@ describe("PullsPage", () => {
             view.container.textContent!.includes("No pull requests found")
         );
         expect(shown).toBe(true);
+        view.unmount();
+    });
+
+    it("distinguishes a pull request closed as not planned", async () => {
+        const services = backendWith({
+            pages: [
+                {
+                    items: [
+                        pull({
+                            number: 4,
+                            title: "Won't fix",
+                            state: "closed",
+                            stateReason: "notPlanned",
+                        }),
+                    ],
+                    page: 1,
+                    hasMore: false,
+                },
+            ],
+        });
+        const view = renderWith(services, <PullsPage />);
+        await flush();
+
+        const listed = await waitFor(() =>
+            view.container.textContent!.includes("Won't fix")
+        );
+        expect(listed).toBe(true);
+        expect(
+            view.container.querySelector(".lucide-circle-slash")
+        ).not.toBeNull();
         view.unmount();
     });
 

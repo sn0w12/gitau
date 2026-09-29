@@ -14,8 +14,21 @@ use super::{
     GithubPullRequestRef, GithubPullRequestReview, GithubPullRequestReviewComment,
     GithubRepoPermissions, GithubUser, GithubWorkflowRun, MergePullRequestBody,
     MergePullRequestResult, NotificationPage, PullRequestMergeMethod, SearchIssueItem,
-    SearchIssuePage, SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody,
+    SearchIssuePage, SearchPullRequestPage, ThreadStateReason, UpdateIssueBody,
+    UpdatePullRequestBody,
 };
+
+/// Maps GitHub's `state_reason` string. The REST API spells one value with a
+/// space (`not planned`) and the enum documentation with an underscore, so
+/// both are accepted.
+fn parse_state_reason(raw: Option<&str>) -> ThreadStateReason {
+    match raw.map(str::trim) {
+        Some("completed") => ThreadStateReason::Completed,
+        Some("not planned" | "not_planned") => ThreadStateReason::NotPlanned,
+        Some("duplicate") => ThreadStateReason::Duplicate,
+        _ => ThreadStateReason::None,
+    }
+}
 
 /// Object-safe async surface: boxed futures let tests inject fakes without
 /// a network.
@@ -368,6 +381,8 @@ struct RawIssue {
     #[serde(default)]
     state: String,
     #[serde(default)]
+    state_reason: Option<String>,
+    #[serde(default)]
     body: Option<String>,
     #[serde(default)]
     user: Option<RawIssueUser>,
@@ -396,6 +411,8 @@ struct RawSearchIssue {
     title: String,
     #[serde(default)]
     state: String,
+    #[serde(default)]
+    state_reason: Option<String>,
     #[serde(default)]
     user: Option<RawIssueUser>,
     #[serde(default)]
@@ -489,6 +506,8 @@ struct RawPull {
     title: String,
     #[serde(default)]
     state: String,
+    #[serde(default)]
+    state_reason: Option<String>,
     #[serde(default)]
     body: Option<String>,
     #[serde(default)]
@@ -1133,6 +1152,7 @@ fn map_search_issue_item(raw: RawSearchIssue) -> SearchIssueItem {
         number: raw.number,
         title: raw.title,
         state: raw.state,
+        state_reason: parse_state_reason(raw.state_reason.as_deref()),
         labels: raw.labels.iter().map(map_issue_label).collect(),
         comment_count: raw.comments,
         assignees: raw
@@ -1166,6 +1186,7 @@ fn map_search_pull_item(
         number: raw.number,
         title: raw.title,
         state: raw.state,
+        state_reason: parse_state_reason(raw.state_reason.as_deref()),
         labels: raw.labels.iter().map(map_issue_label).collect(),
         comment_count: raw.comments,
         assignees: raw
@@ -1241,6 +1262,7 @@ fn map_issue_detail(
         number: raw.number,
         title: raw.title,
         state: raw.state,
+        state_reason: parse_state_reason(raw.state_reason.as_deref()),
         body: raw.body.unwrap_or_default(),
         author: map_issue_user(raw.user),
         labels: raw.labels.iter().map(map_issue_label).collect(),
@@ -1328,6 +1350,7 @@ fn map_pull_detail(raw: RawPull) -> GithubPullRequestDetail {
         number: raw.number,
         title: raw.title,
         state: raw.state,
+        state_reason: parse_state_reason(raw.state_reason.as_deref()),
         body: raw.body.unwrap_or_default(),
         author: map_issue_user(raw.user),
         labels: raw.labels.iter().map(map_issue_label).collect(),
@@ -1855,6 +1878,7 @@ impl GithubApi for HttpGithubApi {
                         number: item.number,
                         title: item.title,
                         state: item.state,
+                        state_reason: parse_state_reason(item.state_reason.as_deref()),
                         labels,
                         comment_count: item.comments,
                         assignees,
@@ -3035,6 +3059,46 @@ mod tests {
         assert_eq!(mapped.labels[0].name, "enhancement");
         assert_eq!(mapped.merged_at.as_deref(), Some("2026-09-02T09:00:00Z"));
         assert_eq!(mapped.repo_full_name, "octocat/repo");
+    }
+
+    /// `state_reason` is the only thing that separates an issue closed as
+    /// fixed from one closed as stale, since both report `state: "closed"`.
+    #[test]
+    fn carries_the_close_reason_onto_search_items() {
+        let raw: RawSearchIssue = serde_json::from_value(serde_json::json!({
+            "number": 3,
+            "title": "Flaky test",
+            "state": "closed",
+            "state_reason": "not planned"
+        }))
+        .unwrap();
+        assert_eq!(
+            map_search_issue_item(raw).state_reason,
+            ThreadStateReason::NotPlanned
+        );
+    }
+
+    /// An open thread carries no reason, and neither does anything GitHub
+    /// reports that this build does not know.
+    #[test]
+    fn unrecognised_close_reasons_fall_back_to_none() {
+        assert_eq!(parse_state_reason(None), ThreadStateReason::None);
+        assert_eq!(
+            parse_state_reason(Some("reopened")),
+            ThreadStateReason::None
+        );
+        assert_eq!(
+            parse_state_reason(Some("completed")),
+            ThreadStateReason::Completed
+        );
+        assert_eq!(
+            parse_state_reason(Some("not_planned")),
+            ThreadStateReason::NotPlanned
+        );
+        assert_eq!(
+            parse_state_reason(Some("duplicate")),
+            ThreadStateReason::Duplicate
+        );
     }
 
     /// A cross-repo search has no repo name to hand the mapper, so the
