@@ -12,6 +12,7 @@ import type { GithubLabel } from "@/lib/backend/protocol";
 import { formatRelativeDate } from "@/lib/utils";
 
 import { LabelBadge } from "./label-badge";
+import { MessageSpacer } from "./message";
 
 function EventIcon({ kind }: { kind: string }) {
     switch (kind) {
@@ -87,12 +88,12 @@ export function TimelineEvent({
     const initial = (actor ?? "?").slice(0, 1).toUpperCase();
     return (
         <>
-            <div className="ml-4 h-1.5 w-0.5 bg-muted" />
+            <MessageSpacer />
             <div className="ui-selectable flex items-center gap-1 px-1.5 py-1 text-sm">
-                <div className="flex size-6 items-center justify-center rounded-full bg-primary text-background">
+                <div className="ml-0.5 flex size-5.5 items-center justify-center rounded-full bg-primary text-background">
                     <EventIcon kind={kind} />
                 </div>
-                <Avatar className="size-6">
+                <Avatar className="size-6.5">
                     <AvatarImage src={avatarUrl} />
                     <AvatarFallback>{initial}</AvatarFallback>
                 </Avatar>
@@ -119,7 +120,7 @@ export function TimelineEvent({
                     </span>
                 ) : null}
             </div>
-            {!last && <div className="ml-4 h-1.5 w-0.5 bg-muted" />}
+            {!last && <MessageSpacer />}
         </>
     );
 }

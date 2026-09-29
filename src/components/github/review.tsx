@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 
 import { CodeBlock } from "@/components/github/code-block";
-import { TimelineMessage } from "@/components/github/message";
+import { MessageSpacer, TimelineMessage } from "@/components/github/message";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
     Collapsible,
@@ -78,47 +78,58 @@ export function TimelineReview({
     const { icon, label, className } = reviewAppearance(review.state);
 
     return (
-        <div className="w-full">
-            <div className="ui-selectable flex items-center gap-1 px-1.5 py-1 text-sm">
-                <div
-                    className={`flex size-6 items-center justify-center rounded-full bg-muted ${className}`}
-                >
-                    {icon}
-                </div>
-                <Avatar className="size-6">
-                    <AvatarImage src={review.author.avatarUrl || undefined} />
-                    <AvatarFallback>
-                        {initials(review.author.login)}
-                    </AvatarFallback>
-                </Avatar>
-                <span>
-                    {review.author.login}{" "}
-                    <span className="text-muted-foreground">
-                        {label} {formatRelativeDate(review.submittedAt)}
+        <>
+            <div className="w-full">
+                <MessageSpacer />
+                <div className="ui-selectable flex items-center gap-1 px-1.5 py-1 text-sm">
+                    <div
+                        className={`flex size-6.5 items-center justify-center rounded-full bg-muted ${className}`}
+                    >
+                        {icon}
+                    </div>
+                    <Avatar className="size-6.5">
+                        <AvatarImage
+                            src={review.author.avatarUrl || undefined}
+                        />
+                        <AvatarFallback>
+                            {initials(review.author.login)}
+                        </AvatarFallback>
+                    </Avatar>
+                    <span>
+                        {review.author.login}{" "}
+                        <span className="text-muted-foreground">
+                            {label} {formatRelativeDate(review.submittedAt)}
+                        </span>
                     </span>
-                </span>
+                </div>
+                {review.body ? (
+                    <>
+                        <MessageSpacer />
+                        <TimelineMessage
+                            text={review.body}
+                            owner={owner}
+                            repo={repo}
+                            canQuote={canQuote}
+                            onQuote={onQuote}
+                            link={review.htmlUrl || undefined}
+                        />
+                    </>
+                ) : null}
+                {comments.map((comment) => (
+                    <>
+                        <MessageSpacer />
+                        <TimelineReviewComment
+                            key={comment.id}
+                            comment={comment}
+                            owner={owner}
+                            repo={repo}
+                            canQuote={canQuote}
+                            onQuote={onQuote}
+                        />
+                    </>
+                ))}
             </div>
-            {review.body ? (
-                <TimelineMessage
-                    text={review.body}
-                    owner={owner}
-                    repo={repo}
-                    canQuote={canQuote}
-                    onQuote={onQuote}
-                    link={review.htmlUrl || undefined}
-                />
-            ) : null}
-            {comments.map((comment) => (
-                <TimelineReviewComment
-                    key={comment.id}
-                    comment={comment}
-                    owner={owner}
-                    repo={repo}
-                    canQuote={canQuote}
-                    onQuote={onQuote}
-                />
-            ))}
-        </div>
+        </>
     );
 }
 
@@ -148,8 +159,8 @@ export function TimelineReviewComment({
     return (
         <div className="flex flex-col gap-2">
             <div className="w-full">
-                <div className="ui-selectable flex items-center gap-1.5 px-1.5 pt-2 pb-1.5 text-sm">
-                    <Avatar className="size-5">
+                <div className="ui-selectable flex items-center gap-1.5 px-2 pt-2 pb-1.5 text-sm">
+                    <Avatar className="size-5.5">
                         <AvatarImage
                             src={comment.author.avatarUrl || undefined}
                         />
@@ -166,6 +177,7 @@ export function TimelineReviewComment({
                         {formatRelativeDate(comment.createdAt)}
                     </span>
                 </div>
+                <MessageSpacer />
                 <TimelineMessage
                     text={comment.body}
                     owner={owner}
@@ -176,20 +188,25 @@ export function TimelineReviewComment({
                     showAuthor={false}
                 />
                 {comment.diffHunk ? (
-                    <div className="mt-2 ml-4 w-auto">
-                        <Collapsible>
-                            <CollapsibleTrigger className="flex items-center gap-1.5 rounded-sm px-0.5 py-0.5 text-xs text-muted-foreground hover:text-foreground [&[data-panel-open]>svg]:rotate-90">
-                                <ChevronRight className="size-3.5 shrink-0 transition-transform" />
-                                Show the diff for this comment
-                            </CollapsibleTrigger>
-                            <CollapsiblePanel>
-                                <CodeBlock
-                                    language={languageFromPath(comment.path)}
-                                    text={comment.diffHunk}
-                                    diff
-                                />
-                            </CollapsiblePanel>
-                        </Collapsible>
+                    <div className="grid grid-cols-50">
+                        <MessageSpacer className="h-stretch" />
+                        <div className="col-span-49 mt-2 ml-4 w-auto">
+                            <Collapsible>
+                                <CollapsibleTrigger className="flex items-center gap-1.5 rounded-sm px-0.5 py-0.5 text-xs text-muted-foreground hover:text-foreground [&[data-panel-open]>svg]:rotate-90">
+                                    <ChevronRight className="size-3.5 shrink-0 transition-transform" />
+                                    Show the diff for this comment
+                                </CollapsibleTrigger>
+                                <CollapsiblePanel>
+                                    <CodeBlock
+                                        language={languageFromPath(
+                                            comment.path
+                                        )}
+                                        text={comment.diffHunk}
+                                        diff
+                                    />
+                                </CollapsiblePanel>
+                            </Collapsible>
+                        </div>
                     </div>
                 ) : null}
             </div>

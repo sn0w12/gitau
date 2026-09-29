@@ -333,6 +333,6 @@ export function TimelineMessage({
     );
 }
 
-export function MessageSpacer() {
-    return <div className="ml-4 h-2 w-0.5 bg-muted" />;
+export function MessageSpacer({ className }: { className?: string }) {
+    return <div className={cn("ml-4.5 h-2 w-0.5 bg-muted", className)} />;
 }
