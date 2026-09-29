@@ -92,7 +92,11 @@ export function useCommitActions(repoId: number | undefined) {
     const createBranch = useCreateBranchMutation(repoId ?? 0);
     const { confirm } = useConfirm();
 
-    const { copyToClipboard } = useCopyToClipboard();
+    const { copyToClipboard } = useCopyToClipboard({
+        onCopy: () => {
+            toastManager.add({ title: "Copied", type: "success" });
+        },
+    });
 
     const copySha = (commit: CommitSummary) => copyToClipboard(commit.id);
 
