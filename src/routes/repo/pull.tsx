@@ -563,8 +563,6 @@ export function PullRequestPage() {
                 <header className="ui-selectable flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <Skeleton className="h-8 w-72" />
-                        <Skeleton className="h-5 w-12 self-end" />
-                        <Skeleton className="mb-1.5 h-5 w-16 self-end rounded-full" />
                     </div>
                     <div className="flex items-center gap-2">
                         <Skeleton className="h-8 w-28 rounded-lg" />
