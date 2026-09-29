@@ -285,6 +285,7 @@ function IssuesRow({
                 </div>
                 <p className="truncate text-xs text-muted-foreground">
                     #{issue.number}
+                    {issue.author ? ` · ${issue.author}` : ""}
                     {issue.updatedAt
                         ? ` · ${formatRelativeDate(issue.updatedAt)}`
                         : ""}
