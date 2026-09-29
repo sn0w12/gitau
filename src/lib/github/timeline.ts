@@ -117,11 +117,15 @@ export function buildIssueTimeline(
     const byCreatedAt = (a: { createdAt: string }, b: { createdAt: string }) =>
         a.createdAt.localeCompare(b.createdAt);
 
+    const reviewIds = new Set(parts.reviews.map((review) => review.id));
     const orphaned: GithubPullRequestReviewComment[] = [];
     const nested = new Map<number, GithubPullRequestReviewComment[]>();
     for (const comment of [...parts.reviewComments].sort(byCreatedAt)) {
         const reviewId = comment.pullRequestReviewId;
-        if (reviewId == null) {
+        // A comment whose review is not in the list, a pending one or a
+        // dismissed one the endpoint omits, has no review to nest under, so
+        // it renders on its own rather than disappearing.
+        if (reviewId == null || !reviewIds.has(reviewId)) {
             orphaned.push(comment);
             continue;
         }

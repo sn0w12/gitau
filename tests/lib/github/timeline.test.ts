@@ -63,7 +63,8 @@ function review(
 
 function reviewComment(
     id: number,
-    createdAt: string
+    createdAt: string,
+    reviewId?: number
 ): GithubPullRequestReviewComment {
     return {
         id,
@@ -74,6 +75,7 @@ function reviewComment(
         diffHunk: "@@ -1 +1 @@",
         createdAt,
         htmlUrl: "",
+        ...(reviewId === undefined ? {} : { pullRequestReviewId: reviewId }),
     };
 }
 
@@ -178,6 +180,36 @@ describe("buildPullTimeline", () => {
             "body",
             "commit",
             "comment",
+        ]);
+    });
+
+    it("nests a comment under the review that introduced it", () => {
+        const timeline = buildPullTimeline(THREAD, {
+            commits: [],
+            comments: [],
+            events: [],
+            reviews: [review(7, "2026-09-03T00:00:00Z")],
+            reviewComments: [reviewComment(8, "2026-09-02T00:00:00Z", 7)],
+        });
+        expect(timeline.map((item) => item.kind)).toEqual(["body", "review"]);
+        const row = timeline[1];
+        if (row.kind !== "review") throw new Error("expected a review row");
+        expect(row.comments).toHaveLength(1);
+    });
+
+    /** The reviews endpoint can omit the review a comment belongs to, so the
+     * comment still has to surface. */
+    it("orphans a comment whose review is missing from the list", () => {
+        const timeline = buildPullTimeline(THREAD, {
+            commits: [],
+            comments: [],
+            events: [],
+            reviews: [],
+            reviewComments: [reviewComment(8, "2026-09-02T00:00:00Z", 7)],
+        });
+        expect(timeline.map((item) => item.kind)).toEqual([
+            "body",
+            "reviewComment",
         ]);
     });
 
