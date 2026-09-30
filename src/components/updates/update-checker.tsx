@@ -22,6 +22,7 @@ import {
     updaterController,
 } from "@/lib/updates/update-manager";
 
+import { CustomMarkdown } from "../github/markdown";
 import { formatBytes } from "../repo/dialogs/clone-progress-panel";
 
 /**
@@ -109,7 +110,7 @@ function UpdateDialogBody({
         <AnimatePresence mode="wait" initial={false}>
             <motion.div
                 key={state.status}
-                className="flex min-h-0 w-full flex-col"
+                className="ui-selectable flex min-h-0 w-full flex-col"
                 initial={{
                     opacity: 0,
                     transform: reducedMotion
@@ -150,7 +151,7 @@ function AvailableView({
             </DialogHeader>
             {body ? (
                 <DialogPanel className="text-sm whitespace-pre-line text-muted-foreground">
-                    {body}
+                    <CustomMarkdown>{body}</CustomMarkdown>
                 </DialogPanel>
             ) : null}
             <DialogFooter>

@@ -370,6 +370,17 @@ describe("Alerts", () => {
 });
 
 describe("CustomMarkdown", () => {
+    it("shortens GitHub pull request autolinks to their number", () => {
+        const view = renderMarkdown("(https://github.com/sn0w12/gitau/pull/1)");
+        const anchor = view.container.querySelector("a");
+
+        expect(view.container.textContent).toBe("(#1)");
+        expect(anchor?.textContent).toBe("#1");
+        expect(anchor?.getAttribute("href")).toBe(
+            "https://github.com/sn0w12/gitau/pull/1"
+        );
+    });
+
     it("marks fenced code for backend highlighting", () => {
         const view = renderMarkdown("```rust\nlet x = 1;\n```");
         expect(view.container.textContent).toContain("let x = 1;");

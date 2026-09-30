@@ -14,7 +14,7 @@ function fakeDevUpdate(): Update {
         available: true,
         currentVersion: "0.0.0",
         version: "0.0.0-dev-update",
-        body: "Development build: this dialog is always shown so the update flow can be exercised end to end.",
+        body: "## Features\n\n- Add the GitHub inbox page - by sn0w12 (https://github.com/sn0w12/gitau/pull/1)\n- Feature/issues - by sn0w12 (https://github.com/sn0w12/gitau/pull/2)\n- Feature/pull requests - by sn0w12 (https://github.com/sn0w12/gitau/pull/3)\n\n\n[View all changes](https://github.com/sn0w12/gitau/compare/v0.1.3...v0.2.0)",
         rawJson: {},
         downloadAndInstall: async (
             onEvent?: (event: {

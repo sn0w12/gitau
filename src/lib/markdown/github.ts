@@ -58,7 +58,8 @@ function trimUrlEnd(value: string): string {
         }
         if (
             char === ")" &&
-            countChar(value, ")") > countChar(value.slice(0, end), ")")
+            countChar(value.slice(0, end), ")") >
+                countChar(value.slice(0, end), "(")
         ) {
             end -= 1;
             continue;
@@ -184,10 +185,22 @@ function urlLink(raw: string, scheme?: string): FoundLink | undefined {
     if (!/^https?:\/\/[^\s]/.test(value) && !/^www\.[^\s.]/.test(value)) {
         return undefined;
     }
+    const pullRequestNumber = githubPullRequestNumber(value);
+    const label = pullRequestNumber ? `#${pullRequestNumber}` : value;
     return found(
-        link(scheme ? `${scheme}${value}` : value, value),
+        link(scheme ? `${scheme}${value}` : value, label),
         value.length
     );
+}
+
+function githubPullRequestNumber(value: string): string | undefined {
+    try {
+        const parsed = new URL(value);
+        if (parsed.hostname !== "github.com") return undefined;
+        return parsed.pathname.match(/^\/[^/]+\/[^/]+\/pull\/(\d+)\/?$/)?.[1];
+    } catch {
+        return undefined;
+    }
 }
 
 function splitReference(value: string): [[string, string], string] {
