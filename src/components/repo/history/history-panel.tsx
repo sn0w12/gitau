@@ -295,10 +295,10 @@ function HistoryRow({
                         <div className="flex items-center gap-0.5 font-mono">
                             {unpushed && (
                                 <>
-                                  <span
-                                      aria-label="Not pushed"
-                                      className="mr-0.5 size-1.5 shrink-0 rounded-full bg-warning"
-                                  />
+                                    <span
+                                        aria-label="Not pushed"
+                                        className="mr-0.5 size-1.5 shrink-0 rounded-full bg-warning"
+                                    />
                                     <span>/</span>
                                 </>
                             )}
