@@ -55,6 +55,13 @@ export function HistoryPanel({
         () => history.data?.pages.flatMap((page) => page.commits) ?? [],
         [history.data]
     );
+    const unpushed = useMemo(
+        () =>
+            new Set(
+                history.data?.pages.flatMap((page) => page.unpushed ?? []) ?? []
+            ),
+        [history.data]
+    );
     const { hasNextPage, isFetchingNextPage, isPending, fetchNextPage } =
         history;
     const [scrollTop, setScrollTop] = useState(0);
@@ -185,6 +192,7 @@ export function HistoryPanel({
                             key={commit.id}
                             repoId={repoId}
                             commit={commit}
+                            unpushed={unpushed.has(commit.id)}
                             selected={selectedId === commit.id}
                             top={
                                 (firstVisible + offset) * HISTORY_ROW_HEIGHT_PX
@@ -214,6 +222,7 @@ export function HistoryPanel({
 function HistoryRow({
     repoId,
     commit,
+    unpushed,
     selected,
     top,
     onSelect,
@@ -222,6 +231,7 @@ function HistoryRow({
 }: {
     repoId: number;
     commit: CommitSummary;
+    unpushed: boolean;
     selected: boolean;
     top: number;
     onSelect: (commitId: string | null) => void;
@@ -283,6 +293,23 @@ function HistoryRow({
                             </span>
                         </div>
                         <div className="flex items-center gap-0.5 font-mono">
+                            {unpushed && (
+                                <Tooltip>
+                                    <TooltipTrigger
+                                        delay={100}
+                                        render={
+                                            <span
+                                                aria-label="Not pushed"
+                                                className="mr-0.5 size-1.5 shrink-0 rounded-full bg-muted-foreground"
+                                            />
+                                        }
+                                    />
+                                    <TooltipContent>
+                                        Not pushed to upstream
+                                    </TooltipContent>
+                                    <span>/</span>
+                                </Tooltip>
+                            )}
                             {commit.tags.length > 0 && (
                                 <Tooltip>
                                     <TooltipTrigger delay={100}>

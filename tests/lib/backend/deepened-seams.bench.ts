@@ -19,6 +19,7 @@ const page: HistoryPage = {
     generation: 2,
     commits: [],
     hasMore: false,
+    unpushed: [],
 };
 
 const historyStub = {

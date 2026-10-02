@@ -49,6 +49,7 @@ const page = (commits: CommitSummary[], hasMore = false): HistoryPage => ({
     generation: 1,
     commits,
     hasMore,
+    unpushed: [],
 });
 
 function fakeBackend(pageResult: Result<HistoryPage>): AppServices {

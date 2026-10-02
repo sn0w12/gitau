@@ -13,6 +13,7 @@ pub struct HistoryPage {
     pub generation: Generation,
     pub commits: Vec<CommitSummary>,
     pub has_more: bool,
+    pub unpushed: Vec<ObjectId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use git2::{DiffOptions, Sort};
@@ -36,6 +36,7 @@ pub fn history_page(
                         generation,
                         commits: Vec::new(),
                         has_more: false,
+                        unpushed: Vec::new(),
                     });
                 }
             }
@@ -165,8 +166,76 @@ pub fn history_page(
             generation,
             commits,
             has_more,
+            unpushed: unpushed_ids(repo, query.revision.as_ref(), page_oids)?,
         })
     })
+}
+
+/// Ids from `page_oids` that the viewed branch's upstream does not contain.
+///
+/// Returns empty when the revision is not a local branch with an upstream:
+/// with nothing to compare against, "not yet pushed" has no meaning.
+fn unpushed_ids(
+    repo: &git2::Repository,
+    revision: Option<&crate::domain::RevisionSpec>,
+    page_oids: &[git2::Oid],
+) -> Result<Vec<crate::domain::ObjectId>> {
+    let branch = if is_default_revision(revision) {
+        repo.head()
+            .ok()
+            .and_then(|head| head.shorthand().ok().map(str::to_owned))
+    } else {
+        resolve_local_branch(repo, revision.map(|spec| spec.as_str()))
+    };
+    let Some(branch) = branch else {
+        return Ok(Vec::new());
+    };
+    let Ok(local) = repo.find_branch(&branch, git2::BranchType::Local) else {
+        return Ok(Vec::new());
+    };
+    let Some(upstream) = local.upstream().ok() else {
+        return Ok(Vec::new());
+    };
+    let Ok(upstream_commit) = upstream.get().peel_to_commit() else {
+        return Ok(Vec::new());
+    };
+
+    // `upstream..tip` is exactly the unpushed set; `hide` keeps the walk to
+    // the commits that are actually ahead instead of the whole history.
+    let mut walk = repo.revwalk()?;
+    walk.push(repo.head()?.peel_to_commit()?.id())?;
+    walk.hide(upstream_commit.id())?;
+    let mut ahead = HashSet::with_capacity(page_oids.len());
+    for oid in walk {
+        match oid {
+            Ok(oid) => {
+                ahead.insert(oid_bytes(oid));
+            }
+            Err(e) => {
+                return Err(GitError::Internal {
+                    message: e.to_string(),
+                });
+            }
+        }
+    }
+
+    Ok(page_oids
+        .iter()
+        .filter(|oid| ahead.contains(&oid_bytes(**oid)))
+        .filter_map(|oid| crate::domain::ObjectId::from_bytes(oid.as_bytes()).ok())
+        .collect())
+}
+
+fn resolve_local_branch(repo: &git2::Repository, spec: Option<&str>) -> Option<String> {
+    let spec = spec?;
+    for candidate in [spec, spec.strip_prefix("refs/heads/").unwrap_or(spec)] {
+        if let Ok(branch) = repo.find_branch(candidate, git2::BranchType::Local) {
+            if let Some(name) = branch.name().ok().flatten() {
+                return Some(name.to_owned());
+            }
+        }
+    }
+    None
 }
 
 /// Per-commit stats against the first parent (root commits diff the empty
@@ -297,4 +366,93 @@ pub(crate) fn resolve_tip(
             spec: spec.to_owned(),
         })?;
     Ok(reference.peel_to_commit()?.id())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_tree<'a>(repo: &'a git2::Repository) -> git2::Tree<'a> {
+        repo.treebuilder(None)
+            .unwrap()
+            .write()
+            .map(|oid| repo.find_tree(oid).unwrap())
+            .unwrap()
+    }
+
+    fn commit(repo: &git2::Repository, msg: &str) -> git2::Oid {
+        let sig = git2::Signature::now("T", "t@e").unwrap();
+        let tree = empty_tree(repo);
+        let parents: Vec<git2::Commit> = match repo.head() {
+            Ok(h) => vec![h.peel_to_commit().unwrap()],
+            Err(_) => vec![],
+        };
+        let refs: Vec<&git2::Commit> = parents.iter().collect();
+        repo.commit(Some("HEAD"), &sig, &sig, msg, &tree, &refs)
+            .unwrap()
+    }
+
+    fn init_repo() -> (tempfile::TempDir, git2::Repository) {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = git2::Repository::init(dir.path()).unwrap();
+        let mut cfg = repo.config().unwrap();
+        cfg.set_str("user.name", "T").unwrap();
+        cfg.set_str("user.email", "t@e").unwrap();
+        drop(cfg);
+        (dir, repo)
+    }
+
+    #[test]
+    fn marks_commits_ahead_of_upstream() {
+        let (_dir, repo) = init_repo();
+        let first = commit(&repo, "one");
+        let branch = repo.head().unwrap().shorthand().unwrap().to_owned();
+        repo.remote("origin", "https://example.invalid/repo.git")
+            .unwrap();
+        repo.reference(
+            &format!("refs/remotes/origin/{branch}"),
+            first,
+            false,
+            "remote",
+        )
+        .unwrap();
+        {
+            let mut cfg = repo.config().unwrap();
+            cfg.set_str("remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
+                .unwrap();
+            cfg.set_str(&format!("branch.{branch}.remote"), "origin")
+                .unwrap();
+            cfg.set_str(
+                &format!("branch.{branch}.merge"),
+                &format!("refs/heads/{branch}"),
+            )
+            .unwrap();
+        }
+        let second = commit(&repo, "two");
+        let third = commit(&repo, "three");
+
+        let page = [third, second, first];
+        let unpushed = unpushed_ids(&repo, None, &page).unwrap();
+        let hexes: Vec<String> = unpushed.iter().map(|id| id.to_string()).collect();
+
+        assert!(
+            hexes.contains(&third.to_string()),
+            "third should be unpushed, got {hexes:?}"
+        );
+        assert!(
+            hexes.contains(&second.to_string()),
+            "second should be unpushed, got {hexes:?}"
+        );
+        assert!(
+            !hexes.contains(&first.to_string()),
+            "first is the upstream tip and must not be marked"
+        );
+    }
+
+    #[test]
+    fn empty_without_upstream() {
+        let (_dir, repo) = init_repo();
+        let oid = commit(&repo, "only");
+        assert!(unpushed_ids(&repo, None, &[oid]).unwrap().is_empty());
+    }
 }
