@@ -198,7 +198,6 @@ export interface HistoryPage {
     generation: number;
     commits: CommitSummary[];
     hasMore: boolean;
-    /** Ids in this page not reachable from the viewed branch's upstream. */
     unpushed: string[];
 }
 

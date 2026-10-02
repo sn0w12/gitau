@@ -4,6 +4,8 @@ import {
     queryOptions,
 } from "@tanstack/react-query";
 
+import { getSetting } from "@/stores/settings-store";
+
 import type {
     HistoryChartQuery,
     HistoryPage,
@@ -193,7 +195,12 @@ export function hooksQuery(deps: RepositoryQueryDeps, repoId: number) {
     });
 }
 
-export const HISTORY_PAGE_SIZE = 100;
+/** Commits per history page, user-configurable via the `historyPageSize`
+ * setting. Read inside the factories so the resolved value lands in the query
+ * key and a change mid-session paginates from a clean boundary. */
+export function historyPageSize(): number {
+    return getSetting("historyPageSize");
+}
 
 /**
  * One fetch path for both history shapes. The backend walks and caches
@@ -216,14 +223,11 @@ export function historyPageQuery(
     repoId: number,
     query: HistoryPageQueryLike = {}
 ) {
+    const resolved = { limit: historyPageSize(), ...query };
     return queryOptions({
-        queryKey: historyKeyFor(repoId, "page", query),
+        queryKey: historyKeyFor(repoId, "page", resolved),
         queryFn: async () =>
-            fetchHistoryPage(deps, repoId, {
-                limit: 100,
-                skip: 0,
-                ...query,
-            }),
+            fetchHistoryPage(deps, repoId, { skip: 0, ...resolved }),
         staleTime: 30_000,
         gcTime: 10 * 60_000,
         // Pagination/filtering swaps render the previous page instead of
@@ -242,17 +246,23 @@ export function infiniteHistoryPageQuery(
     repoId: number,
     search = ""
 ) {
+    const pageSize = historyPageSize();
     return infiniteQueryOptions({
-        queryKey: historyKeyFor(repoId, "infinite", search ? { search } : {}),
+        queryKey: historyKeyFor(
+            repoId,
+            "infinite",
+            search ? { search } : {},
+            pageSize
+        ),
         queryFn: async ({ pageParam }) =>
             fetchHistoryPage(deps, repoId, {
-                limit: HISTORY_PAGE_SIZE,
+                limit: pageSize,
                 skip: pageParam,
                 ...(search ? { search } : {}),
             }),
         initialPageParam: 0,
         getNextPageParam: (lastPage, allPages) =>
-            lastPage.hasMore ? allPages.length * HISTORY_PAGE_SIZE : undefined,
+            lastPage.hasMore ? allPages.length * pageSize : undefined,
         staleTime: 30_000,
         gcTime: 10 * 60_000,
         // Switching a search keeps the previous list visible while the new

@@ -335,6 +335,8 @@ mod tests {
                 path.display()
             )
         });
-        assert_eq!(committed, typescript_contract());
+        // autocrlf rewrites the checked-out file to CRLF, which is a platform
+        // artifact rather than schema drift.
+        assert_eq!(committed.replace("\r\n", "\n"), typescript_contract());
     }
 }

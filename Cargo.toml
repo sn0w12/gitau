@@ -63,6 +63,10 @@ two-face = { version = "0.5", features = ["syntect-default-onig"] }
 [profile.dev]
 incremental = true
 
+[profile.test]
+incremental = false
+debug = 1
+
 [profile.release]
 codegen-units = 1
 lto = true

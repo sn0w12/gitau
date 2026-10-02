@@ -22,10 +22,19 @@ export const historyKeys = {
     /**
      * One cache entry holds every accumulated page of the infinite history
      * list; still invalidated by the "history" scope prefix. The search term
-     * separates cached walks per query.
+     * separates cached walks per query, and the page size keys the entry
+     * because `skip` offsets are computed from it: a cached walk built at one
+     * page size cannot be continued at another without losing commits.
      */
-    infinite: (repoId: number, search = "") =>
-        ["repository", repoId, "history", "infinite", search || ""] as const,
+    infinite: (repoId: number, search = "", pageSize?: number) =>
+        [
+            "repository",
+            repoId,
+            "history",
+            "infinite",
+            search || "",
+            pageSize,
+        ] as const,
     commitDetail: (repoId: number, revision: string, detectRenames = true) =>
         ["repository", repoId, "commit", revision, detectRenames] as const,
     chart: (repoId: number, config: HistoryChartQuery = {}) =>
@@ -48,10 +57,11 @@ export const iconKeys = {
 export function historyKeyFor(
     repoId: number,
     kind: "page" | "infinite",
-    query: HistoryPageQueryLike
+    query: HistoryPageQueryLike,
+    pageSize?: number
 ) {
     return kind === "infinite"
-        ? historyKeys.infinite(repoId, query.search ?? "")
+        ? historyKeys.infinite(repoId, query.search ?? "", pageSize)
         : historyKeys.page(repoId, query);
 }
 

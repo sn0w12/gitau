@@ -11,11 +11,15 @@ import {
 } from "@/lib/backend/queries/query-keys";
 import {
     fetchHistoryPage,
+    historyPageQuery,
+    historyPageSize,
+    infiniteHistoryPageQuery,
     rareReadQuery,
 } from "@/lib/backend/queries/repository-queries";
 import type { BackendClient } from "@/lib/backend/transport/client";
 import { GitBackendError } from "@/lib/backend/transport/invoke";
 import type { Result } from "@/lib/backend/transport/result";
+import { seedSettingsForTests } from "@/stores/settings-store";
 
 const page: HistoryPage = {
     snapshotId: 1,
@@ -79,6 +83,64 @@ describe("fetchHistoryPage", () => {
         await expect(
             fetchHistoryPage(deps, 7, { limit: 100, skip: 0 })
         ).rejects.toMatchObject({ code: "repoNotFound" });
+    });
+});
+
+describe("history page size", () => {
+    function sized(): ReturnType<typeof depsWith> {
+        return depsWith(async () => ({ ok: true, value: page }));
+    }
+
+    it("reads the configured page size", () => {
+        seedSettingsForTests({ historyPageSize: 25 });
+        expect(historyPageSize()).toBe(25);
+    });
+
+    it("defaults the single page limit to the setting and keys it", () => {
+        seedSettingsForTests({ historyPageSize: 25 });
+        expect(historyPageQuery(sized(), 4).queryKey).toEqual(
+            historyKeys.page(4, { limit: 25 })
+        );
+    });
+
+    it("lets an explicit caller limit override the setting", () => {
+        seedSettingsForTests({ historyPageSize: 25 });
+        expect(historyPageQuery(sized(), 4, { limit: 5 }).queryKey).toEqual(
+            historyKeys.page(4, { limit: 5 })
+        );
+    });
+
+    /**
+     * Skip offsets are multiples of the page size, so a cached walk built at
+     * one size cannot be continued at another without dropping commits.
+     */
+    it("keys the infinite query by page size", () => {
+        seedSettingsForTests({ historyPageSize: 25 });
+        expect(infiniteHistoryPageQuery(sized(), 4).queryKey).toEqual(
+            historyKeys.infinite(4, "", 25)
+        );
+    });
+
+    it("derives the next skip from the configured page size", () => {
+        seedSettingsForTests({ historyPageSize: 25 });
+        const options = infiniteHistoryPageQuery(sized(), 4);
+        const loaded = [page, page];
+        expect(
+            options.getNextPageParam?.(
+                { ...page, hasMore: true },
+                loaded,
+                25,
+                [0, 25]
+            )
+        ).toBe(50);
+        expect(
+            options.getNextPageParam?.(
+                { ...page, hasMore: false },
+                loaded,
+                25,
+                [0, 25]
+            )
+        ).toBeUndefined();
     });
 });
 

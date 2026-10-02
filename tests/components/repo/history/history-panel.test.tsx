@@ -11,7 +11,10 @@ import { AppServicesContext } from "@/contexts/services-context";
 import { TabContext } from "@/contexts/tab-context";
 import type { CommitSummary, HistoryPage } from "@/lib/backend/protocol";
 import { historyKeys } from "@/lib/backend/queries/query-keys";
-import { historyPageQuery } from "@/lib/backend/queries/repository-queries";
+import {
+    historyPageQuery,
+    historyPageSize,
+} from "@/lib/backend/queries/repository-queries";
 import type { BackendClient } from "@/lib/backend/transport/client";
 import type { Result } from "@/lib/backend/transport/result";
 import type { AppServices } from "@/lib/bootstrap/app-runtime";
@@ -127,22 +130,25 @@ async function flushMicrotasks(): Promise<void> {
 
 describe("HistoryPanel", () => {
     it("renders cached commits immediately without skeletons", () => {
-        seedSettingsForTests({});
+        seedSettingsForTests({ historyPageSize: 50 });
         const services = fakeBackend({ ok: true, value: page([commit()]) });
         // Prime the infinite cache exactly like a prior visit would have.
         act(() => {
-            services.queryClient.setQueryData(historyKeys.infinite(9), {
-                pages: [
-                    page([
-                        commit(),
-                        commit({
-                            id: "2b2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
-                            summaryLine: "Earlier commit",
-                        }),
-                    ]),
-                ],
-                pageParams: [0],
-            });
+            services.queryClient.setQueryData(
+                historyKeys.infinite(9, "", historyPageSize()),
+                {
+                    pages: [
+                        page([
+                            commit(),
+                            commit({
+                                id: "2b2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+                                summaryLine: "Earlier commit",
+                            }),
+                        ]),
+                    ],
+                    pageParams: [0],
+                }
+            );
         });
 
         const view = renderWith(
