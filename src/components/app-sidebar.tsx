@@ -13,6 +13,7 @@ import {
     Settings,
     User,
 } from "lucide-react";
+import { LayoutGroup, motion } from "motion/react";
 import type { ComponentType } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -27,6 +28,7 @@ import { useRepoAvatarByPath } from "@/hooks/repositories/use-repo-avatar";
 import { useRemoteIcon } from "@/hooks/repositories/use-repository-queries";
 import { useSettingValue } from "@/hooks/settings/use-setting";
 import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
+import { EASE_SNAPPY } from "@/lib/motion";
 import { addExistingRepositoryFromDisk } from "@/lib/repositories/add-repository";
 import { toastError } from "@/lib/toast-error";
 import {
@@ -62,6 +64,7 @@ import {
 } from "./ui/tooltip";
 
 const handle = TooltipCreateHandle<ComponentType>();
+const REPO_TRANSITION = { duration: 0.2, ease: EASE_SNAPPY } as const;
 // Built at drag time: reads live bounds so resize/scroll stay correct.
 const restrictToRepoList = (slot: string) =>
     RestrictToList.configure({
@@ -226,36 +229,41 @@ function RepoButton({
     };
 
     return (
-        <SidebarMenuItem ref={ref}>
-            <RepoContextMenu repoPath={repoPath}>
-                <TooltipTrigger
-                    handle={handle}
-                    payload={repoNamePayload}
-                    render={
-                        <SidebarMenuButton
-                            variant="secondary"
-                            className="relative group-data-[collapsible=icon]:p-0!"
-                            aria-label={avatar.name}
-                            onClick={() => void openRepo(repoPath)}
-                            render={
-                                <Avatar>
-                                    <AvatarImage
-                                        src={avatar.icon?.dataUrl}
-                                        alt={`${avatar.name} icon`}
-                                    />
-                                    <AvatarFallback
-                                        className="block size-auto bg-transparent"
-                                        render={<div />}
-                                    >
-                                        {avatar.initial}
-                                    </AvatarFallback>
-                                </Avatar>
-                            }
-                        />
-                    }
-                />
-            </RepoContextMenu>
-        </SidebarMenuItem>
+        <motion.div
+            layoutId={`sidebar:${repoPath}`}
+            transition={REPO_TRANSITION}
+        >
+            <SidebarMenuItem ref={ref}>
+                <RepoContextMenu repoPath={repoPath}>
+                    <TooltipTrigger
+                        handle={handle}
+                        payload={repoNamePayload}
+                        render={
+                            <SidebarMenuButton
+                                variant="secondary"
+                                className="relative group-data-[collapsible=icon]:p-0!"
+                                aria-label={avatar.name}
+                                onClick={() => void openRepo(repoPath)}
+                                render={
+                                    <Avatar>
+                                        <AvatarImage
+                                            src={avatar.icon?.dataUrl}
+                                            alt={`${avatar.name} icon`}
+                                        />
+                                        <AvatarFallback
+                                            className="block size-auto bg-transparent"
+                                            render={<div />}
+                                        >
+                                            {avatar.initial}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                }
+                            />
+                        }
+                    />
+                </RepoContextMenu>
+            </SidebarMenuItem>
+        </motion.div>
     );
 }
 
@@ -274,8 +282,8 @@ function RegisteredRepoButtons() {
     const restrictToList = useMemo(() => restrictToRepoList("repo-list"), []);
 
     return (
-        <div className="flex flex-col gap-1">
-            {pinned.length > 0 ? (
+        <LayoutGroup id="sidebar-repos">
+            <div className="flex flex-col">
                 <DragDropProvider
                     onDragEnd={(event) => {
                         if (event.canceled) return;
@@ -294,8 +302,10 @@ function RegisteredRepoButtons() {
                         }
                     }}
                 >
-                    <div
-                        className="flex flex-col gap-1"
+                    <motion.div
+                        layout
+                        transition={REPO_TRANSITION}
+                        className="flex flex-col gap-1 empty:hidden"
                         data-slot="pinned-repo-list"
                     >
                         {pinned.map((entry, index) => (
@@ -307,37 +317,46 @@ function RegisteredRepoButtons() {
                                 modifiers={[restrictPinnedToList]}
                             />
                         ))}
-                    </div>
+                    </motion.div>
                 </DragDropProvider>
-            ) : null}
-            {pinned.length > 0 && unpinned.length > 0 ? (
-                <SidebarSeparator className="data-[orientation=horizontal]:w-auto" />
-            ) : null}
-            <DragDropProvider
-                onDragEnd={(event) => {
-                    if (event.canceled) return;
-                    const { source } = event.operation;
-                    if (
-                        isSortable(source) &&
-                        source.initialIndex !== source.index
-                    ) {
-                        moveRepo(String(source.id), source.index, pinnedRepos);
-                    }
-                }}
-            >
-                <div className="flex flex-col gap-1" data-slot="repo-list">
-                    {unpinned.map((entry, index) => (
-                        <RepoButton
-                            key={entry.path}
-                            repoId={entry.repoId}
-                            repoPath={entry.path}
-                            index={index}
-                            modifiers={[restrictToList]}
-                        />
-                    ))}
-                </div>
-            </DragDropProvider>
-        </div>
+                {pinned.length > 0 && unpinned.length > 0 ? (
+                    <SidebarSeparator className="my-1 data-[orientation=horizontal]:w-auto" />
+                ) : null}
+                <DragDropProvider
+                    onDragEnd={(event) => {
+                        if (event.canceled) return;
+                        const { source } = event.operation;
+                        if (
+                            isSortable(source) &&
+                            source.initialIndex !== source.index
+                        ) {
+                            moveRepo(
+                                String(source.id),
+                                source.index,
+                                pinnedRepos
+                            );
+                        }
+                    }}
+                >
+                    <motion.div
+                        layout
+                        transition={REPO_TRANSITION}
+                        className="flex flex-col gap-1"
+                        data-slot="repo-list"
+                    >
+                        {unpinned.map((entry, index) => (
+                            <RepoButton
+                                key={entry.path}
+                                repoId={entry.repoId}
+                                repoPath={entry.path}
+                                index={index}
+                                modifiers={[restrictToList]}
+                            />
+                        ))}
+                    </motion.div>
+                </DragDropProvider>
+            </div>
+        </LayoutGroup>
     );
 }
 

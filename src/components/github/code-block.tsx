@@ -1,5 +1,3 @@
-import { Check, Copy } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@/components/ui/tooltip";
@@ -8,6 +6,7 @@ import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
 import type { DiffRow } from "@/lib/backend/protocol";
 import { cn } from "@/lib/utils";
 
+import { CopyGlyph } from "../copy-glyph";
 import { HighlightedLine } from "../diff/highlight-line";
 import {
     DIFF_ROW_HEIGHT,
@@ -56,7 +55,7 @@ function CopyCodeButton({ text }: { text: string }) {
                     />
                 }
             >
-                {isCopied ? <Check /> : <Copy />}
+                <CopyGlyph copied={isCopied} />
             </TooltipTrigger>
             <TooltipPopup sideOffset={8}>
                 {isCopied ? "Copied" : "Copy"}

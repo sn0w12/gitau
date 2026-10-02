@@ -568,7 +568,7 @@ function BranchRow({
                 >
                     <Check
                         className={cn(
-                            "size-3.5 shrink-0",
+                            "size-3.5 shrink-0 transition-opacity duration-200 ease-snappy",
                             currentName === branch.name
                                 ? "opacity-100"
                                 : "opacity-0"

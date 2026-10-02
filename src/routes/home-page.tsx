@@ -4,6 +4,7 @@ import { DragDropProvider } from "@dnd-kit/react";
 import { isSortable, useSortable } from "@dnd-kit/react/sortable";
 import { useSelector } from "@tanstack/react-store";
 import { GitFork, Star } from "lucide-react";
+import { LayoutGroup, motion } from "motion/react";
 
 import { RepoContextMenu } from "@/components/repo/repo-context-menu";
 import { RepoLabel } from "@/components/repo/repo-label";
@@ -20,6 +21,7 @@ import { useRepoAvatarByPath } from "@/hooks/repositories/use-repo-avatar";
 import { useRemoteRepoInfoByPath } from "@/hooks/repositories/use-repository-queries";
 import { useSettingValue } from "@/hooks/settings/use-setting";
 import type { LanguageShare } from "@/lib/backend/protocol";
+import { EASE_SNAPPY } from "@/lib/motion";
 import type { RepositoryEntry } from "@/stores/repository-store";
 import {
     moveRepo,
@@ -29,6 +31,8 @@ import {
     selectUnpinnedRepoEntries,
 } from "@/stores/repository-store";
 import { setSetting } from "@/stores/settings-store";
+
+const REPO_TRANSITION = { duration: 0.2, ease: EASE_SNAPPY } as const;
 
 export function HomePage() {
     const pinnedRepos = useSettingValue("pinnedRepos");
@@ -46,8 +50,8 @@ export function HomePage() {
                     <h1 className="ui-selectable w-full pt-6 pb-2 text-center font-heading text-8xl font-semibold tracking-tight">
                         GITAU
                     </h1>
-                    <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                        {pinned.length > 0 ? (
+                    <LayoutGroup id="home-repos">
+                        <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                             <DragDropProvider
                                 onDragEnd={(event) => {
                                     if (event.canceled) return;
@@ -75,32 +79,32 @@ export function HomePage() {
                                     />
                                 ))}
                             </DragDropProvider>
-                        ) : null}
-                        <DragDropProvider
-                            onDragEnd={(event) => {
-                                if (event.canceled) return;
-                                const { source } = event.operation;
-                                if (
-                                    isSortable(source) &&
-                                    source.initialIndex !== source.index
-                                ) {
-                                    moveRepo(
-                                        String(source.id),
-                                        source.index,
-                                        pinnedRepos
-                                    );
-                                }
-                            }}
-                        >
-                            {unpinned.map((entry, index) => (
-                                <RepoCard
-                                    key={entry.path}
-                                    repo={entry}
-                                    index={index}
-                                />
-                            ))}
-                        </DragDropProvider>
-                    </div>
+                            <DragDropProvider
+                                onDragEnd={(event) => {
+                                    if (event.canceled) return;
+                                    const { source } = event.operation;
+                                    if (
+                                        isSortable(source) &&
+                                        source.initialIndex !== source.index
+                                    ) {
+                                        moveRepo(
+                                            String(source.id),
+                                            source.index,
+                                            pinnedRepos
+                                        );
+                                    }
+                                }}
+                            >
+                                {unpinned.map((entry, index) => (
+                                    <RepoCard
+                                        key={entry.path}
+                                        repo={entry}
+                                        index={index}
+                                    />
+                                ))}
+                            </DragDropProvider>
+                        </div>
+                    </LayoutGroup>
                 </div>
             </div>
         </ScrollArea>
@@ -120,57 +124,65 @@ function RepoCard({ repo, index }: { repo: RepositoryEntry; index: number }) {
 
     return (
         <RepoContextMenu repoPath={repo.path} side="bottom">
-            <Frame
-                ref={ref}
-                className="group grid cursor-pointer grid-rows-[1fr_auto] text-sm"
-                onClick={() => {
-                    void openRepo(repo.path);
-                }}
+            <motion.div
+                layoutId={`home:${repo.path}`}
+                className="h-full"
+                transition={REPO_TRANSITION}
             >
-                <FramePanel className="p-3">
-                    <div className="flex items-center gap-1">
-                        <Avatar className="size-6 rounded-lg">
-                            <AvatarImage
-                                src={avatar.icon?.dataUrl}
-                                alt={`${avatar.name} icon`}
+                <Frame
+                    ref={ref}
+                    className="group grid h-full cursor-pointer grid-rows-[1fr_auto] text-sm"
+                    onClick={() => {
+                        void openRepo(repo.path);
+                    }}
+                >
+                    <FramePanel className="p-3">
+                        <div className="flex items-center gap-1">
+                            <Avatar className="size-6 rounded-lg">
+                                <AvatarImage
+                                    src={avatar.icon?.dataUrl}
+                                    alt={`${avatar.name} icon`}
+                                />
+                                <AvatarFallback>
+                                    {avatar.initial}
+                                </AvatarFallback>
+                            </Avatar>
+                            <RepoLabel
+                                className="gap-0 group-hover:underline"
+                                repo={
+                                    avatar.owner
+                                        ? `${avatar.owner}/${avatar.name}`
+                                        : avatar.name
+                                }
                             />
-                            <AvatarFallback>{avatar.initial}</AvatarFallback>
-                        </Avatar>
-                        <RepoLabel
-                            className="gap-0 group-hover:underline"
-                            repo={
-                                avatar.owner
-                                    ? `${avatar.owner}/${avatar.name}`
-                                    : avatar.name
-                            }
-                        />
-                    </div>
-                    {description && (
-                        <p className="line-clamp-2 pt-0.5">{description}</p>
+                        </div>
+                        {description && (
+                            <p className="line-clamp-2 pt-0.5">{description}</p>
+                        )}
+                    </FramePanel>
+                    {(stars !== undefined ||
+                        forks !== undefined ||
+                        languages.length > 0) && (
+                        <FrameFooter className="flex items-center gap-1.5 px-2 py-1 font-mono [&_svg:not([class*='size-'])]:size-4">
+                            {stars !== undefined && (
+                                <span className="flex items-center gap-0.5">
+                                    <Star />
+                                    {stars}
+                                </span>
+                            )}
+                            {forks !== undefined && (
+                                <span className="flex items-center gap-0.5">
+                                    <GitFork />
+                                    {forks}
+                                </span>
+                            )}
+                            {languages.length > 0 && (
+                                <LanguageBar items={languages} />
+                            )}
+                        </FrameFooter>
                     )}
-                </FramePanel>
-                {(stars !== undefined ||
-                    forks !== undefined ||
-                    languages.length > 0) && (
-                    <FrameFooter className="flex items-center gap-1.5 px-2 py-1 font-mono [&_svg:not([class*='size-'])]:size-4">
-                        {stars !== undefined && (
-                            <span className="flex items-center gap-0.5">
-                                <Star />
-                                {stars}
-                            </span>
-                        )}
-                        {forks !== undefined && (
-                            <span className="flex items-center gap-0.5">
-                                <GitFork />
-                                {forks}
-                            </span>
-                        )}
-                        {languages.length > 0 && (
-                            <LanguageBar items={languages} />
-                        )}
-                    </FrameFooter>
-                )}
-            </Frame>
+                </Frame>
+            </motion.div>
         </RepoContextMenu>
     );
 }
