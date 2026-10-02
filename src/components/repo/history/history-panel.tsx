@@ -294,21 +294,13 @@ function HistoryRow({
                         </div>
                         <div className="flex items-center gap-0.5 font-mono">
                             {unpushed && (
-                                <Tooltip>
-                                    <TooltipTrigger
-                                        delay={100}
-                                        render={
-                                            <span
-                                                aria-label="Not pushed"
-                                                className="mr-0.5 size-1.5 shrink-0 rounded-full bg-muted-foreground"
-                                            />
-                                        }
-                                    />
-                                    <TooltipContent>
-                                        Not pushed to upstream
-                                    </TooltipContent>
+                                <>
+                                  <span
+                                      aria-label="Not pushed"
+                                      className="mr-0.5 size-1.5 shrink-0 rounded-full bg-warning"
+                                  />
                                     <span>/</span>
-                                </Tooltip>
+                                </>
                             )}
                             {commit.tags.length > 0 && (
                                 <Tooltip>
