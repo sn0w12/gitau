@@ -30,7 +30,7 @@ import {
     useCommitHooks,
 } from "@/hooks/repositories/use-commit-hooks";
 import type { GitHook } from "@/lib/backend/protocol";
-import { cn } from "@/lib/utils";
+import { cn, formatDuration } from "@/lib/utils";
 
 import { ScrollArea } from "../../ui/scroll-area";
 import {
@@ -256,8 +256,8 @@ function HookRow({
                         </span>
                     )}
                     {state?.phase === "done" && (
-                        <span className="ml-auto shrink-0 font-mono text-muted-foreground tabular-nums">
-                            {state.result.durationMs} ms
+                        <span className="ml-auto shrink-0 pr-0.5 font-mono text-muted-foreground tabular-nums">
+                            {formatDuration(state.result.durationMs)}
                         </span>
                     )}
                 </CollapsibleTrigger>

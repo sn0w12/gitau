@@ -80,6 +80,23 @@ export function formatRelativeDate(dateString: string | number): string {
     }
 }
 
+export function formatDuration(ms: number): string {
+    const seconds = ms / 1_000;
+    if (seconds < 1) return `${Math.round(ms)}ms`;
+    if (seconds < 10) {
+        const tenths = Math.round(seconds * 10) / 10;
+        return `${Number.isInteger(tenths) ? tenths : tenths.toFixed(1)} s`;
+    }
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    const total = Math.round(seconds);
+    const minutes = Math.floor(total / 60);
+    const rest = total % 60;
+    if (minutes < 60) {
+        return rest === 0 ? `${minutes}m` : `${minutes}m ${rest}s`;
+    }
+    return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
 type TextColor = "bright" | "dark";
 
 /**
