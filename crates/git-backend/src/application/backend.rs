@@ -6,6 +6,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::api::changes::{DiscardRequest, StageRequest, StatusOptions};
 use crate::api::github::{
@@ -21,7 +22,7 @@ use crate::api::highlight::HighlightedSnippet;
 use crate::api::history::{
     BlameQuery, CommitDetailQuery, FileAtRevisionQuery, HistoryChartQuery, HistoryPageQuery,
 };
-use crate::api::hooks::{HookContent, HookInfo, HookRunResult};
+use crate::api::hooks::{HookContent, HookInfo, HookOutputChunk, HookRunResult};
 use crate::api::lfs::LfsStatus;
 use crate::api::mutations::{
     AmendRequest, BranchCreateRequest, CheckoutRequest, CommitExecution, CommitRequest,
@@ -954,18 +955,27 @@ impl Backend {
             .await
     }
 
-    /// Executes one commit hook with captured output. Not routed through
-    /// `run_write`: hooks mutate outside our index/generation model, so no
-    /// generation bump is published and the frontend refreshes status on
-    /// completion itself.
-    pub async fn run_commit_hook(&self, id: RepoId, hook: String) -> Result<HookRunResult> {
+    /// Executes one commit hook, sending each output line down `output` as
+    /// the script writes it. Not routed through `run_write`: hooks mutate
+    /// outside our index/generation model, so no generation bump is published
+    /// and the frontend refreshes status on completion itself.
+    pub async fn run_commit_hook_streamed(
+        &self,
+        id: RepoId,
+        hook: String,
+        output: UnboundedSender<HookOutputChunk>,
+    ) -> Result<HookRunResult> {
         let entry = self.registry.get(id)?;
         let path = entry.canonical_path.clone();
         self.scheduler
             .run(&CancellationToken::new(), move || {
                 let repo = git2::Repository::discover(&path)
                     .map_err(|e| crate::streaming::pipeline::map_open_error(&path, e))?;
-                git2_hooks::run_commit_hook(&repo, &hook)
+                git2_hooks::run_commit_hook_streamed(&repo, &hook, move |chunk| {
+                    // A closed receiver means the UI is gone; the hook still
+                    // runs to completion, it just has nowhere left to report.
+                    let _ = output.send(chunk);
+                })
             })
             .await
     }

@@ -4,7 +4,6 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use super::ansi;
 use super::device_flow::{DeviceCodeResponse, TokenPoll, parse_device_code, parse_token_poll};
 use super::{
     AccountProfile, GitHubError, GithubActionStep, GithubCheckAnnotation, GithubCheckRun,
@@ -17,6 +16,7 @@ use super::{
     SearchIssuePage, SearchPullRequestPage, ThreadStateReason, UpdateIssueBody,
     UpdatePullRequestBody,
 };
+use crate::ansi;
 
 /// Maps GitHub's `state_reason` string. The REST API spells one value with a
 /// space (`not planned`) and the enum documentation with an underscore, so

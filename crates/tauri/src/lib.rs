@@ -221,7 +221,7 @@ pub fn run() {
             commands::changes::git_commit,
             commands::changes::git_amend_commit,
             commands::hooks::git_list_commit_hooks,
-            commands::hooks::git_run_commit_hook,
+            commands::hooks::git_run_commit_hook_streamed,
             commands::hooks::git_read_commit_hook,
             commands::hooks::git_write_commit_hook,
             commands::mutations::git_create_branch,

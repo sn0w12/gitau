@@ -3,7 +3,12 @@ import { useCallback, useState } from "react";
 
 import { useAppServices } from "@/contexts/services-context";
 import { invalidateRepository } from "@/lib/backend/mutations/invalidation";
-import type { GitHook, HookRunResult } from "@/lib/backend/protocol";
+import type {
+    GitHook,
+    HookOutputLine,
+    HookRunResult,
+    SyntaxStyle,
+} from "@/lib/backend/protocol";
 import { hooksQuery } from "@/lib/backend/queries/repository-queries";
 
 /** Placeholder ids never reach the backend; pages mount before repo
@@ -24,17 +29,37 @@ export function useCommitHooks(repoId: number | undefined) {
     });
 }
 
-/** One settled (or in-flight) manual run per hook name. */
+/** Output of a run, live or settled, in the shape the rows render. */
+export interface HookOutput {
+    lines: HookOutputLine[];
+    styles: SyntaxStyle[];
+}
+
+const NO_OUTPUT: HookOutput = { lines: [], styles: [] };
+
+/** One settled (or in-flight) manual run per hook name. A run in flight
+ * carries the lines it has streamed so far. */
 export type HookRunState =
-    | { phase: "running" }
+    | { phase: "running"; output: HookOutput }
     | { phase: "done"; result: HookRunResult }
     | { phase: "failed"; message: string };
 
+/** What a run has to show: a live run its streamed lines, a settled one the
+ * result the backend parsed the same way. */
+export function outputOf(state: HookRunState | undefined): HookOutput {
+    if (state == null) return NO_OUTPUT;
+    return state.phase === "running"
+        ? state.output
+        : state.phase === "done"
+          ? { lines: state.result.lines, styles: state.result.styles }
+          : NO_OUTPUT;
+}
+
 /**
  * Manual hook execution: every row runs independently so one slow
- * formatter never blocks checking another. Settled runs refresh status,
- * since linters and formatters may rewrite worktree contents outside the
- * backend's write path.
+ * formatter never blocks checking another. Output streams in line by line
+ * while the hook runs, and settles runs refresh status, since linters and
+ * formatters may rewrite worktree contents outside the backend's write path.
  */
 export function useCommitHookRunner(repoId: number) {
     const { backend, queryClient } = useAppServices();
@@ -46,8 +71,41 @@ export function useCommitHookRunner(repoId: number) {
 
     const run = useCallback(
         async (hook: string) => {
-            setRuns((prev) => ({ ...prev, [hook]: { phase: "running" } }));
-            const outcome = await backend.hooks.run(repoId, hook);
+            setRuns((prev) => ({
+                ...prev,
+                [hook]: { phase: "running", output: NO_OUTPUT },
+            }));
+            const outcome = await backend.hooks.runStreamed(
+                repoId,
+                hook,
+                (chunk) => {
+                    setRuns((prev) => {
+                        const current = prev[hook];
+                        // A line that lands after the run settled belongs to a
+                        // run already reported, so it is dropped.
+                        if (current?.phase !== "running") return prev;
+                        return {
+                            ...prev,
+                            [hook]: {
+                                phase: "running",
+                                output: {
+                                    lines: [
+                                        ...current.output.lines,
+                                        {
+                                            text: chunk.text,
+                                            spans: chunk.spans,
+                                        },
+                                    ],
+                                    styles: [
+                                        ...current.output.styles,
+                                        ...(chunk.styles ?? []),
+                                    ],
+                                },
+                            },
+                        };
+                    });
+                }
+            );
             if (!outcome.ok) {
                 setRuns((prev) => ({
                     ...prev,

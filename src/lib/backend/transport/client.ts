@@ -42,6 +42,7 @@ import type {
     HistoryPage,
     HistoryPageQuery,
     HookContent,
+    HookOutputChunk,
     HookRunResult,
     GithubWorkflowRun,
     LicenseTemplateInfo,
@@ -157,10 +158,25 @@ function createRawBackendClient() {
                 invokeCommand<GitHook[]>("git_list_commit_hooks", {
                     args: { repoId },
                 }),
-            run: (repoId: number, hook: string) =>
-                invokeCommand<HookRunResult>("git_run_commit_hook", {
-                    args: { repoId, hook },
-                }),
+            /**
+             * Runs one hook, handing `onLine` each output line as the process
+             * writes it. Resolves once every line has been delivered, with a
+             * result whose `lines` repeat the stream.
+             */
+            runStreamed: (
+                repoId: number,
+                hook: string,
+                onLine: (chunk: HookOutputChunk) => void
+            ) => {
+                const channel = new Channel<HookOutputChunk>();
+                channel.onmessage = onLine;
+                return invokeCommand<HookRunResult>(
+                    "git_run_commit_hook_streamed",
+                    {
+                        args: { repoId, hook, onEvent: channel },
+                    }
+                );
+            },
             read: (repoId: number, hook: string) =>
                 invokeCommand<HookContent>("git_read_commit_hook", {
                     args: { repoId, hook },

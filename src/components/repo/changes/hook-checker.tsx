@@ -1,8 +1,20 @@
-import { Check, ListChecks, Pencil, Play, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Check, ListChecks, Pencil, Play, SkipForward, X } from "lucide-react";
+import {
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+    type ComponentType,
+} from "react";
 
-import { Badge } from "@/components/ui/badge";
+import { HighlightedLine } from "@/components/diff/highlight-line";
 import { Button } from "@/components/ui/button";
+import {
+    Collapsible,
+    CollapsiblePanel,
+    CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
     Popover,
     PopoverContent,
@@ -11,6 +23,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import {
+    type HookOutput,
+    type HookRunState,
+    outputOf,
     useCommitHookRunner,
     useCommitHooks,
 } from "@/hooks/repositories/use-commit-hooks";
@@ -18,30 +33,41 @@ import type { GitHook, HookRunResult } from "@/lib/backend/protocol";
 import { cn } from "@/lib/utils";
 
 import { ScrollArea } from "../../ui/scroll-area";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip";
+import {
+    TooltipCreateHandle,
+    TooltipPayloadHost,
+    TooltipProvider,
+    TooltipTrigger,
+    TooltipContent,
+    Tooltip,
+} from "../../ui/tooltip";
 import { HookEditorDialog } from "./hook-editor-dialog";
 
-type RowState =
-    | { phase: "running" }
-    | { phase: "done"; result: HookRunResult }
-    | { phase: "failed"; message: string };
-
-interface ManualEntry {
+interface LogEntry {
     hook: string;
     result: HookRunResult;
-}
-
-interface LogEntry extends ManualEntry {
     source: "manual" | "commit";
 }
 
 const TRIGGER_CLASS = "relative text-muted-foreground hover:text-foreground";
 
+/** How far from the bottom the viewport may sit and still follow along. */
+const TAIL_SLACK_PX = 8;
+
+const handle = TooltipCreateHandle<ComponentType>();
+const runAllPayload = () => {
+    return <span>Run All</span>;
+};
+const editPayload = () => {
+    return <span>Edit Hooks</span>;
+};
+
 /**
  * Pre-flight hook checker for the commit form: lists discovered
- * commit-lifecycle scripts, runs them on demand, shows captured output
- * with exit status per hook, and mirrors hook results from real commits
- * (`naturalRuns`). A manual rerun of the same hook supersedes its
+ * commit-lifecycle scripts and runs them on demand. Each hook carries its
+ * own collapsible output, streamed line by line while it runs with the
+ * colours the hook wrote, and results from real commits (`naturalRuns`)
+ * show the same way. A manual rerun of the same hook supersedes its
  * committed-run entry.
  */
 export function HookChecker({
@@ -53,7 +79,7 @@ export function HookChecker({
 }) {
     const hooks = useCommitHooks(repoId);
     const { runs, log, busy, run, runAll } = useCommitHookRunner(repoId);
-    const [activeHook, setActiveHook] = useState<string | null>(null);
+    const [opened, setOpened] = useState<Record<string, boolean>>({});
     const [editorOpen, setEditorOpen] = useState(false);
 
     const entries = useMemo<LogEntry[]>(() => {
@@ -65,14 +91,14 @@ export function HookChecker({
                 source: "commit",
             });
         }
-        for (const entry of log as ManualEntry[]) {
+        for (const entry of log) {
             merged.set(entry.hook, { ...entry, source: "manual" });
         }
         return [...merged.values()];
     }, [log, naturalRuns]);
 
-    const states = useMemo<Record<string, RowState>>(() => {
-        const merged: Record<string, RowState> = { ...runs };
+    const states = useMemo<Record<string, HookRunState>>(() => {
+        const merged: Record<string, HookRunState> = { ...runs };
         for (const entry of entries) {
             if (!(entry.hook in merged)) {
                 merged[entry.hook] = { phase: "done", result: entry.result };
@@ -83,10 +109,6 @@ export function HookChecker({
 
     const discovered = hooks.data ?? [];
     const failed = entries.some((entry) => !entry.result.success);
-    const active =
-        activeHook != null
-            ? (entries.find((entry) => entry.hook === activeHook) ?? null)
-            : (entries.at(-1) ?? null);
 
     return (
         <Popover>
@@ -118,29 +140,47 @@ export function HookChecker({
             <PopoverContent
                 align="center"
                 side="top"
-                className="w-120 overflow-hidden"
+                sideOffset={6}
+                className="w-100 overflow-hidden"
             >
-                <div className="flex items-center justify-between px-1 pt-1">
+                <div className="flex items-center justify-between pt-1 pr-0.5 pl-1">
                     <h2 className="text-sm font-semibold">Commit hooks</h2>
                     <div className="flex items-center gap-0.5">
-                        {discovered.length > 0 && (
-                            <Button
-                                size="xs"
-                                variant="ghost"
-                                disabled={busy}
-                                onClick={() => void runAll(discovered)}
-                            >
-                                Run all
-                            </Button>
-                        )}
-                        <Button
-                            size="icon-xs"
-                            variant="ghost"
-                            aria-label="Edit commit hooks"
-                            onClick={() => setEditorOpen(true)}
-                        >
-                            <Pencil />
-                        </Button>
+                        <TooltipProvider>
+                            {discovered.length > 0 && (
+                                <TooltipTrigger
+                                    handle={handle}
+                                    payload={runAllPayload}
+                                    render={
+                                        <Button
+                                            size="icon-2xs"
+                                            variant="ghost"
+                                            disabled={busy}
+                                            onClick={() =>
+                                                void runAll(discovered)
+                                            }
+                                        >
+                                            <SkipForward />
+                                        </Button>
+                                    }
+                                />
+                            )}
+                            <TooltipTrigger
+                                handle={handle}
+                                payload={editPayload}
+                                render={
+                                    <Button
+                                        size="icon-2xs"
+                                        variant="ghost"
+                                        aria-label="Edit commit hooks"
+                                        onClick={() => setEditorOpen(true)}
+                                    >
+                                        <Pencil />
+                                    </Button>
+                                }
+                            />
+                            <TooltipPayloadHost handle={handle} />
+                        </TooltipProvider>
                     </div>
                 </div>
                 <div>
@@ -164,48 +204,22 @@ export function HookChecker({
                                     key={hook.name}
                                     hook={hook}
                                     state={states[hook.name]}
-                                    onSelect={() => setActiveHook(hook.name)}
-                                    onRun={() => {
-                                        setActiveHook(hook.name);
-                                        void run(hook.name);
-                                    }}
+                                    open={
+                                        opened[hook.name] ??
+                                        opensByDefault(states[hook.name])
+                                    }
+                                    onOpenChange={(next) =>
+                                        setOpened((prev) => ({
+                                            ...prev,
+                                            [hook.name]: next,
+                                        }))
+                                    }
+                                    onRun={() => void run(hook.name)}
                                 />
                             ))}
                         </ul>
                     )}
                 </div>
-                {active && (
-                    <div className="mt-auto border-t pt-1.5">
-                        <div className="flex items-center gap-1 px-1 pb-1">
-                            <Badge
-                                variant={
-                                    active.result.success ? "success" : "error"
-                                }
-                                size="sm"
-                                className="font-mono"
-                            >
-                                {active.result.success
-                                    ? "passed"
-                                    : exitLabel(active.result.exitCode)}
-                            </Badge>
-                            <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
-                                {active.source === "commit" && "committed · "}
-                                {active.hook} · {active.result.durationMs} ms
-                            </span>
-                        </div>
-                        <ScrollArea className="rounded-md bg-muted/40 [&_[data-slot=scroll-area-viewport]]:max-h-32">
-                            <pre
-                                data-testid="hook-checker-output"
-                                className="p-1.5 font-mono text-xs leading-4 whitespace-pre-wrap"
-                            >
-                                {combinedOutput(
-                                    active.result.stdout,
-                                    active.result.stderr
-                                ) || "(no output)"}
-                            </pre>
-                        </ScrollArea>
-                    </div>
-                )}
             </PopoverContent>
             <HookEditorDialog
                 repoId={repoId}
@@ -217,54 +231,166 @@ export function HookChecker({
     );
 }
 
+/** A hook shows its output while it runs and whenever it did not pass,
+ * until the reader opens or closes it themselves. */
+function opensByDefault(state: HookRunState | undefined): boolean {
+    if (state?.phase === "running") return true;
+    if (state?.phase === "failed") return true;
+    return state?.phase === "done" && !state.result.success;
+}
+
 function HookRow({
     hook,
     state,
-    onSelect,
+    open,
+    onOpenChange,
     onRun,
 }: {
     hook: GitHook;
-    state: RowState | undefined;
-    onSelect: () => void;
+    state: HookRunState | undefined;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
     onRun: () => void;
 }) {
     return (
-        <li className="flex items-center rounded-md pr-0.5 pl-1 hover:bg-accent">
-            <button
-                type="button"
-                className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 py-1 text-left text-xs"
-                onClick={onSelect}
-            >
-                <StatusGlyph state={state} />
-                <span className="truncate font-mono">{hook.name}</span>
-                {!hook.executable && (
-                    <span className="shrink-0 text-muted-foreground">
-                        not executable
-                    </span>
-                )}
-                {state?.phase === "done" && (
-                    <span className="ml-auto shrink-0 font-mono text-muted-foreground tabular-nums">
-                        {state.result.durationMs} ms
-                    </span>
-                )}
-            </button>
-            <Button
-                size="icon-2xs"
-                variant="ghost"
-                aria-label={`Run ${hook.name}`}
-                disabled={state?.phase === "running"}
-                onClick={(event) => {
-                    event.stopPropagation();
-                    onRun();
-                }}
-            >
-                <Play />
-            </Button>
-        </li>
+        <Collapsible render={<li />} open={open} onOpenChange={onOpenChange}>
+            <div className="flex items-center rounded-md pr-0.5 pl-1 hover:bg-accent">
+                <CollapsibleTrigger className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 py-1 text-left text-xs">
+                    <StatusGlyph state={state} />
+                    <span className="truncate font-mono">{hook.name}</span>
+                    {!hook.executable && (
+                        <span className="shrink-0 text-muted-foreground">
+                            not executable
+                        </span>
+                    )}
+                    {state?.phase === "done" && (
+                        <span className="ml-auto shrink-0 font-mono text-muted-foreground tabular-nums">
+                            {state.result.durationMs} ms
+                        </span>
+                    )}
+                </CollapsibleTrigger>
+                <Button
+                    size="icon-2xs"
+                    variant="ghost"
+                    aria-label={`Run ${hook.name}`}
+                    disabled={state?.phase === "running"}
+                    onClick={onRun}
+                >
+                    <Play />
+                </Button>
+            </div>
+            <CollapsiblePanel>
+                <HookOutputPanel state={state} output={outputOf(state)} />
+            </CollapsiblePanel>
+        </Collapsible>
     );
 }
 
-function StatusGlyph({ state }: { state: RowState | undefined }) {
+function HookOutputPanel({
+    state,
+    output,
+}: {
+    state: HookRunState | undefined;
+    output: HookOutput;
+}) {
+    const viewportRef = useRef<HTMLDivElement | null>(null);
+    /** False once the reader has scrolled away from the tail; only their own
+     * scrolling can set it, since following the tail counts as being there. */
+    const pinnedRef = useRef(true);
+    /** Offset the viewport is known to sit at, written both when the tail is
+     * followed and when a scroll event reports a move. */
+    const offsetRef = useRef(0);
+    const mountedRef = useRef(false);
+    const wasRunningRef = useRef(false);
+    const running = state?.phase === "running";
+    const { lines, styles } = output;
+
+    useEffect(() => {
+        const viewport = viewportRef.current;
+        if (!viewport) return;
+        const onScroll = () => {
+            const offset = viewport.scrollTop;
+            if (offset === offsetRef.current) return;
+            offsetRef.current = offset;
+            // Only a position the reader moved is measured against the tail.
+            // A browser dispatches a scroll event on its own schedule, so one
+            // raised by a follow can arrive after further output grew the
+            // content past it; measuring then would read as the reader
+            // scrolling away and stop a stream nobody took over.
+            pinnedRef.current =
+                viewport.scrollHeight - offset - viewport.clientHeight <
+                TAIL_SLACK_PX;
+        };
+        viewport.addEventListener("scroll", onScroll);
+        return () => viewport.removeEventListener("scroll", onScroll);
+    }, []);
+
+    useLayoutEffect(() => {
+        const viewport = viewportRef.current;
+        if (!viewport) return;
+        const started = running && !wasRunningRef.current;
+        wasRunningRef.current = running;
+        const fresh = !mountedRef.current;
+        mountedRef.current = true;
+        // A panel opening on a finished run stays at the top, where a settled
+        // log is read from, and starts following only once the reader scrolls
+        // down. One that opens mid-run picks the stream up at the tail, and
+        // so does a run started from an already open panel.
+        if (fresh && !running) {
+            pinnedRef.current = false;
+            return;
+        }
+        if (started) {
+            pinnedRef.current = true;
+        }
+        if (!pinnedRef.current) return;
+        // Reading the offset back matters: the browser clamps the write to
+        // the scrollable range, and that clamped value is what the scroll
+        // event reports.
+        viewport.scrollTop = viewport.scrollHeight;
+        offsetRef.current = viewport.scrollTop;
+    }, [lines.length, running]);
+
+    return (
+        <div className="mb-0.5 ml-4 rounded-md bg-muted/40">
+            <ScrollArea
+                viewportRef={viewportRef}
+                className="[&_[data-slot=scroll-area-viewport]]:max-h-32"
+            >
+                <div
+                    data-testid="hook-checker-output"
+                    className="ui-selectable code-hl p-1.5 font-mono text-xs leading-4"
+                >
+                    {lines.length > 0 ? (
+                        lines.map((line, index) => (
+                            <div key={index} className="whitespace-pre-wrap">
+                                <HighlightedLine
+                                    code={line.text}
+                                    row={
+                                        line.spans.length > 0
+                                            ? {
+                                                  kind: "context",
+                                                  content: line.text,
+                                                  spans: line.spans,
+                                              }
+                                            : undefined
+                                    }
+                                    styles={styles}
+                                />
+                            </div>
+                        ))
+                    ) : (
+                        <p className="text-muted-foreground">
+                            {running ? "running" : "(no output)"}
+                        </p>
+                    )}
+                </div>
+            </ScrollArea>
+        </div>
+    );
+}
+
+function StatusGlyph({ state }: { state: HookRunState | undefined }) {
     if (!state) {
         return null;
     }
@@ -291,12 +417,4 @@ function StatusGlyph({ state }: { state: RowState | undefined }) {
                 <X className="size-3 shrink-0 text-destructive" />
             );
     }
-}
-
-function exitLabel(exitCode: number | null): string {
-    return exitCode == null ? "no exit code" : `exit ${exitCode}`;
-}
-
-function combinedOutput(stdout: string, stderr: string): string {
-    return `${stdout}${stderr}`.trim();
 }

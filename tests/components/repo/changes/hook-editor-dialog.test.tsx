@@ -34,6 +34,8 @@ function hookResult(overrides: Partial<HookRunResult> = {}): HookRunResult {
         stdout: "",
         stderr: "",
         durationMs: 12,
+        lines: [],
+        styles: [],
         ...overrides,
     };
 }
@@ -101,7 +103,7 @@ function backendWith({
                 ok: true,
                 value: list,
             }),
-            run: async (): Promise<Result<HookRunResult>> => ({
+            runStreamed: async (): Promise<Result<HookRunResult>> => ({
                 ok: true,
                 value: hookResult(),
             }),

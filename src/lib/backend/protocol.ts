@@ -371,7 +371,7 @@ export interface GitHook {
     executable: boolean;
 }
 
-/** Outcome of one manual hook run; failure is a value, not an error. */
+/** Outcome of one hook run; failure is a value, not an error. */
 export interface HookRunResult {
     hook: string;
     exitCode: number | null;
@@ -379,6 +379,26 @@ export interface HookRunResult {
     stdout: string;
     stderr: string;
     durationMs: number;
+    /** Output with the escapes taken out and the colours resolved, the way
+     * a CI log is parsed. */
+    lines: HookOutputLine[];
+    /** Style table `lines[].spans` index. */
+    styles: SyntaxStyle[];
+}
+
+/** One line of hook output: `spans` are `[start, len, styleId]` triples into
+ * the run's style table. */
+export interface HookOutputLine {
+    text: string;
+    spans: number[];
+}
+
+/** One line of a running hook, delivered as the process writes it. */
+export interface HookOutputChunk extends HookOutputLine {
+    /** Style-table delta; `spans` ids index the table these append to.
+     * Omitted entirely when the line interned no new style, which is every
+     * plain line. */
+    styles?: SyntaxStyle[];
 }
 
 /** A commit hook script as editable text; hooks missing on disk report

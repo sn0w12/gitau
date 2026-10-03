@@ -3,10 +3,13 @@
 
 mod common;
 
+use std::sync::{Arc, Mutex};
+
 use common::TestRepo;
 use git_backend::api::mutations::CommitRequest;
 use git_backend::engines::git2::hooks::{
-    list_commit_hooks, read_commit_hook, run_commit_hook, write_commit_hook,
+    list_commit_hooks, read_commit_hook, run_commit_hook, run_commit_hook_streamed,
+    write_commit_hook,
 };
 use git_backend::engines::git2::mutations;
 
@@ -328,4 +331,77 @@ fn successful_commit_collects_pipeline_results_in_order() {
     let names: Vec<&str> = runs.iter().map(|run| run.hook.as_str()).collect();
     assert_eq!(names, ["pre-commit", "post-commit"]);
     assert!(runs.iter().all(|run| run.success));
+}
+
+#[test]
+fn a_streamed_run_reports_each_line_with_its_colour_resolved() {
+    if !posix_shell_available() {
+        eprintln!("skipping: no POSIX shell on this host");
+        return;
+    }
+    let repo = TestRepo::init("hooks-stream");
+    install_script(
+        &repo,
+        "pre-commit",
+        &shell_script("printf '\\033[32mformatted 2 files\\033[0m\\nplain line\\n'"),
+    );
+
+    let sink = Arc::new(Mutex::new(Vec::new()));
+    let received = Arc::clone(&sink);
+    let result = run_commit_hook_streamed(&repo.repo, "pre-commit", move |chunk| {
+        received.lock().unwrap().push(chunk);
+    })
+    .unwrap();
+
+    let streamed = sink.lock().unwrap();
+    let texts: Vec<&str> = streamed
+        .iter()
+        .map(|chunk| chunk.line.text.as_str())
+        .collect();
+    assert_eq!(texts, ["formatted 2 files", "plain line"]);
+    // The escape is gone from the text and became a span.
+    assert_eq!(streamed[0].line.spans, vec![0, 17, 1]);
+    assert!(streamed[1].line.spans.is_empty());
+    let interned: usize = streamed.iter().map(|chunk| chunk.styles.len()).sum();
+    assert_eq!(interned, 1, "the green is interned once for the run");
+
+    // The settled result repeats the stream, parsed the same way, so a
+    // consumer that ignores the live lines loses nothing.
+    let settled: Vec<&str> = result.lines.iter().map(|line| line.text.as_str()).collect();
+    assert_eq!(settled, texts);
+    assert_eq!(result.styles.len(), 1);
+    assert!(result.stdout.contains("formatted 2 files"));
+}
+
+#[test]
+fn both_pipes_of_a_running_hook_reach_the_stream() {
+    if !posix_shell_available() {
+        eprintln!("skipping: no POSIX shell on this host");
+        return;
+    }
+    let repo = TestRepo::init("hooks-stream-pipes");
+    install_script(
+        &repo,
+        "pre-commit",
+        &shell_script("echo first\necho reported 1>&2\necho second\n"),
+    );
+
+    let sink = Arc::new(Mutex::new(Vec::new()));
+    let received = Arc::clone(&sink);
+    let result = run_commit_hook_streamed(&repo.repo, "pre-commit", move |chunk| {
+        received.lock().unwrap().push(chunk);
+    })
+    .unwrap();
+
+    let mut texts: Vec<String> = sink
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|chunk| chunk.line.text.clone())
+        .collect();
+    texts.sort();
+    assert_eq!(texts, ["first", "reported", "second"]);
+    // Each pipe keeps its own raw text in the result.
+    assert_eq!(result.stdout, "first\nsecond\n");
+    assert_eq!(result.stderr, "reported\n");
 }

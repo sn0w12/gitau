@@ -7,7 +7,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { HookChecker } from "@/components/repo/changes/hook-checker";
 import { AppServicesContext } from "@/contexts/services-context";
-import type { GitHook, HookRunResult } from "@/lib/backend/protocol";
+import type {
+    GitHook,
+    HookOutputChunk,
+    HookRunResult,
+    SyntaxStyle,
+} from "@/lib/backend/protocol";
 import type { BackendClient } from "@/lib/backend/transport/client";
 import type { Result } from "@/lib/backend/transport/result";
 
@@ -21,6 +26,17 @@ const PRE_COMMIT: GitHook = {
     executable: true,
 };
 
+const POST_COMMIT: GitHook = {
+    name: "post-commit",
+    path: "/repo/.git/hooks/post-commit",
+    executable: true,
+};
+
+const RED: SyntaxStyle = {
+    light: "#cf222e",
+    dark: "#ff7b72",
+};
+
 function hookResult(overrides: Partial<HookRunResult> = {}): HookRunResult {
     return {
         hook: "pre-commit",
@@ -29,12 +45,51 @@ function hookResult(overrides: Partial<HookRunResult> = {}): HookRunResult {
         stdout: "",
         stderr: "",
         durationMs: 12,
+        lines: [],
+        styles: [],
         ...overrides,
     };
 }
 
+/** A run as the backend reports it: the lines it streamed, then the same
+ * lines parsed again in the result it resolves with. A line that interned no
+ * style carries no `styles` key at all, which is what the wire does. */
+function runOf(
+    lines: { text: string; spans: number[] }[],
+    overrides: Partial<HookRunResult> = {}
+): {
+    chunks: HookOutputChunk[];
+    outcome: Result<HookRunResult>;
+} {
+    const interned = lines.some((line) => line.spans.length > 0) ? [RED] : [];
+    return {
+        chunks: lines.map((line) =>
+            line.spans.length > 0 ? { ...line, styles: interned } : { ...line }
+        ),
+        outcome: {
+            ok: true,
+            value: hookResult({
+                lines,
+                styles: interned,
+                ...overrides,
+            }),
+        },
+    };
+}
+
+interface RunPlan {
+    chunks: HookOutputChunk[];
+    outcome: Result<HookRunResult>;
+}
+
 function backendWith(hooksList: GitHook[]) {
-    let nextRun: Result<HookRunResult> = { ok: true, value: hookResult() };
+    let plan: RunPlan = {
+        chunks: [],
+        outcome: { ok: true, value: hookResult() },
+    };
+    let gate: Promise<void> = Promise.resolve();
+    let open = (): void => {};
+    let deliver: (chunk: HookOutputChunk) => void = () => {};
     const runCalls: string[] = [];
 
     const backend = {
@@ -43,12 +98,16 @@ function backendWith(hooksList: GitHook[]) {
                 ok: true,
                 value: hooksList,
             }),
-            run: async (
+            runStreamed: async (
                 _repoId: number,
-                hook: string
+                hook: string,
+                onLine: (chunk: HookOutputChunk) => void
             ): Promise<Result<HookRunResult>> => {
                 runCalls.push(hook);
-                return nextRun;
+                deliver = onLine;
+                for (const chunk of plan.chunks) onLine(chunk);
+                await gate;
+                return plan.outcome;
             },
         },
     };
@@ -58,8 +117,19 @@ function backendWith(hooksList: GitHook[]) {
         queryClient: new QueryClient({
             defaultOptions: { queries: { retry: false } },
         }),
-        setNextRun(outcome: Result<HookRunResult>) {
-            nextRun = outcome;
+        setPlan(next: RunPlan) {
+            plan = next;
+        },
+        /** Keeps the run in flight so the streamed state can be inspected. */
+        holdRun(): () => void {
+            gate = new Promise<void>((resolve) => {
+                open = resolve;
+            });
+            return () => open();
+        },
+        /** Hands one more line to the running hook's channel. */
+        emit(chunk: HookOutputChunk): void {
+            deliver(chunk);
         },
         runCalls: () => runCalls,
     };
@@ -121,6 +191,75 @@ function openChecker(view: ReturnType<typeof renderWith>) {
     );
 }
 
+function runButton(hook: string): HTMLButtonElement {
+    return document.querySelector<HTMLButtonElement>(
+        `[aria-label="Run ${hook}"]`
+    )!;
+}
+
+function rowTrigger(hook: string): HTMLButtonElement {
+    return [...document.querySelectorAll("li button")].find(
+        (element) =>
+            element.textContent!.includes(hook) &&
+            !element.getAttribute("aria-label")?.startsWith("Run")
+    ) as HTMLButtonElement;
+}
+
+function output(): Element | null {
+    return document.querySelector('[data-testid="hook-checker-output"]');
+}
+
+/** jsdom reports every scroll metric as zero, so the viewport's geometry is
+ * stubbed here to drive the tail-following. Scroll positions clamp like a real
+ * viewport's, and a scroll event fires on every move. `lateScrollEvents` queues
+ * those events to a later task, the way a browser dispatches them on its own
+ * frame rather than the one that moved the viewport. */
+function stubViewport(
+    content: number,
+    { lateScrollEvents = false }: { lateScrollEvents?: boolean } = {}
+) {
+    const viewport = document.querySelector<HTMLElement>(
+        '[data-slot="scroll-area-viewport"]'
+    )!;
+    const client = 40;
+    let height = content;
+    let scrollTop = 0;
+    const clamp = (value: number) =>
+        Math.max(0, Math.min(value, Math.max(0, height - client)));
+    const notify = () =>
+        lateScrollEvents
+            ? setTimeout(() => viewport.dispatchEvent(new Event("scroll")), 0)
+            : viewport.dispatchEvent(new Event("scroll"));
+    Object.defineProperty(viewport, "clientHeight", {
+        get: () => client,
+        configurable: true,
+    });
+    Object.defineProperty(viewport, "scrollHeight", {
+        get: () => height,
+        configurable: true,
+    });
+    Object.defineProperty(viewport, "scrollTop", {
+        get: () => scrollTop,
+        set: (value: number) => {
+            scrollTop = clamp(value);
+            notify();
+        },
+        configurable: true,
+    });
+    return {
+        grow(to: number) {
+            height = to;
+        },
+        scrollTo(value: number) {
+            scrollTop = clamp(value);
+            notify();
+        },
+        /** The furthest down the viewport goes, which is the tail. */
+        tail: () => Math.max(0, height - client),
+        position: () => scrollTop,
+    };
+}
+
 describe("HookChecker", () => {
     beforeEach(() => {
         document.body.innerHTML = "";
@@ -141,45 +280,36 @@ describe("HookChecker", () => {
         view.unmount();
     });
 
-    it("lists discovered hooks and shows captured output after a run", async () => {
+    it("lists discovered hooks and streams output into the row", async () => {
         const services = backendWith([PRE_COMMIT]);
-        services.setNextRun({
-            ok: true,
-            value: hookResult({ stdout: "formatted 2 files\n" }),
-        });
+        const plan = runOf([
+            { text: "Checking formatting", spans: [] },
+            { text: "formatted 2 files", spans: [] },
+        ]);
+        services.setPlan(plan);
+        const release = services.holdRun();
+
         const view = renderWith(services, <HookChecker repoId={7} />);
         await flush();
         await openChecker(view);
 
-        const listed = await waitFor(() =>
-            [...document.querySelectorAll("li button")].some((el) =>
-                el.textContent!.includes("pre-commit")
-            )
-        );
+        const listed = await waitFor(() => runButton("pre-commit") != null);
         expect(listed).toBe(true);
+        await click(runButton("pre-commit"));
 
-        const play = await waitFor(
-            () =>
-                document.querySelector<HTMLButtonElement>(
-                    '[aria-label="Run pre-commit"]'
-                ) != null
-        );
-        expect(play).toBe(true);
-        await click(
-            document.querySelector<HTMLButtonElement>(
-                '[aria-label="Run pre-commit"]'
-            )!
-        );
-
-        const shown = await waitFor(
-            () =>
-                document
-                    .querySelector('[data-testid="hook-checker-output"]')
-                    ?.textContent!.includes("formatted 2 files") === true
-        );
-        expect(shown).toBe(true);
+        // Both lines are on screen while the hook is still running.
+        expect(output()?.textContent).toContain("Checking formatting");
+        expect(output()?.textContent).toContain("formatted 2 files");
         expect(services.runCalls()).toEqual(["pre-commit"]);
-        // Successful run lights the success dot, not the failure one.
+
+        await act(async () => {
+            release();
+            await new Promise((resolve) => setTimeout(resolve, 20));
+        });
+
+        // A run that passes folds its output away once it settles, the way a
+        // passing CI step does, and the dot reports the pass.
+        expect(output()).toBeNull();
         const dot = document.querySelector(
             '[data-testid="hook-checker-status-dot"]'
         );
@@ -187,40 +317,44 @@ describe("HookChecker", () => {
         view.unmount();
     });
 
-    it("marks failing runs with their exit code", async () => {
+    it("collapses and expands a row's output on demand", async () => {
         const services = backendWith([PRE_COMMIT]);
-        services.setNextRun({
-            ok: true,
-            value: hookResult({
-                success: false,
-                exitCode: 3,
-                stderr: "lint found problems",
-            }),
-        });
+        services.setPlan(runOf([{ text: "formatted 2 files", spans: [] }]));
         const view = renderWith(services, <HookChecker repoId={7} />);
         await flush();
         await openChecker(view);
-        await waitFor(
-            () =>
-                document.querySelector<HTMLButtonElement>(
-                    '[aria-label="Run pre-commit"]'
-                ) != null
-        );
+        await waitFor(() => runButton("pre-commit") != null);
 
-        await click(
-            document.querySelector<HTMLButtonElement>(
-                '[aria-label="Run pre-commit"]'
-            )!
-        );
+        // A passing run leaves its output collapsed.
+        await click(runButton("pre-commit"));
+        await flush();
+        expect(output()).toBeNull();
 
-        const shown = await waitFor(
-            () =>
-                document
-                    .querySelector('[data-testid="hook-checker-output"]')
-                    ?.textContent!.includes("lint found problems") === true
+        await click(rowTrigger("pre-commit"));
+        expect(output()?.textContent).toContain("formatted 2 files");
+
+        await click(rowTrigger("pre-commit"));
+        expect(output()).toBeNull();
+        view.unmount();
+    });
+
+    it("opens a failing row's output without being asked", async () => {
+        const services = backendWith([PRE_COMMIT]);
+        services.setPlan(
+            runOf([{ text: "lint found problems", spans: [] }], {
+                success: false,
+                exitCode: 3,
+            })
         );
-        expect(shown).toBe(true);
-        expect(document.body.textContent).toContain("exit 3");
+        const view = renderWith(services, <HookChecker repoId={7} />);
+        await flush();
+        await openChecker(view);
+        await waitFor(() => runButton("pre-commit") != null);
+
+        await click(runButton("pre-commit"));
+        await flush();
+
+        expect(output()?.textContent).toContain("lint found problems");
         const dot = document.querySelector(
             '[data-testid="hook-checker-status-dot"]'
         );
@@ -228,15 +362,137 @@ describe("HookChecker", () => {
         view.unmount();
     });
 
-    it("mirrors results from a real commit without a manual run", async () => {
-        const services = backendWith([
-            PRE_COMMIT,
-            {
-                name: "post-commit",
-                path: "/repo/.git/hooks/post-commit",
-                executable: true,
+    it("renders the colours the hook wrote", async () => {
+        const services = backendWith([PRE_COMMIT]);
+        services.setPlan(
+            runOf([
+                { text: "src/app.ts", spans: [] },
+                { text: "2 problems", spans: [0, 10, 1] },
+            ])
+        );
+        const view = renderWith(services, <HookChecker repoId={7} />);
+        await flush();
+        await openChecker(view);
+        await waitFor(() => runButton("pre-commit") != null);
+
+        await click(runButton("pre-commit"));
+        await flush();
+        await click(rowTrigger("pre-commit"));
+
+        const styled = output()!.querySelector("span.syn");
+        expect(styled?.textContent).toBe("2 problems");
+        expect(styled?.getAttribute("style")).toContain("#cf222e");
+        view.unmount();
+    });
+
+    it("follows the tail of a running hook but not a reader who scrolled back", async () => {
+        const services = backendWith([PRE_COMMIT]);
+        const release = services.holdRun();
+        const view = renderWith(services, <HookChecker repoId={7} />);
+        await flush();
+        await openChecker(view);
+        await waitFor(() => runButton("pre-commit") != null);
+
+        await click(runButton("pre-commit"));
+        const viewport = stubViewport(40);
+
+        // Output grows past the viewport: the tail comes into view on its own.
+        await act(async () => {
+            viewport.grow(120);
+            services.emit({ text: "checking", spans: [] });
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        });
+        expect(viewport.position()).toBe(viewport.tail());
+
+        // Scrolled back to read the first line, the stream leaves it alone.
+        viewport.scrollTo(0);
+        await act(async () => {
+            viewport.grow(200);
+            services.emit({ text: "still checking", spans: [] });
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        });
+        expect(viewport.position()).toBe(0);
+
+        // Back at the tail, it follows again.
+        viewport.scrollTo(viewport.tail());
+        await act(async () => {
+            viewport.grow(240);
+            services.emit({ text: "formatted 2 files", spans: [] });
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        });
+        expect(viewport.position()).toBe(viewport.tail());
+
+        // Settling the run does not yank the view either.
+        viewport.scrollTo(60);
+        await act(async () => {
+            release();
+            await new Promise((resolve) => setTimeout(resolve, 20));
+        });
+        expect(viewport.position()).toBe(60);
+        view.unmount();
+    });
+
+    it("keeps following when output outruns the scroll events it raises", async () => {
+        const services = backendWith([PRE_COMMIT]);
+        services.setPlan({
+            chunks: [],
+            outcome: {
+                ok: true,
+                value: hookResult({
+                    success: false,
+                    exitCode: 3,
+                    lines: [
+                        { text: "checking", spans: [] },
+                        { text: "still checking", spans: [] },
+                        { text: "formatted 2 files", spans: [] },
+                    ],
+                }),
             },
-        ]);
+        });
+        const release = services.holdRun();
+        const view = renderWith(services, <HookChecker repoId={7} />);
+        await flush();
+        await openChecker(view);
+        await waitFor(() => runButton("pre-commit") != null);
+
+        await click(runButton("pre-commit"));
+        const viewport = stubViewport(40, { lateScrollEvents: true });
+
+        // Output still fits the panel, so there is nothing to follow yet.
+        await act(async () => {
+            viewport.grow(40);
+            services.emit({ text: "checking", spans: [] });
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        });
+        expect(viewport.position()).toBe(0);
+
+        // The next line crosses the max height and the viewport starts
+        // scrolling, then a burst of output lands before the browser gets
+        // around to dispatching the scroll event that follow raised. The
+        // tail has moved on, and the follow must not read as the reader
+        // having scrolled away from it.
+        await act(async () => {
+            viewport.grow(400);
+            services.emit({ text: "still checking", spans: [] });
+            viewport.grow(900);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            services.emit({ text: "formatted 2 files", spans: [] });
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        });
+        expect(viewport.position()).toBe(viewport.tail());
+
+        // Settling on the failed run leaves the tail where it was.
+        await act(async () => {
+            release();
+            await new Promise((resolve) => setTimeout(resolve, 20));
+        });
+        expect(output()?.textContent).toContain("formatted 2 files");
+        expect(viewport.position()).toBe(viewport.tail());
+        view.unmount();
+    });
+
+    it("mirrors results from a real commit without a manual run", async () => {
+        const services = backendWith([PRE_COMMIT, POST_COMMIT]);
         const view = renderWith(
             services,
             <HookChecker
@@ -246,7 +502,7 @@ describe("HookChecker", () => {
                     hookResult({
                         hook: "post-commit",
                         durationMs: 3,
-                        stdout: "post-ran\n",
+                        lines: [{ text: "post-ran", spans: [] }],
                     }),
                 ]}
             />
@@ -255,20 +511,13 @@ describe("HookChecker", () => {
         await openChecker(view);
 
         // Both natural runs appear as settled rows with no manual clicks.
-        const bothShown = await waitFor(() =>
-            ["pre-commit", "post-commit"].every((name) =>
-                [...document.querySelectorAll("li button")].some((el) =>
-                    el.textContent!.includes(name)
-                )
-            )
-        );
+        const bothShown = await waitFor(() => runButton("post-commit") != null);
         expect(bothShown).toBe(true);
         expect(services.runCalls()).toEqual([]);
-        // Latest entry is the default output pane selection.
-        expect(
-            document.querySelector('[data-testid="hook-checker-output"]')
-                ?.textContent
-        ).toContain("post-ran");
+        expect(output()).toBeNull();
+
+        await click(rowTrigger("post-commit"));
+        expect(output()?.textContent).toContain("post-ran");
         const dot = document.querySelector(
             '[data-testid="hook-checker-status-dot"]'
         );

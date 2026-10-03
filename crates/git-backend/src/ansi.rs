@@ -1,6 +1,6 @@
-//! SGR colour parsing for CI logs. Build tools colour their output with ANSI
-//! escapes, so a log rendered verbatim shows raw `[32m` markers and loses
-//! every distinction the runner made.
+//! SGR colour parsing for tool output. Build tools and hooks colour what they
+//! print with ANSI escapes, so output rendered verbatim shows raw `[32m`
+//! markers and loses every distinction the writer made.
 
 use std::collections::HashMap;
 
@@ -230,7 +230,18 @@ pub fn parse_command_line(line: &str, table: &mut AnsiTable) -> Option<ParsedLin
 /// no escapes anywhere keeps its brackets as text, because in a log that never
 /// colourised anything those brackets are the content.
 pub fn parse_line(line: &str, table: &mut AnsiTable, log_is_coloured: bool) -> ParsedLine {
-    let mut style = AnsiStyle::default();
+    parse_line_continued(line, &mut AnsiStyle::default(), table, log_is_coloured)
+}
+
+/// [`parse_line`] for output that arrives one line at a time, carrying the
+/// style the previous line left open. A writer that colours a block sets the
+/// colour once and leaves it open, so the line after it is still coloured.
+pub fn parse_line_continued(
+    line: &str,
+    style: &mut AnsiStyle,
+    table: &mut AnsiTable,
+    log_is_coloured: bool,
+) -> ParsedLine {
     let mut text = String::with_capacity(line.len());
     let mut spans: Vec<u32> = Vec::new();
     // Offsets are counted in UTF-16 units, not bytes, because the span
@@ -238,6 +249,11 @@ pub fn parse_line(line: &str, table: &mut AnsiTable, log_is_coloured: bool) -> P
     // character like a check mark is one unit and not three bytes.
     let mut units: usize = 0;
     let mut run = Run::default();
+    // A style left open by the previous line already covers this line's
+    // first character, so the run opens before any escape is read.
+    if !style.is_plain() {
+        run.style_id = table.id_for(*style);
+    }
 
     fn close_run(spans: &mut Vec<u32>, run: &mut Run, units: usize) {
         if let Some(id) = run.style_id {
@@ -296,15 +312,41 @@ pub fn parse_line(line: &str, table: &mut AnsiTable, log_is_coloured: bool) -> P
             continue;
         }
         close_run(&mut spans, &mut run, units);
-        apply_sgr(&params, &mut style);
+        apply_sgr(&params, style);
         if !style.is_plain() {
             run.start = units;
-            run.style_id = table.id_for(style);
+            run.style_id = table.id_for(*style);
         }
     }
     close_run(&mut spans, &mut run, units);
 
     ParsedLine { text, spans }
+}
+
+/// Incremental line parser for output that arrives as it is written. It keeps
+/// the style table and the open style across lines, so a stream parses to the
+/// same spans a whole-output parse would.
+#[derive(Default)]
+pub struct LineStream {
+    table: AnsiTable,
+    style: AnsiStyle,
+    coloured: bool,
+}
+
+impl LineStream {
+    /// Parses one line. Styles interned by this line land at the end of
+    /// [`LineStream::styles`], in the order span ids expect.
+    pub fn push(&mut self, line: &str) -> ParsedLine {
+        // A stream only knows a writer colourised once it has seen an escape,
+        // which is the same evidence the whole-output parse uses.
+        self.coloured |= line.contains('\u{1b}');
+        parse_line_continued(line, &mut self.style, &mut self.table, self.coloured)
+    }
+
+    /// Every style interned so far; span ids index this list by position.
+    pub fn styles(&self) -> &[SnippetStyle] {
+        self.table.styles()
+    }
 }
 
 /// Applies one SGR parameter list to the running style.
@@ -539,5 +581,48 @@ mod tests {
         assert_eq!(bright_lines[0].text, "bright green");
         assert_eq!(plain_lines[0].text, "green");
         assert_ne!(bright[0].dark, plain[0].dark);
+    }
+
+    #[test]
+    fn a_stream_of_self_contained_lines_matches_a_whole_output_parse() {
+        let log = "\u{1b}[32mgreen\u{1b}[0m\n\u{1b}[31mred\u{1b}[0m\nplain";
+        let (whole, whole_styles) = parse(log);
+        let mut stream = LineStream::default();
+        let streamed: Vec<ParsedLine> = log.lines().map(|line| stream.push(line)).collect();
+
+        for (streamed, whole) in streamed.iter().zip(&whole) {
+            assert_eq!(streamed.text, whole.text);
+            assert_eq!(streamed.spans, whole.spans);
+        }
+        assert_eq!(stream.styles(), whole_styles.as_slice());
+    }
+
+    #[test]
+    fn a_style_left_open_covers_the_next_line() {
+        // A writer that colours a block sets the colour once and resets it
+        // later, so the line in between is still coloured.
+        let mut stream = LineStream::default();
+        let first = stream.push("\u{1b}[31mfirst");
+        let second = stream.push("second");
+        let third = stream.push("third\u{1b}[0m plain");
+        assert_eq!(first.spans, vec![0, 5, 1]);
+        assert_eq!(second.spans, vec![0, 6, 1]);
+        assert_eq!(third.spans, vec![0, 5, 1]);
+        assert_eq!(stream.styles().len(), 1);
+    }
+
+    #[test]
+    fn a_stream_only_honours_bare_markers_once_an_escape_has_arrived() {
+        let mut stream = LineStream::default();
+        let before = stream.push("[32mliteral");
+        assert_eq!(before.text, "[32mliteral");
+        assert!(before.spans.is_empty());
+
+        let after = stream.push("\u{1b}[32mgreen\u{1b}[0m [31mliteral");
+        // Green for the escape, then the bare red marker it proves the writer
+        // emits ANSI, so the brackets go and the text keeps its words.
+        assert_eq!(after.spans, vec![0, 5, 1, 6, 7, 2]);
+        assert_eq!(after.text, "green literal");
+        assert_eq!(stream.styles().len(), 2);
     }
 }

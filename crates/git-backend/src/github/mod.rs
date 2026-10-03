@@ -14,7 +14,6 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use crate::api::remotes::{CredentialKind, CredentialRequest};
 use crate::error::{GitError, Result};
 
-mod ansi;
 pub mod api;
 pub mod device_flow;
 pub mod token_store;
