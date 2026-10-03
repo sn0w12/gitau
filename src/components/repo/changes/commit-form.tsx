@@ -10,7 +10,7 @@ import {
     InputGroupAddon,
     InputGroupInput,
 } from "@/components/ui/input-group";
-import { Textarea } from "@/components/ui/textarea";
+import { ScrollTextarea } from "@/components/ui/textarea";
 import { useCommitHookRunner } from "@/hooks/repositories/use-commit-hooks";
 import { useMergeActions } from "@/hooks/repositories/use-merge-actions";
 import {
@@ -107,7 +107,7 @@ export function CommitForm({
                     <FieldLabel className="sr-only">
                         Commit description
                     </FieldLabel>
-                    <Textarea
+                    <ScrollTextarea
                         placeholder="Description"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}

@@ -13,7 +13,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { ScrollTextarea } from "@/components/ui/textarea";
 import { useAppServices } from "@/contexts/services-context";
 import type { GitHook } from "@/lib/backend/protocol";
 import { repositoryKeys } from "@/lib/backend/queries/query-keys";
@@ -174,9 +174,12 @@ function HookEditorDialogBody({
                         {activeHook} script
                     </Label>
                     {loading ? (
-                        <Textarea rows={12} disabled />
+                        <ScrollTextarea
+                            className="h-[12lh] font-mono"
+                            disabled
+                        />
                     ) : (
-                        <Textarea
+                        <ScrollTextarea
                             id="hook-editor-content"
                             value={entry.content}
                             onChange={(event) =>
@@ -188,15 +191,11 @@ function HookEditorDialogBody({
                                     },
                                 }))
                             }
-                            rows={12}
                             spellCheck={false}
                             autoFocus
-                            className="font-mono"
+                            className="h-[12lh] font-mono"
                         />
                     )}
-                    <p className="truncate font-mono text-xs text-muted-foreground">
-                        {entry?.path}
-                    </p>
                 </div>
             </DialogPanel>
             <DialogFooter>
