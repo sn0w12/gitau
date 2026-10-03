@@ -1,13 +1,17 @@
 // @vitest-environment jsdom
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
-import { act } from "react";
-import type { ReactElement } from "react";
+import { act, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { HookChecker } from "@/components/repo/changes/hook-checker";
 import { AppServicesContext } from "@/contexts/services-context";
+import {
+    useCommitHookRunner,
+    type HookRunner,
+} from "@/hooks/repositories/use-commit-hooks";
 import type {
+    CommitHookEvent,
     GitHook,
     HookOutputChunk,
     HookRunResult,
@@ -137,7 +141,23 @@ function backendWith(hooksList: GitHook[]) {
 
 type Services = ReturnType<typeof backendWith>;
 
-function renderWith(services: Services, ui: ReactElement) {
+/** The checker over a real runner, wired the way the commit form wires it,
+ * so a test can drive either producer: the run buttons or the events a
+ * commit reports. */
+function Harness({ repoId }: { repoId: number }) {
+    const runner = useCommitHookRunner(repoId);
+    useEffect(() => {
+        capture.runner = runner;
+    }, [runner]);
+    return <HookChecker repoId={repoId} runner={runner} />;
+}
+
+/** Replaced on every render; `act` flushes the effect that writes it, so a
+ * test holds a runner bound to the state the checker renders. */
+const capture: { runner: HookRunner | null } = { runner: null };
+
+function renderChecker(services: Services, repoId = 7) {
+    capture.runner = null;
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -145,13 +165,19 @@ function renderWith(services: Services, ui: ReactElement) {
         root.render(
             <AppServicesContext.Provider value={services}>
                 <QueryClientProvider client={services.queryClient}>
-                    {ui}
+                    <Harness repoId={repoId} />
                 </QueryClientProvider>
             </AppServicesContext.Provider>
         );
     });
     return {
         container,
+        /** One event off a commit's hook channel. */
+        report(event: CommitHookEvent) {
+            act(() => {
+                capture.runner?.reportCommit(event);
+            });
+        },
         unmount() {
             act(() => root.unmount());
             container.remove();
@@ -183,7 +209,7 @@ async function waitFor(predicate: () => boolean): Promise<boolean> {
     return predicate();
 }
 
-function openChecker(view: ReturnType<typeof renderWith>) {
+function openChecker(view: ReturnType<typeof renderChecker>) {
     return click(
         view.container.querySelector<HTMLButtonElement>(
             '[aria-label="Pre-commit hooks"]'
@@ -203,6 +229,10 @@ function rowTrigger(hook: string): HTMLButtonElement {
             element.textContent!.includes(hook) &&
             !element.getAttribute("aria-label")?.startsWith("Run")
     ) as HTMLButtonElement;
+}
+
+function rowText(hook: string): string {
+    return rowTrigger(hook).closest("li")?.textContent ?? "";
 }
 
 function output(): Element | null {
@@ -267,7 +297,7 @@ describe("HookChecker", () => {
 
     it("renders an empty state when no hooks exist", async () => {
         const services = backendWith([]);
-        const view = renderWith(services, <HookChecker repoId={7} />);
+        const view = renderChecker(services);
         await flush();
         await openChecker(view);
 
@@ -289,7 +319,7 @@ describe("HookChecker", () => {
         services.setPlan(plan);
         const release = services.holdRun();
 
-        const view = renderWith(services, <HookChecker repoId={7} />);
+        const view = renderChecker(services);
         await flush();
         await openChecker(view);
 
@@ -320,7 +350,7 @@ describe("HookChecker", () => {
     it("collapses and expands a row's output on demand", async () => {
         const services = backendWith([PRE_COMMIT]);
         services.setPlan(runOf([{ text: "formatted 2 files", spans: [] }]));
-        const view = renderWith(services, <HookChecker repoId={7} />);
+        const view = renderChecker(services);
         await flush();
         await openChecker(view);
         await waitFor(() => runButton("pre-commit") != null);
@@ -346,7 +376,7 @@ describe("HookChecker", () => {
                 exitCode: 3,
             })
         );
-        const view = renderWith(services, <HookChecker repoId={7} />);
+        const view = renderChecker(services);
         await flush();
         await openChecker(view);
         await waitFor(() => runButton("pre-commit") != null);
@@ -370,7 +400,7 @@ describe("HookChecker", () => {
                 { text: "2 problems", spans: [0, 10, 1] },
             ])
         );
-        const view = renderWith(services, <HookChecker repoId={7} />);
+        const view = renderChecker(services);
         await flush();
         await openChecker(view);
         await waitFor(() => runButton("pre-commit") != null);
@@ -388,7 +418,7 @@ describe("HookChecker", () => {
     it("follows the tail of a running hook but not a reader who scrolled back", async () => {
         const services = backendWith([PRE_COMMIT]);
         const release = services.holdRun();
-        const view = renderWith(services, <HookChecker repoId={7} />);
+        const view = renderChecker(services);
         await flush();
         await openChecker(view);
         await waitFor(() => runButton("pre-commit") != null);
@@ -450,7 +480,7 @@ describe("HookChecker", () => {
             },
         });
         const release = services.holdRun();
-        const view = renderWith(services, <HookChecker repoId={7} />);
+        const view = renderChecker(services);
         await flush();
         await openChecker(view);
         await waitFor(() => runButton("pre-commit") != null);
@@ -491,37 +521,84 @@ describe("HookChecker", () => {
         view.unmount();
     });
 
-    it("mirrors results from a real commit without a manual run", async () => {
+    it("shows a hook the commit pipeline is running", async () => {
         const services = backendWith([PRE_COMMIT, POST_COMMIT]);
-        const view = renderWith(
-            services,
-            <HookChecker
-                repoId={7}
-                naturalRuns={[
-                    hookResult({ hook: "pre-commit", durationMs: 40 }),
-                    hookResult({
-                        hook: "post-commit",
-                        durationMs: 3,
-                        lines: [{ text: "post-ran", spans: [] }],
-                    }),
-                ]}
-            />
-        );
+        const view = renderChecker(services);
         await flush();
         await openChecker(view);
+        await waitFor(() => runButton("post-commit") != null);
 
-        // Both natural runs appear as settled rows with no manual clicks.
-        const bothShown = await waitFor(() => runButton("post-commit") != null);
-        expect(bothShown).toBe(true);
+        // A commit reports the hook it is about to run, before it has said
+        // anything. The row shows it as running, with its output open.
+        view.report({ type: "started", hook: "pre-commit" });
         expect(services.runCalls()).toEqual([]);
-        expect(output()).toBeNull();
+        expect(rowText("pre-commit")).toContain("pre-commit");
+        expect(output()?.textContent).toContain("running");
+        // Nothing has settled, so the trigger has no verdict to report yet.
+        expect(
+            document.querySelector('[data-testid="hook-checker-status-dot"]')
+        ).toBeNull();
+        expect(runButton("pre-commit").disabled).toBe(true);
 
-        await click(rowTrigger("post-commit"));
-        expect(output()?.textContent).toContain("post-ran");
+        view.report({
+            type: "line",
+            hook: "pre-commit",
+            text: "Checking formatting",
+            spans: [],
+        });
+        expect(output()?.textContent).toContain("Checking formatting");
+
+        // Settling it folds the output away and turns the dot green.
+        view.report({
+            type: "settled",
+            result: hookResult({ hook: "pre-commit", durationMs: 40 }),
+        });
+        expect(output()).toBeNull();
         const dot = document.querySelector(
             '[data-testid="hook-checker-status-dot"]'
         );
         expect(dot?.className).toContain("bg-success");
+        view.unmount();
+    });
+
+    it("keeps a failing commit's hook output, which the error alone drops", async () => {
+        const services = backendWith([PRE_COMMIT]);
+        const view = renderChecker(services);
+        await flush();
+        await openChecker(view);
+        await waitFor(() => runButton("pre-commit") != null);
+
+        // A blocked commit resolves as an error with the output flattened into
+        // its details, so the streamed lines are all the reader is left with.
+        view.report({ type: "started", hook: "pre-commit" });
+        view.report({
+            type: "line",
+            hook: "pre-commit",
+            text: "lint found problems",
+            spans: [],
+        });
+        view.report({
+            type: "settled",
+            result: hookResult({
+                hook: "pre-commit",
+                success: false,
+                exitCode: 3,
+                durationMs: 90,
+                lines: [{ text: "lint found problems", spans: [] }],
+            }),
+        });
+
+        // A failed hook stays open, showing what it printed.
+        expect(output()?.textContent).toContain("lint found problems");
+        const dot = document.querySelector(
+            '[data-testid="hook-checker-status-dot"]'
+        );
+        expect(dot?.className).toContain("bg-destructive");
+        expect(
+            view.container.querySelector<HTMLElement>(
+                '[aria-label="Pre-commit hooks"]'
+            )?.dataset.failed
+        ).toBe("true");
         view.unmount();
     });
 });

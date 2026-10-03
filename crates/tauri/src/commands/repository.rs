@@ -1,3 +1,4 @@
+use crate::commands::channel::channel_send;
 use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
 use git_backend::api::repository::{
@@ -127,13 +128,4 @@ pub async fn git_open_diff(
     });
 
     Ok(operation_id.0)
-}
-
-pub(crate) fn channel_send<T>(channel: &Channel<T>, value: T) -> Result<(), tauri::Error>
-where
-    T: serde::Serialize + Clone,
-{
-    channel
-        .send(value)
-        .map_err(|e| tauri::Error::Anyhow(e.into()))
 }

@@ -6,6 +6,7 @@ mod common;
 use std::sync::{Arc, Mutex};
 
 use common::TestRepo;
+use git_backend::api::hooks::CommitHookEvent;
 use git_backend::api::mutations::CommitRequest;
 use git_backend::engines::git2::hooks::{
     list_commit_hooks, read_commit_hook, run_commit_hook, run_commit_hook_streamed,
@@ -301,7 +302,7 @@ fn failing_pre_commit_gates_the_commit_with_details() {
     }
 
     let before = repo.head_commit().id();
-    let error = mutations::commit(&repo.repo, &commit_request("blocked")).unwrap_err();
+    let error = mutations::commit(&repo.repo, &commit_request("blocked"), None).unwrap_err();
     let rendered = error.to_string();
     assert!(rendered.contains("gate-closed"), "details: {rendered}");
     // Windows batch exits surface the numeric code through runHook; unix
@@ -326,11 +327,112 @@ fn successful_commit_collects_pipeline_results_in_order() {
     install_script(&repo, "pre-commit", &shell_script("echo pre-ran\n"));
     install_script(&repo, "post-commit", &shell_script("echo post-ran\n"));
 
-    let (summary, runs) = mutations::commit(&repo.repo, &commit_request("with hooks")).unwrap();
+    let (summary, runs) =
+        mutations::commit(&repo.repo, &commit_request("with hooks"), None).unwrap();
     assert_eq!(summary.summary_line, "with hooks");
     let names: Vec<&str> = runs.iter().map(|run| run.hook.as_str()).collect();
     assert_eq!(names, ["pre-commit", "post-commit"]);
     assert!(runs.iter().all(|run| run.success));
+}
+
+#[test]
+fn a_commit_reports_each_hook_it_runs_as_it_runs() {
+    if !posix_shell_available() {
+        eprintln!("skipping: no POSIX shell on this host");
+        return;
+    }
+    let repo = TestRepo::init("hooks-commit-stream");
+    repo.initial_commit(&[("a.txt", "one\n")]);
+    repo.write("a.txt", "one\ntwo\n");
+    repo.stage("a.txt");
+
+    install_script(&repo, "pre-commit", &shell_script("echo checking\n"));
+    install_script(&repo, "post-commit", &shell_script("echo posted\n"));
+
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    mutations::commit(&repo.repo, &commit_request("watched"), Some(sender)).unwrap();
+
+    // Everything queued before the commit returned has to be waiting here, so
+    // a frontend that watches the commit sees each hook start and settle.
+    let mut seen: Vec<CommitHookEvent> = Vec::new();
+    while let Ok(event) = receiver.try_recv() {
+        seen.push(event);
+    }
+    let phases: Vec<String> = seen
+        .iter()
+        .map(|event| match event {
+            CommitHookEvent::Started { hook } => format!("start {hook}"),
+            CommitHookEvent::Line { hook, text, .. } => format!("line {hook} {text}"),
+            CommitHookEvent::Settled { result } => format!("settled {} ok", result.success),
+        })
+        .collect();
+    assert_eq!(
+        phases,
+        [
+            "start pre-commit",
+            "line pre-commit checking",
+            "settled true ok",
+            "start post-commit",
+            "line post-commit posted",
+            "settled true ok",
+        ]
+    );
+}
+
+#[test]
+fn a_gated_commit_still_reports_the_hook_that_blocked_it() {
+    if !posix_shell_available() {
+        eprintln!("skipping: no POSIX shell on this host");
+        return;
+    }
+    let repo = TestRepo::init("hooks-commit-gate-stream");
+    repo.initial_commit(&[("a.txt", "one\n")]);
+    repo.write("a.txt", "one\ntwo\n");
+    repo.stage("a.txt");
+    install_script(
+        &repo,
+        "pre-commit",
+        &shell_script("echo gate-closed\nexit 5\n"),
+    );
+
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    mutations::commit(&repo.repo, &commit_request("blocked"), Some(sender)).unwrap_err();
+
+    // The commit fails, but the failing hook's output still reaches the
+    // subscriber: its result is otherwise lost in the error's details string.
+    let mut settled = Vec::new();
+    while let Ok(event) = receiver.try_recv() {
+        if let CommitHookEvent::Settled { result } = event {
+            settled.push(result);
+        }
+    }
+    assert_eq!(settled.len(), 1);
+    assert_eq!(settled[0].hook, "pre-commit");
+    assert!(!settled[0].success);
+    assert!(
+        settled[0]
+            .lines
+            .iter()
+            .any(|line| line.text == "gate-closed")
+    );
+}
+
+#[test]
+fn a_commit_without_a_subscriber_still_runs_its_hooks() {
+    if !posix_shell_available() {
+        eprintln!("skipping: no POSIX shell on this host");
+        return;
+    }
+    let repo = TestRepo::init("hooks-commit-silent");
+    repo.initial_commit(&[("a.txt", "one\n")]);
+    repo.write("a.txt", "one\ntwo\n");
+    repo.stage("a.txt");
+    install_script(&repo, "pre-commit", &shell_script("echo ran\n"));
+
+    let (_summary, runs) =
+        mutations::commit(&repo.repo, &commit_request("unwatched"), None).unwrap();
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].lines[0].text, "ran");
 }
 
 #[test]

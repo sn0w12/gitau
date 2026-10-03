@@ -1,4 +1,4 @@
-use crate::commands::repository::channel_send;
+use crate::commands::channel::channel_send;
 use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
 use git_backend::api::remotes::{

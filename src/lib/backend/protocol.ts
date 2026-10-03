@@ -401,6 +401,16 @@ export interface HookOutputChunk extends HookOutputLine {
     styles?: SyntaxStyle[];
 }
 
+/** Progress of a hook the commit pipeline runs, delivered on the commit's
+ * own channel. A commit has no per-hook command, so this is how a hook
+ * running inside a commit becomes visible without anybody starting it. */
+export type CommitHookEvent =
+    /** Sent only for a hook whose script exists, so a hook that prints
+     * nothing still reads as running. */
+    | { type: "started"; hook: string }
+    | ({ type: "line"; hook: string } & HookOutputChunk)
+    | { type: "settled"; result: HookRunResult };
+
 /** A commit hook script as editable text; hooks missing on disk report
  * `exists: false` with empty content so the editor can create them. */
 export interface HookContent {

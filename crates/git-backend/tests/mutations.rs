@@ -297,6 +297,7 @@ async fn stage_commit_and_amend_round_trip() {
                 ..Default::default()
             },
             Some(opened.snapshot.generation),
+            None, // nobody is watching hook progress
         )
         .await
         .unwrap();
@@ -341,6 +342,7 @@ async fn empty_commit_is_rejected_unless_allowed() {
                 ..Default::default()
             },
             None,
+            None,
         )
         .await
         .unwrap_err();
@@ -355,6 +357,7 @@ async fn empty_commit_is_rejected_unless_allowed() {
                 allow_empty: true,
                 ..Default::default()
             },
+            None,
             None,
         )
         .await

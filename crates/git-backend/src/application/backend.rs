@@ -22,7 +22,7 @@ use crate::api::highlight::HighlightedSnippet;
 use crate::api::history::{
     BlameQuery, CommitDetailQuery, FileAtRevisionQuery, HistoryChartQuery, HistoryPageQuery,
 };
-use crate::api::hooks::{HookContent, HookInfo, HookOutputChunk, HookRunResult};
+use crate::api::hooks::{CommitHookEvent, HookContent, HookInfo, HookOutputChunk, HookRunResult};
 use crate::api::lfs::LfsStatus;
 use crate::api::mutations::{
     AmendRequest, BranchCreateRequest, CheckoutRequest, CommitExecution, CommitRequest,
@@ -1050,9 +1050,10 @@ impl Backend {
         id: RepoId,
         request: CommitRequest,
         expected_generation: Option<Generation>,
+        on_hook: Option<UnboundedSender<CommitHookEvent>>,
     ) -> Result<CommitExecution> {
         self.run_write(id, expected_generation, move |repo| {
-            mutations::commit(repo, &request)
+            mutations::commit(repo, &request, on_hook)
                 .map(|(summary, hook_runs)| CommitExecution { summary, hook_runs })
         })
         .await

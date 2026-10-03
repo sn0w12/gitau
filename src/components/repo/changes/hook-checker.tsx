@@ -2,7 +2,6 @@ import { Check, ListChecks, Pencil, Play, SkipForward, X } from "lucide-react";
 import {
     useEffect,
     useLayoutEffect,
-    useMemo,
     useRef,
     useState,
     type ComponentType,
@@ -25,11 +24,11 @@ import { Spinner } from "@/components/ui/spinner";
 import {
     type HookOutput,
     type HookRunState,
+    type HookRunner,
     outputOf,
-    useCommitHookRunner,
     useCommitHooks,
 } from "@/hooks/repositories/use-commit-hooks";
-import type { GitHook, HookRunResult } from "@/lib/backend/protocol";
+import type { GitHook } from "@/lib/backend/protocol";
 import { cn } from "@/lib/utils";
 
 import { ScrollArea } from "../../ui/scroll-area";
@@ -42,12 +41,6 @@ import {
     Tooltip,
 } from "../../ui/tooltip";
 import { HookEditorDialog } from "./hook-editor-dialog";
-
-interface LogEntry {
-    hook: string;
-    result: HookRunResult;
-    source: "manual" | "commit";
-}
 
 const TRIGGER_CLASS = "relative text-muted-foreground hover:text-foreground";
 
@@ -66,49 +59,35 @@ const editPayload = () => {
  * Pre-flight hook checker for the commit form: lists discovered
  * commit-lifecycle scripts and runs them on demand. Each hook carries its
  * own collapsible output, streamed line by line while it runs with the
- * colours the hook wrote, and results from real commits (`naturalRuns`)
- * show the same way. A manual rerun of the same hook supersedes its
- * committed-run entry.
+ * colours the hook wrote.
+ *
+ * The runs come from `runner` rather than from state of its own, so a hook
+ * the commit pipeline runs shows up here as well: the pre-commit a commit
+ * fires streams through the same rows as one started by hand.
  */
 export function HookChecker({
     repoId,
-    naturalRuns,
+    runner,
 }: {
     repoId: number;
-    naturalRuns?: HookRunResult[];
+    runner: HookRunner;
 }) {
     const hooks = useCommitHooks(repoId);
-    const { runs, log, busy, run, runAll } = useCommitHookRunner(repoId);
+    const { runs, busy, run, runAll } = runner;
     const [opened, setOpened] = useState<Record<string, boolean>>({});
     const [editorOpen, setEditorOpen] = useState(false);
 
-    const entries = useMemo<LogEntry[]>(() => {
-        const merged = new Map<string, LogEntry>();
-        for (const result of naturalRuns ?? []) {
-            merged.set(result.hook, {
-                hook: result.hook,
-                result,
-                source: "commit",
-            });
-        }
-        for (const entry of log) {
-            merged.set(entry.hook, { ...entry, source: "manual" });
-        }
-        return [...merged.values()];
-    }, [log, naturalRuns]);
-
-    const states = useMemo<Record<string, HookRunState>>(() => {
-        const merged: Record<string, HookRunState> = { ...runs };
-        for (const entry of entries) {
-            if (!(entry.hook in merged)) {
-                merged[entry.hook] = { phase: "done", result: entry.result };
-            }
-        }
-        return merged;
-    }, [runs, entries]);
-
     const discovered = hooks.data ?? [];
-    const failed = entries.some((entry) => !entry.result.success);
+    // A run still in flight has no verdict to report, so the dot waits for
+    // the hooks that have settled.
+    const settled = Object.values(runs).filter(
+        (state) => state.phase !== "running"
+    );
+    const failed = settled.some(
+        (state) =>
+            state.phase === "failed" ||
+            (state.phase === "done" && !state.result.success)
+    );
 
     return (
         <Popover>
@@ -127,7 +106,7 @@ export function HookChecker({
                 }
             >
                 <ListChecks className="size-3.5" />
-                {entries.length > 0 && (
+                {settled.length > 0 && (
                     <span
                         aria-hidden
                         data-testid="hook-checker-status-dot"
@@ -203,10 +182,10 @@ export function HookChecker({
                                 <HookRow
                                     key={hook.name}
                                     hook={hook}
-                                    state={states[hook.name]}
+                                    state={runs[hook.name]}
                                     open={
                                         opened[hook.name] ??
-                                        opensByDefault(states[hook.name])
+                                        opensByDefault(runs[hook.name])
                                     }
                                     onOpenChange={(next) =>
                                         setOpened((prev) => ({

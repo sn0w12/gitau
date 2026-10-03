@@ -10,6 +10,7 @@ import type {
     BranchInfo,
     CheckoutMode,
     CommitExecution,
+    CommitHookEvent,
     CommitSummary,
     PublishResult,
     PushOutcome,
@@ -42,6 +43,9 @@ type CommitInput = {
     allowEmpty?: boolean;
     authorName?: string;
     authorEmail?: string;
+    /** Receives each hook the commit pipeline runs as it starts, streams a
+     * line, and settles. */
+    onHookEvent?: (event: CommitHookEvent) => void;
 };
 
 type CommitResult = CommitExecution;

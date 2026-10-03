@@ -7,6 +7,7 @@ import type {
     CloneEvent,
     CommitDetail,
     CommitExecution,
+    CommitHookEvent,
     CommitSummary,
     ConflictFile,
     CreateRepositoryRequest,
@@ -352,6 +353,12 @@ function createRawBackendClient() {
         },
 
         mutations: {
+            /**
+             * Commits, reporting each hook the pipeline runs through
+             * `options.onHookEvent`: it started, wrote a line, and settled.
+             * Mirrors the streamed hook command, minus the ability to choose
+             * which hook runs.
+             */
             commit: (
                 repoId: number,
                 message: string,
@@ -360,12 +367,27 @@ function createRawBackendClient() {
                     allowEmpty?: boolean;
                     authorName?: string;
                     authorEmail?: string;
+                    /** Called for every hook the commit runs, in the order
+                     * they run. */
+                    onHookEvent?: (event: CommitHookEvent) => void;
                 } = {},
                 expectedGeneration?: number
-            ) =>
-                invokeCommand<CommitExecution>("git_commit", {
-                    args: { repoId, message, ...options, expectedGeneration },
-                }),
+            ) => {
+                // The sink stays on this side of the wire; the rest of the
+                // options are the command's arguments.
+                const { onHookEvent, ...wire } = options;
+                const channel = new Channel<CommitHookEvent>();
+                channel.onmessage = onHookEvent ?? ignoreHookEvent;
+                return invokeCommand<CommitExecution>("git_commit", {
+                    args: {
+                        repoId,
+                        message,
+                        ...wire,
+                        expectedGeneration,
+                        onEvent: channel,
+                    },
+                });
+            },
             amend: (
                 repoId: number,
                 message?: string,
@@ -902,6 +924,11 @@ function createRawBackendClient() {
 }
 
 type RawClient = ReturnType<typeof createRawBackendClient>;
+
+/** Stands in for a caller with nowhere to put hook progress. The channel
+ * still has to be handed to the backend, which reads it as a required
+ * argument. */
+function ignoreHookEvent(_event: CommitHookEvent): void {}
 
 /** `(...args) => Promise<T>` becomes `(...args) => Promise<Result<T>>`. */
 type Resultified<TFn> = TFn extends (

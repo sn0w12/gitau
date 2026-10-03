@@ -144,6 +144,7 @@ fn remove_empty_parents(workdir: &Path, rel: &RelativePath) {
 pub fn commit(
     repo: &git2::Repository,
     request: &CommitRequest,
+    events: Option<tokio::sync::mpsc::UnboundedSender<crate::api::hooks::CommitHookEvent>>,
 ) -> Result<(CommitSummary, Vec<crate::api::hooks::HookRunResult>)> {
     if request.message.trim().is_empty() {
         return Err(GitError::invalid_input("commit message must not be empty"));
@@ -155,7 +156,7 @@ pub fn commit(
 
     let mut hook_runs = Vec::new();
     if request.run_hooks {
-        super::hooks::capture_existing(repo, "pre-commit", &mut hook_runs)?;
+        super::hooks::capture_existing(repo, "pre-commit", &mut hook_runs, events.as_ref())?;
         // pre-commit gates the commit like git's own pipeline.
         if let Some(result) = hook_runs.last() {
             if !result.success {
@@ -197,7 +198,7 @@ pub fn commit(
     )?;
 
     if request.run_hooks {
-        super::hooks::capture_existing(repo, "post-commit", &mut hook_runs)?;
+        super::hooks::capture_existing(repo, "post-commit", &mut hook_runs, events.as_ref())?;
         // post-commit cannot undo anything; a failure is recorded and
         // surfaced instead of discarding the successful commit result.
     }

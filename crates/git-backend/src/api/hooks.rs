@@ -74,6 +74,33 @@ pub struct HookRunResult {
     pub styles: Vec<SnippetStyle>,
 }
 
+/// Progress of a hook the commit pipeline runs. A commit has no per-hook
+/// command of its own, so the frontend learns about these from the commit's
+/// channel and can show a hook running that nobody started by hand.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum CommitHookEvent {
+    /// The hook is about to run. Sent only for a hook whose script exists, so
+    /// a hook that prints nothing still reads as running.
+    Started { hook: String },
+    /// One line of output, carrying the styles it interned the way a manual
+    /// run's [`HookOutputChunk`] does.
+    Line {
+        hook: String,
+        text: String,
+        /// Style ids index the table these append to.
+        spans: Vec<u32>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        styles: Vec<SnippetStyle>,
+    },
+    /// The hook finished, with the result a manual run reports.
+    Settled { result: HookRunResult },
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -105,6 +132,64 @@ mod tests {
             styles: Vec::new(),
         };
         let json = serde_json::to_value(&plain).expect("chunk serializes");
+        assert!(json.get("styles").is_none());
+    }
+
+    fn result_of(hook: &str) -> HookRunResult {
+        HookRunResult {
+            hook: hook.to_owned(),
+            exit_code: Some(0),
+            success: true,
+            stdout: String::new(),
+            stderr: String::new(),
+            duration_ms: 3,
+            lines: Vec::new(),
+            styles: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_commit_hook_event_is_tagged_with_its_phase() {
+        let json = serde_json::to_value(CommitHookEvent::Started {
+            hook: "pre-commit".to_owned(),
+        })
+        .expect("event serializes");
+        assert_eq!(
+            json,
+            serde_json::json!({ "type": "started", "hook": "pre-commit" })
+        );
+
+        let json = serde_json::to_value(CommitHookEvent::Line {
+            hook: "pre-commit".to_owned(),
+            text: "2 problems".to_owned(),
+            spans: vec![0, 10, 1],
+            styles: vec![SnippetStyle {
+                light: "#cf222e".to_owned(),
+                dark: "#ff7b72".to_owned(),
+                ..Default::default()
+            }],
+        })
+        .expect("event serializes");
+        assert_eq!(json["type"], "line");
+        assert_eq!(json["hook"], "pre-commit");
+        assert_eq!(json["spans"], serde_json::json!([0, 10, 1]));
+        assert_eq!(json["styles"][0]["dark"], "#ff7b72");
+
+        let json = serde_json::to_value(CommitHookEvent::Settled {
+            result: result_of("pre-commit"),
+        })
+        .expect("event serializes");
+        assert_eq!(json["type"], "settled");
+        assert_eq!(json["result"]["hook"], "pre-commit");
+
+        // A plain line leaves the style delta out entirely, like a chunk.
+        let json = serde_json::to_value(CommitHookEvent::Line {
+            hook: "pre-commit".to_owned(),
+            text: "ok".to_owned(),
+            spans: Vec::new(),
+            styles: Vec::new(),
+        })
+        .expect("event serializes");
         assert!(json.get("styles").is_none());
     }
 }

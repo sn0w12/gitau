@@ -22,6 +22,7 @@ fn error_message(err: &crate::session::SessionError) -> String {
 }
 
 pub mod changes;
+pub mod channel;
 pub mod editor;
 pub mod file_manager;
 pub mod github;

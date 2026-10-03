@@ -11,13 +11,13 @@ import {
     InputGroupInput,
 } from "@/components/ui/input-group";
 import { Textarea } from "@/components/ui/textarea";
+import { useCommitHookRunner } from "@/hooks/repositories/use-commit-hooks";
 import { useMergeActions } from "@/hooks/repositories/use-merge-actions";
 import {
     useOperationState,
     useRepositoryStatus,
 } from "@/hooks/repositories/use-repository-queries";
 import { useCommitMutation } from "@/lib/backend/mutations/repository-mutations";
-import type { HookRunResult } from "@/lib/backend/protocol";
 import { toastError } from "@/lib/toast-error";
 
 import { HookChecker } from "./hook-checker";
@@ -35,7 +35,9 @@ export function CommitForm({
 }) {
     const [summary, setSummary] = useState("");
     const [description, setDescription] = useState("");
-    const [naturalHookRuns, setNaturalHookRuns] = useState<HookRunResult[]>([]);
+    // Owned here because the commit is one of the two things that start a
+    // hook run, and the checker renders whatever runs are recorded.
+    const hooks = useCommitHookRunner(repoId);
     const commit = useCommitMutation(repoId);
     const operation = useOperationState(repoId);
     const status = useRepositoryStatus(repoId);
@@ -56,8 +58,12 @@ export function CommitForm({
                 const outcome = await mergeActions.continueMerge(message);
                 if (!outcome) return;
             } else {
-                const execution = await commit.mutateAsync({ message });
-                setNaturalHookRuns(execution.hookRuns);
+                // The hooks the pipeline runs report themselves as they go,
+                // so the checker shows a pre-commit mid-run.
+                await commit.mutateAsync({
+                    message,
+                    onHookEvent: hooks.reportCommit,
+                });
             }
             setSummary("");
             setDescription("");
@@ -93,14 +99,7 @@ export function CommitForm({
                             disabled={busy}
                         />
                         <InputGroupAddon align="inline-end" className="gap-0.5">
-                            <HookChecker
-                                repoId={repoId}
-                                naturalRuns={
-                                    naturalHookRuns.length > 0
-                                        ? naturalHookRuns
-                                        : undefined
-                                }
-                            />
+                            <HookChecker repoId={repoId} runner={hooks} />
                         </InputGroupAddon>
                     </InputGroup>
                 </Field>

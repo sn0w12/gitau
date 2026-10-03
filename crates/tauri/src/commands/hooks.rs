@@ -1,6 +1,6 @@
 use tauri::ipc::Channel;
 
-use crate::commands::repository::channel_send;
+use crate::commands::channel::forward_channel;
 use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
 
@@ -26,14 +26,7 @@ pub async fn git_run_commit_hook_streamed(
     hook: String,
     on_event: Channel<git_backend::api::hooks::HookOutputChunk>,
 ) -> CommandResult<git_backend::api::hooks::HookRunResult> {
-    let (sender, mut rx) = tokio::sync::mpsc::unbounded_channel();
-    let forward = tauri::async_runtime::spawn(async move {
-        while let Some(chunk) = rx.recv().await {
-            if channel_send(&on_event, chunk).is_err() {
-                break;
-            }
-        }
-    });
+    let (sender, forward) = forward_channel(on_event);
 
     let result = state
         .backend

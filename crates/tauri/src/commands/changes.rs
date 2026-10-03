@@ -1,7 +1,9 @@
+use crate::commands::channel::forward_channel;
 use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
 use git_backend::api::changes::{DiscardRequest, StageRequest, StatusOptions};
 use git_backend::domain::{Generation, StatusReport};
+use tauri::ipc::Channel;
 
 #[tauri::command]
 pub async fn git_status(
@@ -96,6 +98,7 @@ pub async fn git_commit(
     author_name: Option<String>,
     author_email: Option<String>,
     expected_generation: Option<u64>,
+    on_event: Channel<git_backend::api::hooks::CommitHookEvent>,
 ) -> CommandResult<git_backend::api::mutations::CommitExecution> {
     let author = match (author_name, author_email) {
         (Some(name), Some(email)) => Some(git_backend::domain::Signature {
@@ -106,7 +109,8 @@ pub async fn git_commit(
         }),
         _ => None,
     };
-    state
+    let (events, forward) = forward_channel(on_event);
+    let result = state
         .backend
         .commit(
             to_repo_id(repo_id),
@@ -120,9 +124,13 @@ pub async fn git_commit(
                 allow_empty: allow_empty.unwrap_or(false),
             },
             expected_generation.map(Generation),
+            Some(events),
         )
-        .await
-        .map_err(to_serialized)
+        .await;
+    // Draining the forwarder first means the last hook line has landed before
+    // the frontend sees the result, so nothing arrives out of order.
+    let _ = forward.await;
+    result.map_err(to_serialized)
 }
 
 #[tauri::command]

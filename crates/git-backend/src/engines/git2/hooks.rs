@@ -15,9 +15,12 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use git2::Repository;
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::ansi::LineStream;
-use crate::api::hooks::{HookContent, HookInfo, HookOutputChunk, HookOutputLine, HookRunResult};
+use crate::api::hooks::{
+    CommitHookEvent, HookContent, HookInfo, HookOutputChunk, HookOutputLine, HookRunResult,
+};
 use crate::error::{GitError, Result};
 
 /// Hooks that participate in a `git commit` run, in execution order.
@@ -138,14 +141,50 @@ pub fn run_commit_hook_streamed(
 /// Records a hook result when the script exists. The caller decides whether
 /// a failure aborts the surrounding operation, so this never inspects
 /// `success`.
+///
+/// With `events` the run is also reported as it happens, the way a manual run
+/// streams: a subscriber watching a commit sees the hook the commit is
+/// running without having started it. Events go into an unbounded queue whose
+/// receiver lives on the async side, so the pipe readers never block and a
+/// frontend that went away only loses the events.
 pub(crate) fn capture_existing(
     repo: &Repository,
     hook: &str,
     out: &mut Vec<HookRunResult>,
+    events: Option<&UnboundedSender<CommitHookEvent>>,
 ) -> Result<()> {
-    match execute(repo, hook, |_| {})? {
+    // The hook is resolved twice, once here and once in `execute`: a pipeline
+    // with no post-commit installed must not announce a hook that never runs.
+    if find_hook_file(&hooks_dir(repo)?, hook).is_none() {
+        return Ok(());
+    }
+    if let Some(events) = events {
+        let _ = events.send(CommitHookEvent::Started {
+            hook: hook.to_owned(),
+        });
+    }
+
+    // The reader threads need an owned emitter, so the subscriber and the
+    // hook name are cloned into the closure rather than borrowed.
+    let subscribing = events.cloned();
+    let name = hook.to_owned();
+    match execute(repo, hook, move |chunk: HookOutputChunk| {
+        if let Some(events) = &subscribing {
+            let _ = events.send(CommitHookEvent::Line {
+                hook: name.clone(),
+                text: chunk.line.text,
+                spans: chunk.line.spans,
+                styles: chunk.styles,
+            });
+        }
+    })? {
         HookSpawn::Missing => Ok(()),
         HookSpawn::Ran(result) => {
+            if let Some(events) = events {
+                let _ = events.send(CommitHookEvent::Settled {
+                    result: result.clone(),
+                });
+            }
             out.push(result);
             Ok(())
         }

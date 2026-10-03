@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { HookChecker } from "@/components/repo/changes/hook-checker";
 import { HookEditorDialog } from "@/components/repo/changes/hook-editor-dialog";
 import { AppServicesContext } from "@/contexts/services-context";
+import type { HookRunner } from "@/hooks/repositories/use-commit-hooks";
 import type {
     GitHook,
     HookContent,
@@ -171,6 +172,18 @@ async function waitFor(predicate: () => boolean): Promise<boolean> {
     return predicate();
 }
 
+/** The dialog is reached through the checker, so these tests need a runner
+ * to render. Running hooks is not what is under test here. */
+function idleRunner(): HookRunner {
+    return {
+        runs: {},
+        busy: false,
+        run: async () => {},
+        runAll: async () => {},
+        reportCommit: () => {},
+    };
+}
+
 describe("HookEditorDialog", () => {
     beforeEach(() => {
         document.body.innerHTML = "";
@@ -183,7 +196,7 @@ describe("HookEditorDialog", () => {
         });
         const view = renderWith(
             fixture,
-            <HookChecker repoId={7} naturalRuns={[]} />
+            <HookChecker repoId={7} runner={idleRunner()} />
         );
         await flush();
 
@@ -276,7 +289,7 @@ describe("HookEditorDialog", () => {
         });
         const view = renderWith(
             fixture,
-            <HookChecker repoId={7} naturalRuns={[]} />
+            <HookChecker repoId={7} runner={idleRunner()} />
         );
         await flush();
         await click(

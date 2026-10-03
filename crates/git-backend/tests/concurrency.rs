@@ -74,6 +74,7 @@ async fn concurrent_reads_and_writes_stay_consistent() {
                             ..Default::default()
                         },
                         None,
+                        None, // nobody is watching hook progress
                     )
                     .await
                     .unwrap();
