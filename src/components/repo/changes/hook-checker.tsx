@@ -23,6 +23,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import {
     type HookOutput,
+    type HookRuns,
     type HookRunState,
     type HookRunner,
     outputOf,
@@ -43,6 +44,29 @@ import {
 import { HookEditorDialog } from "./hook-editor-dialog";
 
 const TRIGGER_CLASS = "relative text-muted-foreground hover:text-foreground";
+
+const DOT_CLASS = {
+    running: "bg-foreground",
+    failed: "bg-destructive",
+    success: "bg-success",
+} as const;
+
+/** The dot on the trigger: what the runs recorded so far add up to. A run in
+ * flight has no verdict yet, so it reads as pending unless another hook has
+ * already failed, which outranks it. */
+function dotOf(runs: HookRuns): keyof typeof DOT_CLASS | null {
+    const states = Object.values(runs);
+    if (states.length === 0) return null;
+    const failed = states.some(
+        (state) =>
+            state.phase === "failed" ||
+            (state.phase === "done" && !state.result.success)
+    );
+    if (failed) return "failed";
+    return states.some((state) => state.phase === "running")
+        ? "running"
+        : "success";
+}
 
 /** How far from the bottom the viewport may sit and still follow along. */
 const TAIL_SLACK_PX = 8;
@@ -78,22 +102,13 @@ export function HookChecker({
     const [editorOpen, setEditorOpen] = useState(false);
 
     const discovered = hooks.data ?? [];
-    // A run still in flight has no verdict to report, so the dot waits for
-    // the hooks that have settled.
-    const settled = Object.values(runs).filter(
-        (state) => state.phase !== "running"
-    );
-    const failed = settled.some(
-        (state) =>
-            state.phase === "failed" ||
-            (state.phase === "done" && !state.result.success)
-    );
+    const dot = dotOf(runs);
 
     return (
         <Popover>
             <PopoverTrigger
                 aria-label="Pre-commit hooks"
-                data-failed={failed || undefined}
+                data-failed={dot === "failed" || undefined}
                 render={
                     <Button
                         size="icon-xs"
@@ -106,13 +121,11 @@ export function HookChecker({
                 }
             >
                 <ListChecks className="size-3.5" />
-                {settled.length > 0 && (
+                {dot !== null && (
                     <span
                         aria-hidden
                         data-testid="hook-checker-status-dot"
-                        className={`absolute top-0.5 right-0.5 size-1.5 rounded-full ${
-                            failed ? "bg-destructive" : "bg-success"
-                        }`}
+                        className={`absolute top-0.5 right-0.5 size-1.5 rounded-full ${DOT_CLASS[dot]}`}
                     />
                 )}
             </PopoverTrigger>

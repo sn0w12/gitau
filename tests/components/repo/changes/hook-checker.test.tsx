@@ -239,6 +239,12 @@ function output(): Element | null {
     return document.querySelector('[data-testid="hook-checker-output"]');
 }
 
+/** The dot on the trigger, absent until something has run. */
+function dotClass(): string | null {
+    return document.querySelector('[data-testid="hook-checker-status-dot"]')
+        ?.className as string | null;
+}
+
 /** jsdom reports every scroll metric as zero, so the viewport's geometry is
  * stubbed here to drive the tail-following. Scroll positions clamp like a real
  * viewport's, and a scroll event fires on every move. `lateScrollEvents` queues
@@ -340,10 +346,7 @@ describe("HookChecker", () => {
         // A run that passes folds its output away once it settles, the way a
         // passing CI step does, and the dot reports the pass.
         expect(output()).toBeNull();
-        const dot = document.querySelector(
-            '[data-testid="hook-checker-status-dot"]'
-        );
-        expect(dot?.className).toContain("bg-success");
+        expect(dotClass()).toContain("bg-success");
         view.unmount();
     });
 
@@ -385,10 +388,7 @@ describe("HookChecker", () => {
         await flush();
 
         expect(output()?.textContent).toContain("lint found problems");
-        const dot = document.querySelector(
-            '[data-testid="hook-checker-status-dot"]'
-        );
-        expect(dot?.className).toContain("bg-destructive");
+        expect(dotClass()).toContain("bg-destructive");
         view.unmount();
     });
 
@@ -529,15 +529,12 @@ describe("HookChecker", () => {
         await waitFor(() => runButton("post-commit") != null);
 
         // A commit reports the hook it is about to run, before it has said
-        // anything. The row shows it as running, with its output open.
+        // anything: the row shows it running, with its output open.
         view.report({ type: "started", hook: "pre-commit" });
         expect(services.runCalls()).toEqual([]);
         expect(rowText("pre-commit")).toContain("pre-commit");
         expect(output()?.textContent).toContain("running");
-        // Nothing has settled, so the trigger has no verdict to report yet.
-        expect(
-            document.querySelector('[data-testid="hook-checker-status-dot"]')
-        ).toBeNull();
+        expect(dotClass()).toContain("bg-foreground");
         expect(runButton("pre-commit").disabled).toBe(true);
 
         view.report({
@@ -554,19 +551,26 @@ describe("HookChecker", () => {
             result: hookResult({ hook: "pre-commit", durationMs: 40 }),
         });
         expect(output()).toBeNull();
-        const dot = document.querySelector(
-            '[data-testid="hook-checker-status-dot"]'
-        );
-        expect(dot?.className).toContain("bg-success");
+        expect(dotClass()).toContain("bg-success");
+
+        // The next hook in the pipeline takes the dot back to pending, then
+        // settles green.
+        view.report({ type: "started", hook: "post-commit" });
+        expect(dotClass()).toContain("bg-foreground");
+        view.report({
+            type: "settled",
+            result: hookResult({ hook: "post-commit", durationMs: 3 }),
+        });
+        expect(dotClass()).toContain("bg-success");
         view.unmount();
     });
 
     it("keeps a failing commit's hook output, which the error alone drops", async () => {
-        const services = backendWith([PRE_COMMIT]);
+        const services = backendWith([PRE_COMMIT, POST_COMMIT]);
         const view = renderChecker(services);
         await flush();
         await openChecker(view);
-        await waitFor(() => runButton("pre-commit") != null);
+        await waitFor(() => runButton("post-commit") != null);
 
         // A blocked commit resolves as an error with the output flattened into
         // its details, so the streamed lines are all the reader is left with.
@@ -590,15 +594,17 @@ describe("HookChecker", () => {
 
         // A failed hook stays open, showing what it printed.
         expect(output()?.textContent).toContain("lint found problems");
-        const dot = document.querySelector(
-            '[data-testid="hook-checker-status-dot"]'
-        );
-        expect(dot?.className).toContain("bg-destructive");
+        expect(dotClass()).toContain("bg-destructive");
         expect(
             view.container.querySelector<HTMLElement>(
                 '[aria-label="Pre-commit hooks"]'
             )?.dataset.failed
         ).toBe("true");
+
+        // A failure outranks a run still in flight: the dot must not go back
+        // to pending while something is known to be broken.
+        view.report({ type: "started", hook: "post-commit" });
+        expect(dotClass()).toContain("bg-destructive");
         view.unmount();
     });
 });
