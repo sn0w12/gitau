@@ -28,6 +28,8 @@ const EDGE_STROKE = 2;
 const LANE_BLEND_FRACTION = 0.15;
 const NODE_RADIUS = 6;
 const MERGE_RADIUS = 7;
+const SQUIRCLE_CORNER = 0.7;
+const NODE_CORE_INSET = 4;
 const COLUMN_COUNT = 6;
 
 export function laneVar(lane: number): string {
@@ -339,7 +341,7 @@ function CommitGraphRow({
             style={{ height: GRAPH_ROW_HEIGHT_PX }}
         >
             <td className="p-0" />
-            <td className="truncate px-2">{row.summaryLine}</td>
+            <td className="truncate pr-2">{row.summaryLine}</td>
             <td className="truncate px-2">
                 {refs.length > 0 && (
                     <span className="flex min-w-0 items-center gap-1">
@@ -372,24 +374,51 @@ function CommitGraphRow({
 }
 
 function CommitNode({ row, cy }: { row: GraphRow; cy: number }) {
-    const r = row.kind === "merge" ? MERGE_RADIUS : NODE_RADIUS;
+    const cx = laneX(row.lane);
+    const stroke = laneVar(row.lane);
+
+    if (row.kind === "merge") {
+        const outer = MERGE_RADIUS;
+        const core = outer - NODE_CORE_INSET;
+        return (
+            <g>
+                <rect
+                    x={cx - outer}
+                    y={cy - outer}
+                    width={outer * 2}
+                    height={outer * 2}
+                    rx={outer * SQUIRCLE_CORNER}
+                    fill="var(--background)"
+                    stroke={stroke}
+                    strokeWidth={EDGE_STROKE}
+                />
+                <rect
+                    x={cx - core}
+                    y={cy - core}
+                    width={core * 2}
+                    height={core * 2}
+                    rx={(outer * SQUIRCLE_CORNER * core) / outer}
+                    fill={stroke}
+                />
+            </g>
+        );
+    }
+
     return (
         <g>
-            {/* Opaque so the rail is hidden inside the ring and meets it at
-                the edge rather than showing through the node. */}
             <circle
-                cx={laneX(row.lane)}
+                cx={cx}
                 cy={cy}
-                r={r}
+                r={NODE_RADIUS}
                 fill="var(--background)"
-                stroke={laneVar(row.lane)}
-                strokeWidth={2}
+                stroke={stroke}
+                strokeWidth={EDGE_STROKE}
             />
             <circle
-                cx={laneX(row.lane)}
+                cx={cx}
                 cy={cy}
-                r={r - 4}
-                fill={laneVar(row.lane)}
+                r={NODE_RADIUS - NODE_CORE_INSET}
+                fill={stroke}
             />
         </g>
     );
