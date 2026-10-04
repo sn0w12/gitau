@@ -88,7 +88,7 @@ export function TabsList({
             </TabsListContext.Provider>
             <TabsPrimitive.Indicator
                 className={cn(
-                    "absolute bottom-0 left-0 h-(--active-tab-height) w-(--active-tab-width) translate-x-(--active-tab-left) -translate-y-(--active-tab-bottom) transition-[width,translate] duration-200 ease-in-out",
+                    "absolute bottom-0 left-0 h-(--active-tab-height) w-(--active-tab-width) translate-x-(--active-tab-left) -translate-y-(--active-tab-bottom) transition-[width,translate] duration-200 ease-in-out [&[data-activation-direction=none]]:transition-none",
                     tabsIndicatorVariants({ variant })
                 )}
                 data-slot="tab-indicator"
