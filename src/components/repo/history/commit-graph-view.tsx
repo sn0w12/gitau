@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -20,6 +20,12 @@ const LANE_PAD = 14;
 /** Lanes past this clip out of the rail so it stays a small share of a row. */
 const MAX_LANE_COLUMNS = 8;
 const EDGE_STROKE = 2;
+/**
+ * Share of a connector spent blending from one lane color into the next. The
+ * blend sits in the middle, so the connector starts in the lane it leaves and
+ * ends in the lane it joins.
+ */
+const LANE_BLEND_FRACTION = 0.15;
 const NODE_RADIUS = 6;
 const MERGE_RADIUS = 7;
 const COLUMN_COUNT = 6;
@@ -225,21 +231,12 @@ export function CommitGraphView({
                         <colgroup>
                             <col style={{ width: "var(--rail)" }} />
                             <col />
-                            {/* Variable content, capped at a share of the table. */}
                             <col
                                 style={{ width: "min(calc(18ch + 1rem), 16%)" }}
                             />
                             <col
                                 style={{ width: "min(calc(14ch + 1rem), 12%)" }}
                             />
-                            {/*
-                              Fixed content, no cap needed. 13ch is the longest
-                              value formatRelativeDate returns ("59 minutes
-                              ago", "Sept 30, 2025"), and the short id is
-                              always 7 characters. font-mono on the column
-                              makes ch resolve against Geist Mono instead of
-                              Inter, so 7ch is the id's real width.
-                            */}
                             <col style={{ width: "calc(13ch + 1rem)" }} />
                             <col
                                 className="font-mono"
@@ -398,21 +395,67 @@ function CommitNode({ row, cy }: { row: GraphRow; cy: number }) {
     );
 }
 
-/**
- * One row's edges. Each edge runs from this row's node center to the next
- * row's, so the segment leaves the row it starts in and lands on the node
- * below: a per-row edge would stop at the row boundary and leave a gap.
- */
 function GraphEdges({ row, yCenter }: { row: GraphRow; yCenter: number }) {
+    // Ids reach the document through url(#id), which rejects the characters
+    // useId may emit, so keep only the identifier-safe ones.
+    const prefix = useId().replace(/[^a-zA-Z0-9]/g, "");
     const yNext = yCenter + GRAPH_ROW_HEIGHT_PX;
+    const blendLength = GRAPH_ROW_HEIGHT_PX * LANE_BLEND_FRACTION;
+    const blendStart = yCenter + (GRAPH_ROW_HEIGHT_PX - blendLength) / 2;
+    const blendEnd = blendStart + blendLength;
+    const shifts = row.edges
+        .map((edge, index) => ({ edge, index }))
+        .filter(({ edge }) => laneVar(edge.fromLane) !== laneVar(edge.toLane));
     return (
         <g>
+            {shifts.length > 0 && (
+                <defs>
+                    {shifts.map(({ edge, index }) => {
+                        const toX = laneX(edge.toLane);
+                        return (
+                            <linearGradient
+                                key={index}
+                                id={`${prefix}-${index}`}
+                                gradientUnits="userSpaceOnUse"
+                                x1={toX}
+                                y1={blendStart}
+                                x2={toX}
+                                y2={blendEnd}
+                            >
+                                <stop
+                                    offset="0"
+                                    style={{
+                                        stopColor: laneVar(edge.fromLane),
+                                    }}
+                                />
+                                <stop
+                                    offset="0.5"
+                                    style={{
+                                        stopColor: `color-mix(in oklch, ${laneVar(
+                                            edge.fromLane
+                                        )} 50%, ${laneVar(edge.toLane)})`,
+                                    }}
+                                />
+                                <stop
+                                    offset="1"
+                                    style={{
+                                        stopColor: laneVar(edge.toLane),
+                                    }}
+                                />
+                            </linearGradient>
+                        );
+                    })}
+                </defs>
+            )}
             {row.edges.map((edge, index) => {
                 const fromX = laneX(edge.fromLane);
                 const toX = laneX(edge.toLane);
-                // Bends take the destination lane's color so the end of the
-                // curve matches the node it lands on and the rail below it.
-                const stroke = laneVar(edge.toLane);
+                // Same-lane edges have nothing to hand over, and skipping the
+                // paint server keeps through-lanes off the gradient path.
+                const stroke =
+                    laneVar(edge.fromLane) === laneVar(edge.toLane)
+                        ? laneVar(edge.toLane)
+                        : `url(#${prefix}-${index})`;
                 if (fromX === toX) {
                     return (
                         <line
