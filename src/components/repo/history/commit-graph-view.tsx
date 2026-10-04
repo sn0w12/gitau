@@ -346,7 +346,7 @@ function CommitGraphRow({
                         {refs.map((name) => (
                             <Badge
                                 key={name}
-                                className="max-w-1/2 min-w-0 shrink"
+                                className="min-w-0 shrink"
                                 style={{
                                     background: laneAlpha(lane, 12),
                                     color: laneVar(lane),
