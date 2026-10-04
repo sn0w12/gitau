@@ -5,7 +5,10 @@ import type { ReactElement } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, beforeEach } from "vitest";
 
-import { CommitGraphView } from "@/components/repo/history/commit-graph-view";
+import {
+    collapseRefs,
+    CommitGraphView,
+} from "@/components/repo/history/commit-graph-view";
 import { AppServicesContext } from "@/contexts/services-context";
 import { TabContext } from "@/contexts/tab-context";
 import type { GraphEvent, GraphRow } from "@/lib/backend/protocol";
@@ -130,8 +133,14 @@ describe("CommitGraphView", () => {
                 operationId: op,
                 rowStart: 0,
                 rows: [
-                    row(0, { refs: ["main"], lane: 0 }),
-                    row(1, { lane: 1 }),
+                    row(0, {
+                        refs: ["main", "origin/main", "origin/HEAD"],
+                        lane: 0,
+                    }),
+                    row(1, {
+                        lane: 1,
+                        edges: [{ fromLane: 0, toLane: 1 }],
+                    }),
                 ],
             });
             services.emit({
@@ -150,7 +159,13 @@ describe("CommitGraphView", () => {
         expect(view.container.textContent).toContain("Commit 1");
         // Branch decoration pill renders.
         expect(view.container.textContent).toContain("main");
-        // The SVG gutter is present (edges + nodes).
+        // The remote-tracking copy of a branch is folded into the local one.
+        expect(view.container.textContent).not.toContain("origin/main");
+        expect(view.container.textContent).toContain("origin/HEAD");
+        // Rows are real table rows in a headerless table.
+        expect(view.container.querySelector("thead")).toBeNull();
+        expect(rowsEl[0].parentElement?.tagName).toBe("TBODY");
+        expect(rowsEl[0].parentElement?.parentElement?.tagName).toBe("TABLE");
         expect(view.container.querySelector("svg")).not.toBeNull();
 
         // Clicking a row reports its commit id.
@@ -188,5 +203,27 @@ describe("CommitGraphView", () => {
             view.container.querySelector('[data-slot="graph-empty"]')
         ).not.toBeNull();
         view.unmount();
+    });
+});
+
+describe("collapseRefs", () => {
+    it("keeps the shallowest name for refs sharing a trailing segment", () => {
+        expect(
+            collapseRefs([
+                "feature/pull-requests",
+                "origin/feature/pull-requests",
+            ])
+        ).toEqual(["feature/pull-requests"]);
+        expect(collapseRefs(["origin/main", "upstream/main", "main"])).toEqual([
+            "main",
+        ]);
+    });
+
+    it("keeps refs that name different branches", () => {
+        expect(collapseRefs(["origin/HEAD", "origin/main"])).toEqual([
+            "origin/HEAD",
+            "origin/main",
+        ]);
+        expect(collapseRefs([])).toEqual([]);
     });
 });

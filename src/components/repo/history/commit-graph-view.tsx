@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -15,23 +15,29 @@ const GRAPH_OVERSCAN_ROWS = 10;
 /** Catch-up read size when a completed session still has missing rows. */
 const GRAPH_CATCHUP_ROWS = 2048;
 const LANE_COLORS = 8;
-const LANE_GAP = 20;
-const LANE_PAD = 20;
-/** Column left of the graph holding ref pills and their dashed connectors. */
-const REF_ZONE_WIDTH = 300;
+const LANE_GAP = 16;
+const LANE_PAD = 14;
+/** Lanes past this clip out of the rail so it stays a small share of a row. */
+const MAX_LANE_COLUMNS = 8;
 const EDGE_STROKE = 2;
-const NODE_RADIUS = 7;
-const MERGE_RADIUS = 8;
-/** Fixed-width meta columns right of the summary, outside the row tint. */
-const META_WIDTH = 450;
-const META_TOTAL = META_WIDTH + 16;
+/**
+ * Share of a connector spent blending from one lane color into the next. The
+ * blend sits in the middle, so the connector starts in the lane it leaves and
+ * ends in the lane it joins.
+ */
+const LANE_BLEND_FRACTION = 0.15;
+const NODE_RADIUS = 6;
+const MERGE_RADIUS = 7;
+const SQUIRCLE_CORNER = 0.7;
+const NODE_CORE_INSET = 4;
+const COLUMN_COUNT = 6;
 
 export function laneVar(lane: number): string {
     return `var(--graph-lane-${((lane % LANE_COLORS) + LANE_COLORS) % LANE_COLORS})`;
 }
 
 function laneX(lane: number): number {
-    return REF_ZONE_WIDTH + LANE_PAD + lane * LANE_GAP;
+    return LANE_PAD + lane * LANE_GAP;
 }
 
 function laneAlpha(lane: number, percent: number): string {
@@ -56,15 +62,40 @@ export function flattenRows(
     return rows.length <= knownTotalRows ? rows : rows.slice(0, knownTotalRows);
 }
 
+/**
+ * The backend decorates a commit with every ref that peels to it, so a pushed
+ * branch arrives twice: `feature/x` and `origin/feature/x`. Refs sharing a
+ * trailing path segment are the same branch seen through a remote, and the
+ * shallowest name wins (`feature/x`, not `origin/feature/x`).
+ */
+export function collapseRefs(refs: string[]): string[] {
+    const shallowest = new Map<string, { ref: string; depth: number }>();
+    for (const ref of refs) {
+        const slash = ref.lastIndexOf("/");
+        const tail = slash === -1 ? ref : ref.slice(slash + 1);
+        const depth = slash === -1 ? 0 : ref.split("/").length;
+        const seen = shallowest.get(tail);
+        if (seen === undefined || depth < seen.depth) {
+            shallowest.set(tail, { ref, depth });
+        }
+    }
+    return [...shallowest.values()].map((entry) => entry.ref);
+}
+
 function shortId(id: string): string {
     return id.slice(0, 7);
 }
+
 /**
- * Fixed-row-height commit graph under the history chart. Rows are absolutely
- * positioned at `index * GRAPH_ROW_HEIGHT_PX`, so windowing is arithmetic and
- * the graph gutter renders one SVG over the visible window plus overscan.
- * Edges span from a row's node center to the next row's node center so lane
- * lines stay continuous across rows; nodes paint on top and hide the joints.
+ * Headerless commit table: rail, summary, refs, author, date, short id.
+ * Rows have a fixed height, so the window is picked arithmetically and the
+ * rows above and below it are replaced by one spacer row each. Spacers rather
+ * than absolutely positioned rows keep real rows in normal flow, so
+ * `table-fixed` and the colgroup hold the column widths across scrolls.
+ *
+ * Column widths are `min(<content size>, <share of the table>)`. Fixed table
+ * layout never shrinks a specified width, so an uncapped column would push the
+ * summary off a narrow panel instead of giving up its own space.
  */
 export function CommitGraphView({
     repoId,
@@ -119,17 +150,19 @@ export function CommitGraphView({
     const lastVisible = Math.min(rows.length, firstVisible + visibleCount);
     const windowRows = rows.slice(firstVisible, lastVisible);
 
-    // Lanes over the full row list keep the gutter width stable while
+    // Lanes over the full row list keep the rail width stable while
     // scrolling; deep lanes only appear as the stream reaches them.
-    const laneCount = useMemo(() => {
-        let max = 1;
+    const railWidth = useMemo(() => {
+        let deepest = 1;
         for (const row of rows) {
-            max = Math.max(max, row.lane + 1);
-            for (const edge of row.edges) max = Math.max(max, edge.toLane + 1);
+            deepest = Math.max(deepest, row.lane + 1);
+            for (const edge of row.edges)
+                deepest = Math.max(deepest, edge.toLane + 1);
         }
-        return max;
+        return (
+            LANE_PAD * 2 + (Math.min(deepest, MAX_LANE_COLUMNS) - 1) * LANE_GAP
+        );
     }, [rows]);
-    const gutterWidth = laneX(laneCount - 1) + LANE_PAD;
 
     // A completed session with a gap in the prefix catches up through a
     // range read; the backend keeps completed operations for range reads.
@@ -185,30 +218,59 @@ export function CommitGraphView({
         >
             <ScrollArea scrollX={false} overscrollContain>
                 <div
-                    className="relative"
+                    className="relative overflow-hidden pr-2"
                     style={{
-                        height: Math.max(
+                        minHeight: Math.max(
                             rows.length * GRAPH_ROW_HEIGHT_PX,
                             viewportHeight
                         ),
                     }}
                 >
-                    {windowRows.map((row, offset) => (
-                        <GraphRowLine
-                            key={row.id}
-                            row={row}
-                            gutterWidth={gutterWidth}
-                            top={(firstVisible + offset) * GRAPH_ROW_HEIGHT_PX}
-                            selected={selectedId === row.id}
-                            onSelect={onSelect}
-                        />
-                    ))}
+                    <table
+                        className="w-full table-fixed border-separate border-spacing-0 text-sm whitespace-nowrap"
+                        style={{ "--rail": `${railWidth}px` } as CSSProperties}
+                    >
+                        <colgroup>
+                            <col style={{ width: "var(--rail)" }} />
+                            <col />
+                            <col
+                                style={{ width: "min(calc(18ch + 1rem), 16%)" }}
+                            />
+                            <col
+                                style={{ width: "min(calc(14ch + 1rem), 12%)" }}
+                            />
+                            <col style={{ width: "calc(13ch + 1rem)" }} />
+                            <col
+                                className="font-mono"
+                                style={{ width: "calc(7ch + 1rem)" }}
+                            />
+                        </colgroup>
+                        <tbody>
+                            <SpacerRow
+                                height={firstVisible * GRAPH_ROW_HEIGHT_PX}
+                            />
+                            {windowRows.map((row) => (
+                                <CommitGraphRow
+                                    key={row.id}
+                                    row={row}
+                                    selected={selectedId === row.id}
+                                    onSelect={onSelect}
+                                />
+                            ))}
+                            <SpacerRow
+                                height={
+                                    (rows.length - lastVisible) *
+                                    GRAPH_ROW_HEIGHT_PX
+                                }
+                            />
+                        </tbody>
+                    </table>
                     <svg
                         aria-hidden="true"
                         className="pointer-events-none absolute left-0"
                         style={{
                             top: firstVisible * GRAPH_ROW_HEIGHT_PX,
-                            width: gutterWidth,
+                            width: railWidth,
                             // Edges of the last windowed row reach half a row
                             // past its center.
                             height:
@@ -243,36 +305,187 @@ export function CommitGraphView({
     );
 }
 
+function SpacerRow({ height }: { height: number }) {
+    if (height <= 0) return null;
+    return (
+        <tr aria-hidden="true" data-slot="graph-spacer">
+            <td colSpan={COLUMN_COUNT} className="p-0" style={{ height }} />
+        </tr>
+    );
+}
+
+function CommitGraphRow({
+    row,
+    selected,
+    onSelect,
+}: {
+    row: GraphRow;
+    selected: boolean;
+    onSelect: (commitId: string) => void;
+}) {
+    const lane = row.lane;
+    const refs = collapseRefs(row.refs);
+    return (
+        <tr
+            tabIndex={0}
+            data-slot="graph-row"
+            data-selected={selected || undefined}
+            onClick={() => onSelect(row.id)}
+            onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onSelect(row.id);
+                }
+            }}
+            className="cursor-pointer hover:bg-accent/40 focus-visible:bg-accent/64 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring data-selected:bg-accent/64"
+            style={{ height: GRAPH_ROW_HEIGHT_PX }}
+        >
+            <td className="p-0" />
+            <td className="truncate pr-2">{row.summaryLine}</td>
+            <td className="truncate px-2">
+                {refs.length > 0 && (
+                    <span className="flex min-w-0 items-center gap-1">
+                        {refs.map((name) => (
+                            <Badge
+                                key={name}
+                                className="min-w-0 shrink"
+                                style={{
+                                    background: laneAlpha(lane, 12),
+                                    color: laneVar(lane),
+                                }}
+                            >
+                                <span className="min-w-0 truncate">{name}</span>
+                            </Badge>
+                        ))}
+                    </span>
+                )}
+            </td>
+            <td className="truncate px-2 text-muted-foreground">
+                {row.authorName}
+            </td>
+            <td className="truncate px-2 text-muted-foreground">
+                {formatRelativeDate(row.timeSeconds * 1000)}
+            </td>
+            <td className="truncate px-2 font-mono text-muted-foreground">
+                {shortId(row.id)}
+            </td>
+        </tr>
+    );
+}
+
 function CommitNode({ row, cy }: { row: GraphRow; cy: number }) {
-    const r = row.kind === "merge" ? MERGE_RADIUS : NODE_RADIUS;
     const cx = laneX(row.lane);
+    const stroke = laneVar(row.lane);
+
+    if (row.kind === "merge") {
+        const outer = MERGE_RADIUS;
+        const core = outer - NODE_CORE_INSET;
+        return (
+            <g>
+                <rect
+                    x={cx - outer}
+                    y={cy - outer}
+                    width={outer * 2}
+                    height={outer * 2}
+                    rx={outer * SQUIRCLE_CORNER}
+                    fill="var(--background)"
+                    stroke={stroke}
+                    strokeWidth={EDGE_STROKE}
+                />
+                <rect
+                    x={cx - core}
+                    y={cy - core}
+                    width={core * 2}
+                    height={core * 2}
+                    rx={(outer * SQUIRCLE_CORNER * core) / outer}
+                    fill={stroke}
+                />
+            </g>
+        );
+    }
+
     return (
         <g>
             <circle
                 cx={cx}
                 cy={cy}
-                r={r}
+                r={NODE_RADIUS}
                 fill="var(--background)"
-                stroke={laneVar(row.lane)}
-                strokeWidth={2}
+                stroke={stroke}
+                strokeWidth={EDGE_STROKE}
             />
-            <circle cx={cx} cy={cy} r={r - 4} fill={laneVar(row.lane)} />
+            <circle
+                cx={cx}
+                cy={cy}
+                r={NODE_RADIUS - NODE_CORE_INSET}
+                fill={stroke}
+            />
         </g>
     );
 }
 
 function GraphEdges({ row, yCenter }: { row: GraphRow; yCenter: number }) {
-    // Edges land on the next row's node center so segments join seamlessly.
+    // Ids reach the document through url(#id), which rejects the characters
+    // useId may emit, so keep only the identifier-safe ones.
+    const prefix = useId().replace(/[^a-zA-Z0-9]/g, "");
     const yNext = yCenter + GRAPH_ROW_HEIGHT_PX;
+    const blendLength = GRAPH_ROW_HEIGHT_PX * LANE_BLEND_FRACTION;
+    const blendStart = yCenter + (GRAPH_ROW_HEIGHT_PX - blendLength) / 2;
+    const blendEnd = blendStart + blendLength;
+    const shifts = row.edges
+        .map((edge, index) => ({ edge, index }))
+        .filter(({ edge }) => laneVar(edge.fromLane) !== laneVar(edge.toLane));
     return (
         <g>
+            {shifts.length > 0 && (
+                <defs>
+                    {shifts.map(({ edge, index }) => {
+                        const toX = laneX(edge.toLane);
+                        return (
+                            <linearGradient
+                                key={index}
+                                id={`${prefix}-${index}`}
+                                gradientUnits="userSpaceOnUse"
+                                x1={toX}
+                                y1={blendStart}
+                                x2={toX}
+                                y2={blendEnd}
+                            >
+                                <stop
+                                    offset="0"
+                                    style={{
+                                        stopColor: laneVar(edge.fromLane),
+                                    }}
+                                />
+                                <stop
+                                    offset="0.5"
+                                    style={{
+                                        stopColor: `color-mix(in oklch, ${laneVar(
+                                            edge.fromLane
+                                        )} 50%, ${laneVar(edge.toLane)})`,
+                                    }}
+                                />
+                                <stop
+                                    offset="1"
+                                    style={{
+                                        stopColor: laneVar(edge.toLane),
+                                    }}
+                                />
+                            </linearGradient>
+                        );
+                    })}
+                </defs>
+            )}
             {row.edges.map((edge, index) => {
                 const fromX = laneX(edge.fromLane);
                 const toX = laneX(edge.toLane);
-                // Bends take the destination lane's color so the end of the
-                // curve matches the node it lands on and the line below it.
-                const stroke = laneVar(edge.toLane);
-                if (edge.fromLane === edge.toLane) {
+                // Same-lane edges have nothing to hand over, and skipping the
+                // paint server keeps through-lanes off the gradient path.
+                const stroke =
+                    laneVar(edge.fromLane) === laneVar(edge.toLane)
+                        ? laneVar(edge.toLane)
+                        : `url(#${prefix}-${index})`;
+                if (fromX === toX) {
                     return (
                         <line
                             key={index}
@@ -294,18 +507,17 @@ function GraphEdges({ row, yCenter }: { row: GraphRow; yCenter: number }) {
                     Math.abs(toX - fromX) / 2,
                     GRAPH_ROW_HEIGHT_PX / 2 - 2
                 );
-                const d = [
-                    `M ${fromX} ${yCenter}`,
-                    `L ${fromX} ${yMid - r}`,
-                    `Q ${fromX} ${yMid} ${fromX + dx * r} ${yMid}`,
-                    `L ${toX - dx * r} ${yMid}`,
-                    `Q ${toX} ${yMid} ${toX} ${yMid + r}`,
-                    `L ${toX} ${yNext}`,
-                ].join(" ");
                 return (
                     <path
                         key={index}
-                        d={d}
+                        d={[
+                            `M ${fromX} ${yCenter}`,
+                            `L ${fromX} ${yMid - r}`,
+                            `Q ${fromX} ${yMid} ${fromX + dx * r} ${yMid}`,
+                            `L ${toX - dx * r} ${yMid}`,
+                            `Q ${toX} ${yMid} ${toX} ${yMid + r}`,
+                            `L ${toX} ${yNext}`,
+                        ].join(" ")}
                         fill="none"
                         stroke={stroke}
                         strokeWidth={EDGE_STROKE}
@@ -313,101 +525,5 @@ function GraphEdges({ row, yCenter }: { row: GraphRow; yCenter: number }) {
                 );
             })}
         </g>
-    );
-}
-
-function GraphRowLine({
-    row,
-    gutterWidth,
-    top,
-    selected,
-    onSelect,
-}: {
-    row: GraphRow;
-    gutterWidth: number;
-    top: number;
-    selected: boolean;
-    onSelect: (commitId: string) => void;
-}) {
-    const lane = row.lane;
-    return (
-        <div
-            role="button"
-            tabIndex={0}
-            data-slot="graph-row"
-            data-selected={selected || undefined}
-            onClick={() => onSelect(row.id)}
-            onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    onSelect(row.id);
-                }
-            }}
-            className="absolute inset-x-0 cursor-pointer [--tint:5%] hover:bg-accent hover:[--tint:9%] data-selected:bg-accent/64 data-selected:[--tint:13%]"
-            style={
-                {
-                    top,
-                    height: GRAPH_ROW_HEIGHT_PX,
-                    "--row-lane": laneVar(lane),
-                } as CSSProperties
-            }
-        >
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-y-0 my-1 rounded-l-full border-r-2 border-dotted"
-                style={{
-                    left: REF_ZONE_WIDTH,
-                    right: META_TOTAL,
-                    background:
-                        "color-mix(in srgb, var(--row-lane) var(--tint), transparent)",
-                    borderColor: laneVar(lane),
-                }}
-            />
-            {row.refs.length > 0 && (
-                <div
-                    className="absolute inset-y-0 flex min-w-0 items-center gap-1.5 overflow-hidden"
-                    style={{ left: 12, width: laneX(lane) - 26 }}
-                >
-                    {row.refs.map((name) => (
-                        <Badge
-                            key={name}
-                            className="min-w-0 shrink truncate"
-                            style={{
-                                background: laneAlpha(lane, 12),
-                                color: laneVar(lane),
-                            }}
-                        >
-                            {name}
-                        </Badge>
-                    ))}
-                    <span
-                        className="h-0 min-w-2 flex-1 border-t border-dashed"
-                        style={{ borderColor: laneAlpha(lane, 45) }}
-                    />
-                </div>
-            )}
-            <div
-                className="relative flex h-full min-w-0 items-center pr-4 text-sm"
-                style={{ paddingLeft: gutterWidth + 12 }}
-            >
-                <span className="min-w-0 flex-1 truncate">
-                    {row.summaryLine}
-                </span>
-                <div
-                    className="flex h-full shrink-0 items-center justify-end gap-3 font-mono text-muted-foreground"
-                    style={{ width: META_WIDTH }}
-                >
-                    <span className="hidden h-full min-w-0 flex-1 flex-col justify-center truncate border-r pr-2 text-center 2xl:flex">
-                        {row.authorName}
-                    </span>
-                    <span className="flex h-full w-42 flex-col justify-center border-r pr-2 text-center">
-                        {formatRelativeDate(row.timeSeconds * 1000)}
-                    </span>
-                    <span className="flex h-full shrink-0 flex-col justify-center">
-                        {shortId(row.id)}
-                    </span>
-                </div>
-            </div>
-        </div>
     );
 }
