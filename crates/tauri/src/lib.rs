@@ -50,6 +50,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
+        // Must match the id on the maximize button in
+        // src/components/window-controls/WindowControls.tsx.
+        .plugin(
+            tauri_plugin_snap_layout::init()
+                .button_id("gitau-snap-maximize")
+                .build(),
+        )
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(external_navigation_plugin())
         .plugin(prevent_default())

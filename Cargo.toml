@@ -1,6 +1,10 @@
 [workspace]
 resolver = "2"
-members = ["crates/git-backend", "crates/tauri"]
+members = [
+    "crates/git-backend",
+    "crates/tauri",
+    "crates/tauri-plugin-snap-layout",
+]
 
 [workspace.package]
 version = "0.2.0"
@@ -48,6 +52,7 @@ tauri-plugin-opener = "2"
 tauri-plugin-os = "2"
 tauri-plugin-prevent-default = "5"
 tauri-plugin-process = "2"
+tauri-plugin-snap-layout = { path = "crates/tauri-plugin-snap-layout" }
 tauri-plugin-updater = "2"
 tempfile = "3"
 thiserror = "2"

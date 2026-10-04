@@ -20,7 +20,7 @@
                 "center": true,
                 "visible": false,
                 "decorations": false,
-                "minWidth": 820,
+                "minWidth": 500,
                 "minHeight": 480
             }
         ],

@@ -42,6 +42,7 @@ function WindowsControls({
                 <Icons.minimizeWin />
             </TitlebarButton>
             <TitlebarButton
+                id="gitau-snap-maximize"
                 onClick={() =>
                     void (isMaximized
                         ? windowApi.unmaximize()

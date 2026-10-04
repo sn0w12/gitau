@@ -8,6 +8,9 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@custom-variant snap-hover (&.is-hovered);
+@custom-variant snap-active (&.is-active);
+
 @theme inline {
     --font-heading: "Kalnia Variable", serif;
     --font-display: "Instrument Serif", serif;
