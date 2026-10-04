@@ -1,15 +1,8 @@
 set shell := ["pwsh", "-NoLogo", "-Command"]
 set dotenv-load := false
 
-ci:
-    npm run format:check
-    npm run lint
-    npm run typecheck
-    npm test
-    cargo fmt --all --check
-    cargo check --workspace --all-targets
-    cargo clippy --workspace --all-targets -- -D warnings
-    cargo test --workspace
+ci *args="":
+    node scripts/ci.mjs{{ if args == "" { "" } else { " " + args } }}
 
 check:
     npm run typecheck

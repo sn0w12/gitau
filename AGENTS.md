@@ -36,7 +36,7 @@ React UI (src/)
 | `src/routes/`             | Page components + `route-tree.tsx`                                                                                                                                                                                |
 | `crates/git-backend/src/` | `api/` (DTOs), `application/backend.rs` (facade), `domain/`, `engines/{git2,gix}/`, `error/`, `runtime/` (scheduler/cache/watcher/cancellation), `streaming/`                                                     |
 | `crates/tauri/src/`       | `lib.rs` (builder + command registration), `state.rs`, `commands/*`, `session.rs`, `settings/`                                                                                                                    |
-| `tests/`                  | Frontend Vitest suite mirroring `src/`: `lib/`, `stores/`, `components/`, `hooks/`                                                                                                                                |
+| `tests/`                  | Vitest suite mirroring `src/`: `lib/`, `stores/`, `components/`, `hooks/`                                                                                                                                         |
 
 ## Development commands
 
@@ -47,13 +47,22 @@ npm run dev              # frontend only, port 3000 (strict)
 npm run build            # vite build (frontend)
 npm run tauri build      # installer bundle
 
-# Gates, all run in CI (.github/workflows/ci.yml):
-npm run format:check     # oxfmt --check
-npm run lint             # oxlint
-npm run typecheck        # tsc --noEmit
-npm test                 # vitest run
+# Gates. just ci (node scripts/ci.mjs) runs them scheduled: the four frontend
+# gates and rustfmt run concurrently, the cargo gates serialize on the build
+# lock. Same checks as CI, minus cargo check (clippy repeats it) and with
+# cargo nextest when it is installed.
+just ci                    # every gate, concurrent, summary table + test counts
+just ci --changed          # only gates whose paths changed vs HEAD
+just ci --gate lint        # one gate or prefix: fmt, lint, types, test, check
+just ci --verbose          # stream output live instead of buffering it
+just ci-serial             # the gates one after another, for bisecting
+
+# The same gates on their own:
+npm run format:check       # oxfmt --check
+npm run lint               # oxlint
+npm run typecheck          # tsc --noEmit
+npm test                   # vitest run
 cargo fmt --all --check
-cargo check --workspace --all-targets
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
@@ -130,6 +139,7 @@ Every word written in this repo follows this: comments, markdown docs, commit me
 ## Important files
 
 - `src/main.tsx`: async bootstrap (settings → session restore → theme → render); failure renders `BootstrapError`.
+- `scripts/ci.mjs`: the gate registry and scheduler behind `just ci`. A gate's `lock` decides scheduling, `null` runs concurrently and `"cargo"` serializes on the build lock. `tests` names the runner whose output gets tallied into the passed/skipped/failed counts.
 - `src/lib/backend/transport/client.ts`: typed backend client; single choke point for command names.
 - `src/lib/bootstrap/app-runtime.ts`: process-wide `{backend, queryClient}` singleton (`resetAppRuntime()` for tests).
 - `src/routes/route-tree.tsx`: per-tab route tree factory; loaders handle title/badge, repo binding, stale-id redirects.
