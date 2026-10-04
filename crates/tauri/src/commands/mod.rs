@@ -39,5 +39,6 @@ pub mod repository;
 pub mod session;
 pub mod settings;
 pub mod submodules;
+pub mod terminal;
 pub mod workflows;
 pub mod worktrees;

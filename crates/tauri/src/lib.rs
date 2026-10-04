@@ -294,6 +294,7 @@ pub fn run() {
             commands::settings::settings_load,
             commands::settings::settings_set,
             commands::editor::open_in_editor,
+            commands::terminal::open_in_terminal,
             commands::file_manager::reveal_in_file_manager,
             commands::submodules::git_list_submodules,
             commands::submodules::git_add_submodule,

@@ -1,7 +1,15 @@
-import { FolderOpen, Pin, PinOff, SquarePen, Trash } from "lucide-react";
+import {
+    FolderOpen,
+    Pin,
+    PinOff,
+    SquarePen,
+    Terminal,
+    Trash,
+} from "lucide-react";
 import type * as React from "react";
 
 import { useOpenInEditor } from "@/hooks/repositories/use-open-in-editor";
+import { useOpenInTerminal } from "@/hooks/repositories/use-open-in-terminal";
 import { useRemoveRepository } from "@/hooks/repositories/use-remove-repository";
 import { useRevealInFileManager } from "@/hooks/repositories/use-reveal-in-file-manager";
 import { useSettingValue } from "@/hooks/settings/use-setting";
@@ -34,6 +42,7 @@ export function RepoContextMenu({
 }: RepoContextMenuProps): React.ReactElement {
     const removeRepo = useRemoveRepository();
     const { enabled, openInEditor } = useOpenInEditor();
+    const openInTerminal = useOpenInTerminal();
     const revealInFileManager = useRevealInFileManager();
     const pinnedRepos = useSettingValue("pinnedRepos") ?? [];
 
@@ -71,6 +80,13 @@ export function RepoContextMenu({
                 >
                     <SquarePen />
                     Open in editor
+                </ContextMenuItem>
+                <ContextMenuItem
+                    onClick={() => void openInTerminal(repoPath)}
+                    data-testid="repo-menu-open-in-terminal"
+                >
+                    <Terminal />
+                    Open in terminal
                 </ContextMenuItem>
                 <ContextMenuItem
                     onClick={() => void revealInFileManager(repoPath)}

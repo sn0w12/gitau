@@ -22,6 +22,7 @@ const REPO_PATH = "C:\\repos\\alpha";
 function fakeServices() {
     const editorCalls: Array<{ path: string; relativePath?: string }> = [];
     const revealCalls: Array<{ path: string; relativePath?: string }> = [];
+    const terminalCalls: string[] = [];
     const backend = {
         editor: {
             openInEditor: (
@@ -41,6 +42,12 @@ function fakeServices() {
                 return Promise.resolve({ ok: true, value: undefined });
             },
         },
+        terminal: {
+            open: (path: string): Promise<Result<void>> => {
+                terminalCalls.push(path);
+                return Promise.resolve({ ok: true, value: undefined });
+            },
+        },
     };
     return {
         backend: backend as unknown as BackendClient,
@@ -49,6 +56,7 @@ function fakeServices() {
         }),
         editorCalls,
         revealCalls,
+        terminalCalls,
     };
 }
 
@@ -145,6 +153,37 @@ describe("RepoContextMenu", () => {
             path: REPO_PATH,
             relativePath: undefined,
         });
+        view.unmount();
+    });
+
+    it("opens the repo folder in the default terminal without configuration", async () => {
+        seedSettingsForTests({ editorCommand: "code" });
+        const services = fakeServices();
+        const view = renderWith(
+            services,
+            <RepoContextMenu repoPath={REPO_PATH}>
+                <button data-testid="repo-row">alpha</button>
+            </RepoContextMenu>
+        );
+
+        await rightClick(
+            view.container.querySelector('[data-testid="repo-row"]')!
+        );
+        const opened = await waitFor(() =>
+            Boolean(document.querySelector('[data-slot="context-menu-popup"]'))
+        );
+        expect(opened).toBe(true);
+
+        const item = menuItem("repo-menu-open-in-terminal");
+        expect(
+            item.getAttribute("aria-disabled") === "true" ||
+                item.hasAttribute("data-disabled")
+        ).toBe(false);
+
+        await click(item);
+        const settled = await waitFor(() => services.terminalCalls.length > 0);
+        expect(settled).toBe(true);
+        expect(services.terminalCalls[0]).toBe(REPO_PATH);
         view.unmount();
     });
 

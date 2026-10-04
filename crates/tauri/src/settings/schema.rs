@@ -187,6 +187,15 @@ pub fn builtin() -> SettingsSchema {
                             .default_value(SettingValue::Str(String::new()))],
                     },
                     SettingsSection {
+                        id: "terminal",
+                        title: "Terminal",
+                        settings: vec![string("terminalCommand", "Terminal command")
+                            .description(
+                                "Command used by \"Open in terminal\". Leave empty to use the terminal configured as your system default.",
+                            )
+                            .default_value(SettingValue::Str(String::new()))],
+                    },
+                    SettingsSection {
                         id: "git",
                         title: "Git",
                         settings: vec![

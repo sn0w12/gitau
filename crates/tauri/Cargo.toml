@@ -43,3 +43,6 @@ tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tauri-plugin-os.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-registry = "0.6"

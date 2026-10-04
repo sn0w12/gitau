@@ -896,6 +896,16 @@ function createRawBackendClient() {
                 }),
         },
 
+        terminal: {
+            /** Opens a terminal with `path` as its working directory, using
+             * the system default emulator or the `terminalCommand` override
+             * when one is set. */
+            open: (path: string) =>
+                invokeCommand<void>("open_in_terminal", {
+                    args: { path },
+                }),
+        },
+
         icons: {
             resolve: (remoteUrl: string) =>
                 invokeCommand<CachedIcon>("icon_resolve", {
@@ -982,6 +992,7 @@ export function createBackendClient(): BackendClient {
         settings: resultifyGroup(raw.settings),
         editor: resultifyGroup(raw.editor),
         fileManager: resultifyGroup(raw.fileManager),
+        terminal: resultifyGroup(raw.terminal),
         icons: resultifyGroup(raw.icons),
         session: resultifyGroup(raw.session),
     };
