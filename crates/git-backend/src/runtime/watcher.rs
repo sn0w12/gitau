@@ -223,39 +223,62 @@ mod tests {
         std::fs::write(&ref_file, b"0").unwrap();
         std::fs::write(&tracked_file, b"0").unwrap();
 
+        // Only the ref file itself counts as a tip. Registering a recursive
+        // watch walks the tree, and on Windows those reads come back as
+        // directory-metadata events, so a prefix match would call a bare
+        // `refs/tags` event a ref update and report `true` for a burst that
+        // never touched the tip.
+        let ref_tip = ref_file.clone();
+
         let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
         let seen_cb = seen.clone();
         let handle = spawn_watch(
             &[temp.path().to_path_buf()],
             Duration::from_millis(60),
             |_| false,
-            move |path| path.starts_with(&refs_dir),
+            move |path| path == &ref_tip,
             move |refs_changed| {
                 seen_cb.lock().unwrap().push(refs_changed);
             },
         )
         .unwrap();
 
+        let mut before = 0;
         std::fs::write(&tracked_file, b"1").unwrap();
         let deadline = Instant::now() + Duration::from_secs(3);
-        while seen.lock().unwrap().is_empty() && Instant::now() < deadline {
+        while seen.lock().unwrap().len() == before && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(25));
         }
+        // Let the burst go quiet before inspecting it: a straggler callback
+        // belongs to the phase that produced it, not the next one.
+        std::thread::sleep(Duration::from_millis(200));
         {
             let seen = seen.lock().unwrap();
-            assert!(!seen.is_empty());
-            assert!(seen.iter().all(|hit| !hit));
+            assert!(
+                seen.len() > before,
+                "the worktree write must fire a callback"
+            );
+            assert!(
+                seen.iter().all(|hit| !hit),
+                "a burst that missed the ref tip must report false"
+            );
         }
 
+        before = seen.lock().unwrap().len();
         std::fs::write(&ref_file, b"1").unwrap();
         let deadline = Instant::now() + Duration::from_secs(3);
-        while seen.lock().unwrap().len() < 2 && Instant::now() < deadline {
+        while seen.lock().unwrap().len() == before && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(25));
         }
         {
             let seen = seen.lock().unwrap();
-            assert!(seen.len() >= 2);
-            assert!(*seen.last().unwrap());
+            assert!(seen.len() > before, "the ref write must fire a callback");
+            // Any callback in this phase carrying the flag counts: a late
+            // worktree-only burst after the ref burst is not a failure.
+            assert!(
+                seen[before..].iter().any(|hit| *hit),
+                "a burst that touched the ref tip must report true"
+            );
         }
 
         handle.stop();
