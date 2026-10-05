@@ -149,12 +149,12 @@ fn worktree_side(
 /// Persist refreshed stat data back to the index, the same thing `git status`
 /// and libgit2's `update_index(true)` do.
 ///
-/// The traversal above is slow, so a mutation (or the open-time warmup
-/// finishing late) can rewrite the index while this status is in flight.
-/// `index.lock` is therefore held across the re-read, merge, and write: a
-/// racing git2 mutation fails locked and retries, so its just-written
-/// entries can never be clobbered by this older snapshot. Refreshed stats
-/// merge only into entries still matching by path and blob id. Best effort
+/// The traversal above is slow, so this runs against a snapshot that predates
+/// any mutation landing meanwhile. `index.lock` is therefore held across the
+/// re-read, merge, and write, so no writer can slip an update in between and
+/// have it overwritten by this older snapshot; writers inside this process
+/// queue on the gate instead of racing the lock file. Refreshed stats merge
+/// only into entries still matching by path and blob id. Best effort
 /// throughout: a held lock or an unreadable index simply skips the refresh.
 fn persist_stat_refresh(
     repo: &gix::Repository,
@@ -174,6 +174,9 @@ fn persist_stat_refresh(
     if resolved.is_empty() {
         return;
     }
+    // Queue behind this process's own mutations so the lock below is free to
+    // take instead of being retried against them.
+    let _gate = crate::engines::index_lock::gate();
     let Ok(lock) = gix::lock::File::acquire_to_update_resource(
         repo.index_path(),
         gix::lock::acquire::Fail::Immediately,

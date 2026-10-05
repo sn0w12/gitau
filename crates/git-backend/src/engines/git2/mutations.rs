@@ -44,33 +44,34 @@ pub fn stage(repo: &git2::Repository, paths: &[String], all: bool) -> Result<()>
             }
         }
     }
-    // The gix status engine refreshes racy stat data back into the index
-    // under index.lock; a stage landing in that window retries instead of
-    // surfacing a spurious lock error to the user.
     retry_locked(|| index.write())?;
     Ok(())
 }
 
+/// Runs an index write, serializing this process's writers through the gate so
+/// the retry below only ever races an external git process.
 pub(crate) fn retry_locked<T>(
     mut f: impl FnMut() -> std::result::Result<T, git2::Error>,
 ) -> Result<T> {
-    const MAX_ATTEMPTS: u32 = 20;
-    let mut err = None;
-    for _ in 0..MAX_ATTEMPTS {
+    const DEADLINE: std::time::Duration = std::time::Duration::from_secs(2);
+    const MAX_WAIT: std::time::Duration = std::time::Duration::from_millis(50);
+    let _gate = crate::engines::index_lock::gate();
+    let started = std::time::Instant::now();
+    let mut wait = std::time::Duration::from_millis(2);
+    let details = loop {
         match f() {
             Ok(value) => return Ok(value),
             Err(e) if e.code() == git2::ErrorCode::Locked => {
-                err = Some(e);
-                std::thread::sleep(std::time::Duration::from_millis(5));
+                if started.elapsed() >= DEADLINE {
+                    break e.message().to_owned();
+                }
+                std::thread::sleep(wait);
+                wait = (wait * 2).min(MAX_WAIT);
             }
             Err(e) => return Err(e.into()),
         }
-    }
-    Err(GitError::RepositoryLocked {
-        details: err
-            .map(|e| e.message().to_owned())
-            .unwrap_or_else(|| "index stayed locked".to_owned()),
-    })
+    };
+    Err(GitError::RepositoryLocked { details })
 }
 
 pub fn unstage(repo: &git2::Repository, paths: &[String]) -> Result<()> {
