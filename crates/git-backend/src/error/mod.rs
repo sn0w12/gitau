@@ -33,6 +33,8 @@ pub enum GitError {
     StaleSnapshot { expected: u64, current: u64 },
     #[error("operation produced conflicts: {details}")]
     Conflict { details: String },
+    #[error("hook `{hook}` failed")]
+    HookFailed { hook: String, details: String },
     #[error("authentication required for remote `{remote}`")]
     AuthenticationRequired { remote: String },
     #[error("network failure: {message}")]
@@ -78,6 +80,7 @@ impl GitError {
             GitError::RepositoryLocked { .. } => "repositoryLocked",
             GitError::StaleSnapshot { .. } => "staleSnapshot",
             GitError::Conflict { .. } => "conflict",
+            GitError::HookFailed { .. } => "hookFailed",
             GitError::AuthenticationRequired { .. } => "authenticationRequired",
             GitError::Network { .. } => "network",
             GitError::GitHub { .. } => "github",
@@ -160,6 +163,7 @@ fn detail_of(err: &GitError) -> Option<String> {
         GitError::RepositoryLocked { details } => Some(details.clone()),
         GitError::StaleSnapshot { expected, current } => Some(format!("{expected} != {current}")),
         GitError::Conflict { details } => Some(details.clone()),
+        GitError::HookFailed { details, .. } => Some(details.clone()),
         GitError::AuthenticationRequired { remote } => Some(remote.clone()),
         GitError::GitHub { message, .. } => Some(message.clone()),
         GitError::Trash { details } => Some(details.clone()),

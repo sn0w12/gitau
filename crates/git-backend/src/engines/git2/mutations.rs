@@ -160,7 +160,8 @@ pub fn commit(
         // pre-commit gates the commit like git's own pipeline.
         if let Some(result) = hook_runs.last() {
             if !result.success {
-                return Err(GitError::Conflict {
+                return Err(GitError::HookFailed {
+                    hook: result.hook.clone(),
                     details: hook_failure_details(result),
                 });
             }
@@ -623,7 +624,7 @@ pub(crate) fn validate_paths(paths: &[String]) -> Result<Vec<RelativePath>> {
 }
 
 fn hook_failure_details(result: &crate::api::hooks::HookRunResult) -> String {
-    let mut parts = vec![format!("hook `{}` failed", result.hook)];
+    let mut parts: Vec<String> = Vec::new();
     if let Some(code) = result.exit_code {
         parts.push(format!("exit {code}"));
     }
@@ -632,5 +633,5 @@ fn hook_failure_details(result: &crate::api::hooks::HookRunResult) -> String {
             parts.push(stream.to_owned());
         }
     }
-    parts.join(": ")
+    parts.join("\n")
 }

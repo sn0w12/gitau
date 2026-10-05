@@ -60,4 +60,8 @@ export class GitBackendError extends Error implements SerializedError {
     get isConflict(): boolean {
         return this.code === "conflict";
     }
+
+    get isHookFailure(): boolean {
+        return this.code === "hookFailed";
+    }
 }

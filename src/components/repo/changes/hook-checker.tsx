@@ -92,9 +92,13 @@ const editPayload = () => {
 export function HookChecker({
     repoId,
     runner,
+    open,
+    onOpenChange,
 }: {
     repoId: number;
     runner: HookRunner;
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
 }) {
     const hooks = useCommitHooks(repoId);
     const { runs, busy, run, runAll } = runner;
@@ -105,7 +109,7 @@ export function HookChecker({
     const dot = dotOf(runs);
 
     return (
-        <Popover>
+        <Popover open={open} onOpenChange={onOpenChange}>
             <PopoverTrigger
                 aria-label="Pre-commit hooks"
                 data-failed={dot === "failed" || undefined}

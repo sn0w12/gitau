@@ -18,6 +18,7 @@ import {
     useRepositoryStatus,
 } from "@/hooks/repositories/use-repository-queries";
 import { useCommitMutation } from "@/lib/backend/mutations/repository-mutations";
+import { GitBackendError } from "@/lib/backend/transport/invoke";
 import { toastError } from "@/lib/toast-error";
 
 import { HookChecker } from "./hook-checker";
@@ -35,6 +36,7 @@ export function CommitForm({
 }) {
     const [summary, setSummary] = useState("");
     const [description, setDescription] = useState("");
+    const [hooksOpen, setHooksOpen] = useState(false);
     // Owned here because the commit is one of the two things that start a
     // hook run, and the checker renders whatever runs are recorded.
     const hooks = useCommitHookRunner(repoId);
@@ -69,9 +71,18 @@ export function CommitForm({
             setDescription("");
             onCommitted?.();
         } catch (error) {
+            // The failing hook's output already streamed into the checker.
+            const gated =
+                error instanceof GitBackendError && error.isHookFailure;
             toastError(
                 merging ? "Could not finish merge" : "Commit failed",
-                error
+                error,
+                gated
+                    ? {
+                          label: "Show hooks",
+                          onClick: () => setHooksOpen(true),
+                      }
+                    : undefined
             );
         }
     };
@@ -99,7 +110,12 @@ export function CommitForm({
                             disabled={busy}
                         />
                         <InputGroupAddon align="inline-end" className="gap-0.5">
-                            <HookChecker repoId={repoId} runner={hooks} />
+                            <HookChecker
+                                repoId={repoId}
+                                runner={hooks}
+                                open={hooksOpen}
+                                onOpenChange={setHooksOpen}
+                            />
                         </InputGroupAddon>
                     </InputGroup>
                 </Field>

@@ -13,6 +13,7 @@ use git_backend::engines::git2::hooks::{
     write_commit_hook,
 };
 use git_backend::engines::git2::mutations;
+use git_backend::error::SerializedError;
 
 fn install_script(repo: &TestRepo, file_name: &str, contents: &str) {
     let path = repo.root.join(".git").join("hooks").join(file_name);
@@ -303,8 +304,11 @@ fn failing_pre_commit_gates_the_commit_with_details() {
 
     let before = repo.head_commit().id();
     let error = mutations::commit(&repo.repo, &commit_request("blocked"), None).unwrap_err();
-    let rendered = error.to_string();
-    assert!(rendered.contains("gate-closed"), "details: {rendered}");
+    assert_eq!(error.code(), "hookFailed");
+    assert_eq!(error.to_string(), "hook `pre-commit` failed");
+    let serialized = SerializedError::from(&error);
+    let detail = serialized.detail.unwrap_or_default();
+    assert!(detail.contains("gate-closed"), "detail: {detail}");
     // Windows batch exits surface the numeric code through runHook; unix
     // exit(5) appears verbatim.
     let _ = suffix;
