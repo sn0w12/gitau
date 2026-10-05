@@ -7,6 +7,7 @@ import {
     Upload,
 } from "lucide-react";
 import {
+    AnimatePresence,
     motion,
     useAnimationFrame,
     useMotionValue,
@@ -17,6 +18,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { PublishToGitHubDialog } from "@/components/repo/dialogs/publish-dialog";
 import { ForcePushDialog } from "@/components/repo/sync/force-push-dialog";
+import {
+    ToolbarTrigger,
+    ToolbarTriggerFrame,
+} from "@/components/repo/toolbar-trigger";
 import { Badge } from "@/components/ui/badge";
 import {
     useRemotes,
@@ -24,15 +29,13 @@ import {
     useRepositorySnapshot,
 } from "@/hooks/repositories/use-repository-queries";
 import { useSyncActions } from "@/hooks/repositories/use-sync-actions";
-import { BORDER_GRADIENT, REPO_TOOLBAR_TRIGGER_CLASS } from "@/lib/constants";
+import { REPO_TOOLBAR_TRIGGER_CLASS } from "@/lib/constants";
+import { EASE_SNAPPY } from "@/lib/motion";
 import { deriveFetchAction } from "@/lib/repositories/fetch-action";
-import { cn, formatRelativeDate } from "@/lib/utils";
+import { formatRelativeDate } from "@/lib/utils";
 import { fetchStore } from "@/stores/fetch-store";
 
 const RELATIVE_TIME_TICK_MS = 30_000;
-
-const TRIGGER_EXTRAS =
-    "text-left disabled:pointer-events-none disabled:opacity-64";
 
 /**
  * Toolbar sync button, mirroring GitHub Desktop's PushPullButton: fetch when
@@ -103,80 +106,53 @@ export function RepoFetchButton({
     let body: React.ReactNode;
     if (!action) {
         body = (
-            <div
-                className={cn(
-                    REPO_TOOLBAR_TRIGGER_CLASS,
-                    TRIGGER_EXTRAS,
-                    BORDER_GRADIENT
-                )}
-            />
+            <ToolbarTriggerFrame>
+                <div className={REPO_TOOLBAR_TRIGGER_CLASS} />
+            </ToolbarTriggerFrame>
         );
     } else if (action.kind === "noRemote") {
         body = (
-            <button
+            <ToolbarTrigger
                 data-testid="publish-repository-button"
                 onClick={() => setPublishOpen(true)}
-                className={cn(
-                    REPO_TOOLBAR_TRIGGER_CLASS,
-                    TRIGGER_EXTRAS,
-                    BORDER_GRADIENT
-                )}
             >
                 <ButtonContent
                     icon={<Upload className="size-7" strokeWidth="1.5px" />}
                     label="Publish repository"
                     subtitle="Publish this repository to GitHub"
                 />
-            </button>
+            </ToolbarTrigger>
         );
     } else if (action.kind === "detachedHead") {
         body = (
-            <button
-                disabled
-                data-testid="detached-head-button"
-                className={cn(
-                    REPO_TOOLBAR_TRIGGER_CLASS,
-                    TRIGGER_EXTRAS,
-                    BORDER_GRADIENT
-                )}
-            >
+            <ToolbarTrigger disabled data-testid="detached-head-button">
                 <ButtonContent
                     icon={<Upload className="size-7" strokeWidth="1.5px" />}
                     label="Publish branch"
                     subtitle="Cannot publish detached HEAD"
                 />
-            </button>
+            </ToolbarTrigger>
         );
     } else if (action.kind === "fetch") {
         body = (
-            <button
+            <ToolbarTrigger
                 disabled={busy}
                 data-testid="fetch-button"
                 onClick={() => void handleActivate(action)}
-                className={cn(
-                    REPO_TOOLBAR_TRIGGER_CLASS,
-                    TRIGGER_EXTRAS,
-                    BORDER_GRADIENT
-                )}
             >
                 <ButtonContent
                     icon={<SpinnerIcon busy={busy} />}
                     label={`Fetch ${target}`}
                     subtitle={fetchedLine}
                 />
-            </button>
+            </ToolbarTrigger>
         );
     } else if (action.kind === "publishBranch") {
         body = (
-            <button
+            <ToolbarTrigger
                 disabled={busy}
                 data-testid="fetch-button"
                 onClick={() => void handleActivate(action)}
-                className={cn(
-                    REPO_TOOLBAR_TRIGGER_CLASS,
-                    TRIGGER_EXTRAS,
-                    BORDER_GRADIENT
-                )}
             >
                 <ButtonContent
                     icon={
@@ -193,19 +169,14 @@ export function RepoFetchButton({
                     label="Publish branch"
                     subtitle="Publish this branch to GitHub"
                 />
-            </button>
+            </ToolbarTrigger>
         );
     } else if (action.kind === "pull") {
         body = (
-            <button
+            <ToolbarTrigger
                 disabled={busy}
                 data-testid="fetch-button"
                 onClick={() => void handleActivate(action)}
-                className={cn(
-                    REPO_TOOLBAR_TRIGGER_CLASS,
-                    TRIGGER_EXTRAS,
-                    BORDER_GRADIENT
-                )}
             >
                 <ButtonContent
                     icon={
@@ -228,19 +199,14 @@ export function RepoFetchButton({
                         />
                     }
                 />
-            </button>
+            </ToolbarTrigger>
         );
     } else {
         body = (
-            <button
+            <ToolbarTrigger
                 disabled={busy}
                 data-testid="fetch-button"
                 onClick={() => void handleActivate(action)}
-                className={cn(
-                    REPO_TOOLBAR_TRIGGER_CLASS,
-                    TRIGGER_EXTRAS,
-                    BORDER_GRADIENT
-                )}
             >
                 <ButtonContent
                     icon={
@@ -263,7 +229,7 @@ export function RepoFetchButton({
                         />
                     }
                 />
-            </button>
+            </ToolbarTrigger>
         );
     }
 
@@ -314,23 +280,42 @@ export function RepoFetchButton({
     }
 }
 
+const BADGE_TRANSITION = { duration: 0.18, ease: EASE_SNAPPY } as const;
+
 /** The compact `N↑ M↓` counts graphic GitHub Desktop renders on pull/push. */
 function AheadBehind({ ahead, behind }: { ahead: number; behind: number }) {
-    if (ahead === 0 && behind === 0) return null;
     return (
         <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-            {ahead > 0 && (
-                <Badge className="gap-0.5 pr-[1px]" size="sm">
-                    <span className="mt-[1.5px]">{ahead}</span>
-                    <ArrowUp className="size-3" />
-                </Badge>
-            )}
-            {behind > 0 && (
-                <Badge className="gap-0.5 pr-[1px]" size="sm">
-                    <span className="mt-[1.5px]">{behind}</span>
-                    <ArrowDown className="size-3" />
-                </Badge>
-            )}
+            <AnimatePresence initial={false}>
+                {ahead > 0 && (
+                    <motion.span
+                        key="ahead"
+                        initial={{ opacity: 0, scale: 0.6 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.6 }}
+                        transition={BADGE_TRANSITION}
+                    >
+                        <Badge className="gap-0.5 pr-[1px]" size="sm">
+                            <span className="mt-[1.5px]">{ahead}</span>
+                            <ArrowUp className="size-3" />
+                        </Badge>
+                    </motion.span>
+                )}
+                {behind > 0 && (
+                    <motion.span
+                        key="behind"
+                        initial={{ opacity: 0, scale: 0.6 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.6 }}
+                        transition={BADGE_TRANSITION}
+                    >
+                        <Badge className="gap-0.5 pr-[1px]" size="sm">
+                            <span className="mt-[1.5px]">{behind}</span>
+                            <ArrowDown className="size-3" />
+                        </Badge>
+                    </motion.span>
+                )}
+            </AnimatePresence>
         </span>
     );
 }

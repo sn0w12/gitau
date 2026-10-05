@@ -155,10 +155,16 @@ function renderWith(services: Services, ui: ReactElement) {
     };
 }
 
-async function flush(): Promise<void> {
+async function flush(
+    view: { container: HTMLElement },
+    expected: string
+): Promise<void> {
     await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 20));
     });
+    await waitFor(
+        () => view.container.textContent?.includes(expected) === true
+    );
 }
 
 async function click(element: Element): Promise<void> {
@@ -205,7 +211,7 @@ describe("RepoFetchButton", () => {
             services,
             <RepoFetchButton repoId={5} repoPath={REPO_PATH} />
         );
-        await flush();
+        await flush(view, "Fetch Origin");
 
         expect(view.container.textContent).toContain("Fetch Origin");
         await click(
@@ -232,7 +238,7 @@ describe("RepoFetchButton", () => {
             services,
             <RepoFetchButton repoId={5} repoPath={REPO_PATH} />
         );
-        await flush();
+        await flush(view, "Publish branch");
 
         expect(view.container.textContent).toContain("Publish branch");
         await click(
@@ -258,7 +264,7 @@ describe("RepoFetchButton", () => {
             services,
             <RepoFetchButton repoId={5} repoPath={REPO_PATH} />
         );
-        await flush();
+        await flush(view, "Publish repository");
 
         const trigger = view.container.querySelector(
             '[data-testid="publish-repository-button"]'

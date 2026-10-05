@@ -17,6 +17,7 @@ import {
 import * as React from "react";
 import { useMemo, useState } from "react";
 
+import { ToolbarTriggerFrame } from "@/components/repo/toolbar-trigger";
 import { Button } from "@/components/ui/button";
 import {
     Command,
@@ -58,7 +59,7 @@ import type {
     WorktreeInfo,
 } from "@/lib/backend/protocol";
 import { repositoryKeys } from "@/lib/backend/queries/query-keys";
-import { BORDER_GRADIENT, REPO_TOOLBAR_TRIGGER_CLASS } from "@/lib/constants";
+import { REPO_TOOLBAR_TRIGGER_CLASS } from "@/lib/constants";
 import { toastError } from "@/lib/toast-error";
 import { cn } from "@/lib/utils";
 
@@ -343,35 +344,32 @@ export function BranchSelector({ repoId }: { repoId: number }) {
     return (
         <>
             <Popover open={open} onOpenChange={setOpen}>
-                <PopoverTrigger
-                    render={
-                        <div
-                            className={cn(
-                                REPO_TOOLBAR_TRIGGER_CLASS,
-                                BORDER_GRADIENT
-                            )}
-                        >
-                            <div className="flex items-center gap-2.5 pr-2">
-                                <GitBranch
-                                    className="size-7"
-                                    strokeWidth="1.5px"
-                                />
-                                <div className="flex flex-col">
-                                    <span className="hidden text-xs text-muted-foreground lg:block">
-                                        Current Branch
-                                    </span>
-                                    <span className="font-semibold">
-                                        {currentName ??
-                                            (detachedTarget
-                                                ? `Detached at ${detachedTarget.slice(0, 7)}`
-                                                : "…")}
-                                    </span>
+                <ToolbarTriggerFrame>
+                    <PopoverTrigger
+                        render={
+                            <div className={REPO_TOOLBAR_TRIGGER_CLASS}>
+                                <div className="flex items-center gap-2.5 pr-2">
+                                    <GitBranch
+                                        className="size-7"
+                                        strokeWidth="1.5px"
+                                    />
+                                    <div className="flex flex-col">
+                                        <span className="hidden text-xs text-muted-foreground lg:block">
+                                            Current Branch
+                                        </span>
+                                        <span className="font-semibold">
+                                            {currentName ??
+                                                (detachedTarget
+                                                    ? `Detached at ${detachedTarget.slice(0, 7)}`
+                                                    : "…")}
+                                        </span>
+                                    </div>
                                 </div>
+                                <ChevronDown className="size-4" />
                             </div>
-                            <ChevronDown className="size-4" />
-                        </div>
-                    }
-                />
+                        }
+                    />
+                </ToolbarTriggerFrame>
                 <PopoverPopup className="min-h-0 w-96" align="center">
                     <div className="flex min-h-0 flex-col">
                         <Command items={grouped}>
