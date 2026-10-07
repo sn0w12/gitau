@@ -4,7 +4,7 @@ set -eu
 # Installs gitau from GitHub releases on Linux and macOS. Windows gets the
 # NSIS installer link, since that one can't run from a shell.
 #
-#   curl -fsSL https://raw.githubusercontent.com/sn0w12/gitau/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/sn0w12/gitau/master/scripts/install.sh | sh
 #
 # Environment:
 #   GITAU_VERSION      tag to install, "latest" (default) or e.g. "v0.2.0"
