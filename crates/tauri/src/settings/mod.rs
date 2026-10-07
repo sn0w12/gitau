@@ -46,7 +46,9 @@ pub fn typescript_contract() -> String {
     output.push_str(" * GENERATED FILE - do not edit by hand.\n");
     output.push_str(" *\n");
     output.push_str(" * Source of truth: crates/tauri/src/settings/schema.rs\n");
-    output.push_str(" * Regenerate with: cargo run -p gitau --bin export_settings\n");
+    output.push_str(
+        " * Regenerate with: cargo run -p gitau --bin export_settings --features devtools\n",
+    );
     output.push_str(
         " * Freshness is verified by cargo test (settings::tests::generated_typescript_is_fresh).\n",
     );
@@ -324,14 +326,14 @@ mod tests {
 
     /// CI drift check: the checked-in frontend contract must match the
     /// schema exactly. Regenerate with
-    /// `cargo run -p gitau --bin export_settings`.
+    /// `cargo run -p gitau --bin export_settings --features devtools`.
     #[test]
     fn generated_typescript_is_fresh() {
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let path = std::path::Path::new(manifest_dir).join(GENERATED_TS_PATH);
         let committed = std::fs::read_to_string(&path).unwrap_or_else(|error| {
             panic!(
-                "generated contract missing at {} (run cargo run -p gitau --bin export_settings): {error}",
+                "generated contract missing at {} (run cargo run -p gitau --bin export_settings --features devtools): {error}",
                 path.display()
             )
         });

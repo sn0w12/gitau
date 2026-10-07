@@ -30,7 +30,7 @@ build:
     npm run tauri build
 
 settings:
-    cargo run -p gitau --bin export_settings
+    cargo run -p gitau --bin export_settings --features devtools
 
 # Bump the version, commit it, and tag it: just bump [patch|minor|major|x.y.z] [--dry-run] [--push] [--no-commit] [--no-tag]
 bump *args="":

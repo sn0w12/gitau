@@ -2,7 +2,7 @@
  * GENERATED FILE - do not edit by hand.
  *
  * Source of truth: crates/tauri/src/settings/schema.rs
- * Regenerate with: cargo run -p gitau --bin export_settings
+ * Regenerate with: cargo run -p gitau --bin export_settings --features devtools
  * Freshness is verified by cargo test (settings::tests::generated_typescript_is_fresh).
  */
 

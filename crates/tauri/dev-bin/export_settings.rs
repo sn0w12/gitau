@@ -1,7 +1,7 @@
 //! Regenerates the frontend settings contract at
 //! `src/lib/settings/settings.generated.ts` from the builtin schema.
 //!
-//! Usage: `cargo run -p gitau --bin export_settings`
+//! Usage: `cargo run -p gitau --bin export_settings --features devtools`
 //!
 //! Lives in `dev-bin/` instead of `src/bin/` so the tauri bundler never
 //! treats this dev tool as an app binary (tauri-apps/tauri#15325).

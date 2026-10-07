@@ -70,7 +70,7 @@ cargo test --workspace
 Regenerate the settings TS contract after changing the Rust settings schema:
 
 ```bash
-cargo run -p gitau --bin export_settings   # rewrites src/lib/settings/settings.generated.ts
+cargo run -p gitau --bin export_settings --features devtools   # rewrites src/lib/settings/settings.generated.ts
 ```
 
 Benchmarks: `cargo bench -p git-backend` (Criterion, `crates/git-backend/benches/`).

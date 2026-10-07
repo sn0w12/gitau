@@ -45,5 +45,5 @@ After changing the Rust settings schema, regenerate the frontend settings
 contract:
 
 ```bash
-cargo run -p gitau --bin export_settings
+cargo run -p gitau --bin export_settings --features devtools
 ```
