@@ -6,7 +6,11 @@ A cross-platform Git desktop client.
 
 ## Install
 
-Download the installer for your platform from the GitHub [Releases page](https://github.com/sn0w12/gitau/releases/latest).
+Download the installer for your platform from the GitHub [Releases page](https://github.com/sn0w12/gitau/releases/latest), or on Linux and macOS run:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sn0w12/gitau/main/scripts/install.sh | sh
+```
 
 ## Development
 
