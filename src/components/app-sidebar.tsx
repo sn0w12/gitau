@@ -31,6 +31,7 @@ import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
 import { EASE_SNAPPY } from "@/lib/motion";
 import { addExistingRepositoryFromDisk } from "@/lib/repositories/add-repository";
 import { toastError } from "@/lib/toast-error";
+import { appStore, selectActiveTab } from "@/stores/app-store";
 import {
     moveRepo,
     reorderPinnedRepos,
@@ -94,7 +95,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     return (
         <Sidebar variant="inset" collapsible="icon" {...props}>
             <TooltipProvider>
-                <SidebarContent className="gap-1">
+                <SidebarContent className="group-data-[collapsible=icon]:overflow-visible">
                     <SidebarGroup className="gap-1">
                         <InboxSidebarItem />
                         <PullRequestsSidebarItem />
@@ -106,7 +107,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             scrollBar={false}
                             fill
                             scrollFade
-                            className="h-auto"
+                            className="-ml-1.5 h-auto w-[calc(100%+0.375rem)]"
                         >
                             <RegisteredRepoButtons />
                         </ScrollArea>
@@ -207,15 +208,18 @@ function RepoButton({
     repoId: _repoId,
     index,
     modifiers,
+    isSelected,
 }: {
     repoPath: string;
     repoId?: number;
     index: number;
     modifiers: Modifiers;
+    isSelected: boolean;
 }) {
     const avatar = useRepoAvatarByPath(repoPath);
     const openRepo = useOpenRepository();
     const { ref } = useSortable({ id: repoPath, index, modifiers });
+    const [hovered, setHovered] = useState(false);
     const repoNamePayload = () => {
         return (
             <RepoLabel
@@ -234,6 +238,21 @@ function RepoButton({
             transition={REPO_TRANSITION}
         >
             <SidebarMenuItem ref={ref}>
+                <span
+                    aria-hidden="true"
+                    data-slot="selected-repo-indicator"
+                    className="pointer-events-none absolute top-1/2 -left-1.5 -translate-y-1/2"
+                >
+                    <motion.span
+                        className="block w-0.75 rounded-r-full bg-sidebar-primary"
+                        initial={false}
+                        animate={{
+                            height: isSelected ? 16 : hovered ? 6 : 0,
+                            opacity: isSelected || hovered ? 1 : 0,
+                        }}
+                        transition={{ duration: 0.1, ease: EASE_SNAPPY }}
+                    />
+                </span>
                 <RepoContextMenu repoPath={repoPath}>
                     <TooltipTrigger
                         handle={handle}
@@ -243,6 +262,8 @@ function RepoButton({
                                 variant="secondary"
                                 className="relative group-data-[collapsible=icon]:p-0!"
                                 aria-label={avatar.name}
+                                onPointerEnter={() => setHovered(true)}
+                                onPointerLeave={() => setHovered(false)}
                                 onClick={() => void openRepo(repoPath)}
                                 render={
                                     <Avatar>
@@ -275,6 +296,12 @@ function RegisteredRepoButtons() {
     const unpinned = useSelector(repositoryStore, (state) =>
         selectUnpinnedRepoEntries(state, pinnedRepos)
     );
+    const activeRepoPath = useSelector(
+        appStore,
+        (state) => selectActiveTab(state)?.repoPath ?? null
+    );
+    const isSelected = (path: string) =>
+        activeRepoPath?.toLowerCase() === path.toLowerCase();
     const restrictPinnedToList = useMemo(
         () => restrictToRepoList("pinned-repo-list"),
         []
@@ -283,7 +310,7 @@ function RegisteredRepoButtons() {
 
     return (
         <LayoutGroup id="sidebar-repos">
-            <div className="flex flex-col">
+            <div className="flex flex-col pl-1.5">
                 <DragDropProvider
                     onDragEnd={(event) => {
                         if (event.canceled) return;
@@ -315,6 +342,7 @@ function RegisteredRepoButtons() {
                                 repoPath={entry.path}
                                 index={index}
                                 modifiers={[restrictPinnedToList]}
+                                isSelected={isSelected(entry.path)}
                             />
                         ))}
                     </motion.div>
@@ -351,6 +379,7 @@ function RegisteredRepoButtons() {
                                 repoPath={entry.path}
                                 index={index}
                                 modifiers={[restrictToList]}
+                                isSelected={isSelected(entry.path)}
                             />
                         ))}
                     </motion.div>

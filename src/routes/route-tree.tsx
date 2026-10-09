@@ -164,6 +164,13 @@ export function createTabRouteTree(options: { tabId?: string } = {}) {
                 });
             }
 
+            // Showing a repo page is what binds the tab to its repo, the same
+            // way opening one from the sidebar does. Without it a restored tab
+            // or a deep link shows a repo the sidebar cannot mark as selected.
+            if (tabId !== null && path !== undefined) {
+                associateTabWithRepoPath(tabId, path);
+            }
+
             // Warm the queries the badge and page both read. Status starts
             // here too: the backend warms it on open, so the first changes
             // panel paint hits the cache.
