@@ -41,6 +41,7 @@ import { useOpenInEditor } from "@/hooks/repositories/use-open-in-editor";
 import { useRepoPath } from "@/hooks/repositories/use-repo-path";
 import { useRevealInFileManager } from "@/hooks/repositories/use-reveal-in-file-manager";
 import type { StatusEntry } from "@/lib/backend/protocol";
+import { EASE_SNAPPY } from "@/lib/motion";
 
 import { Badge } from "../../ui/badge";
 import { ScrollArea } from "../../ui/scroll-area";
@@ -598,14 +599,32 @@ function ChangeRow({
     const reducedMotion = useReducedMotion();
     const { enabled, openInEditor } = useOpenInEditor();
     const revealInFileManager = useRevealInFileManager();
+    const [hovered, setHovered] = useState(false);
     const row = (
         <div
             role="option"
             aria-selected={selected}
             data-selected={selected || undefined}
             onClick={onSelect}
-            className="flex w-full cursor-pointer items-center justify-between px-1 py-0.5 hover:bg-accent data-selected:bg-accent/64"
+            onPointerEnter={() => setHovered(true)}
+            onPointerLeave={() => setHovered(false)}
+            className="relative flex w-full cursor-pointer items-center justify-between px-1 py-0.5 hover:bg-accent data-selected:bg-accent/64"
         >
+            <span
+                aria-hidden="true"
+                data-slot="selected-change-indicator"
+                className="pointer-events-none absolute top-1/2 left-0 -translate-y-1/2"
+            >
+                <motion.span
+                    className="block w-0.5 rounded-r-full bg-primary"
+                    initial={false}
+                    animate={{
+                        height: selected ? 10 : hovered ? 4 : 0,
+                        opacity: selected || hovered ? 1 : 0,
+                    }}
+                    transition={{ duration: 0.1, ease: EASE_SNAPPY }}
+                />
+            </span>
             <div className="flex min-w-0 items-center gap-1">
                 <ChangeIcon change={entry.kind} className="shrink-0" />
                 <Checkbox
