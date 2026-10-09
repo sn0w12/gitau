@@ -1,5 +1,7 @@
 import { useHotkey } from "@tanstack/react-hotkeys";
+import { useState } from "react";
 
+import { createWindowControls } from "@/components/window-controls/window";
 import { useAppServices } from "@/contexts/services-context";
 import { useSettingHotkey } from "@/hooks/settings/use-setting-hotkey";
 import {
@@ -37,6 +39,7 @@ function activateNthTab(position: number): void {
 export function useAppShortcuts(): void {
     const { backend } = useAppServices();
     const router = useActiveTabRouter();
+    const [windowControls] = useState(() => createWindowControls());
 
     useSettingHotkey("goToSettings", () =>
         router?.navigate({ to: "/settings" })
@@ -64,4 +67,8 @@ export function useAppShortcuts(): void {
     useHotkey("Mod+7", () => activateNthTab(7));
     useHotkey("Mod+8", () => activateNthTab(8));
     useHotkey("Mod+9", () => activateNthTab(9));
+
+    useHotkey("F11", () => void windowControls.fullscreen(), {
+        ignoreInputs: false,
+    });
 }

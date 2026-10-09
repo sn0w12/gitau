@@ -24,6 +24,7 @@ const FIXED_BINDINGS: { label: string; chord: string }[] = [
     { label: "Commit", chord: "Mod+Enter" },
     { label: "Clear selection", chord: "Escape" },
     { label: "Deselect text", chord: "Mod+D" },
+    { label: "Toggle fullscreen", chord: "F11" },
 ];
 
 function StaticChord({ chord }: { chord: string }) {
