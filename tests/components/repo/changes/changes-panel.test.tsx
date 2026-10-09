@@ -630,7 +630,7 @@ describe("ChangesPanel", () => {
         await flush();
 
         const header = () =>
-            view.container.querySelector('[aria-label="Select all Changes"]')!;
+            view.container.querySelector('[aria-label="Select all Unstaged"]')!;
         const rowChecked = (path: string) =>
             view.container
                 .querySelector(`[aria-label="Select ${path}"]`)!

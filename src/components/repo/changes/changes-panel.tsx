@@ -272,7 +272,7 @@ export function ChangesPanel({
                     onOpenChange={setStagedOpen}
                 >
                     <SectionHeader
-                        title="Staged Changes"
+                        title="Staged"
                         count={stagedEntries.length}
                         disabled={stagedEntries.length === 0}
                         checked={
@@ -364,7 +364,7 @@ export function ChangesPanel({
                     className="border-t"
                 >
                     <SectionHeader
-                        title="Changes"
+                        title="Unstaged"
                         count={unstagedEntries.length}
                         disabled={unstagedEntries.length === 0}
                         checked={
