@@ -53,9 +53,9 @@ export function CloneRepoDialog({
     const [folderName, setFolderName] = useState("");
     const [nameTouched, setNameTouched] = useState(false);
 
-    // Fresh form for the next open; runs on user close and after success.
-    // Field-only reset keeps the terminal status (the cancelled note must
-    // survive); full reset on close returns the session to pristine idle.
+    // Fresh form for the next open; field-only so a cancelled note survives.
+    // The session itself returns to idle on close and after a successful
+    // clone.
     const resetFields = () => {
         setParentDirectory(lastRepositoryDirectory());
         setUrl("");
@@ -96,7 +96,13 @@ export function CloneRepoDialog({
             })
             .then((outcome) => {
                 resetFields();
-                if (outcome.status === "completed") onCloned(outcome.repoPath);
+                if (outcome.status === "completed") {
+                    // The parent closes the dialog itself on success, so
+                    // handleClose never runs and the session would stay
+                    // terminal; a later start() would then be refused.
+                    controller.reset();
+                    onCloned(outcome.repoPath);
+                }
             });
     };
 

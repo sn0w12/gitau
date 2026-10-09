@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
-import { act } from "react";
+import { act, useEffect, useState } from "react";
 import type { ReactElement } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -230,5 +230,55 @@ describe("CloneRepoDialog", () => {
             });
         }
         expect(onCloned).toHaveBeenCalledWith("/repos/hello");
+    });
+
+    it("clones again after a successful clone closed the dialog", async () => {
+        const services = backendWith();
+        const controls: { reopen: (() => void) | null } = { reopen: null };
+
+        function Harness() {
+            const [open, setOpen] = useState(true);
+            useEffect(() => {
+                controls.reopen = () => setOpen(true);
+            }, []);
+            return (
+                <CloneRepoDialog
+                    open={open}
+                    onClose={() => setOpen(false)}
+                    onCloned={() => setOpen(false)}
+                />
+            );
+        }
+
+        renderWith(services, <Harness />);
+        await flush();
+
+        await clickButtonWithText("Browse");
+        await flush();
+        await typeInto(
+            'input[placeholder="https://github.com/owner/repo.git"]',
+            "octocat/hello"
+        );
+        await clickButtonWithText("Clone");
+
+        services.emit({
+            event: "completed",
+            operationId: 11,
+            repoPath: "/repos/hello",
+        });
+        await flush();
+
+        await act(async () => {
+            controls.reopen!();
+        });
+        await flush();
+
+        await typeInto(
+            'input[placeholder="https://github.com/owner/repo.git"]',
+            "octocat/hello"
+        );
+        await clickButtonWithText("Clone");
+
+        expect(services.cloneInputs).toHaveLength(2);
     });
 });

@@ -57,3 +57,46 @@ fn completed_clone_path_opens_immediately() {
     let again = futures_block(backend.open_repository(std::path::Path::new(&repo_path))).unwrap();
     assert_eq!(again.id, opened.id);
 }
+
+/// The app keeps one Backend for the whole process, so a second clone in the
+/// same session must stream and complete exactly like the first.
+#[test]
+fn clones_twice_in_one_backend() {
+    let seed = TestRepo::init("seed-two");
+    seed.initial_commit(&[("hello.txt", "hello world\n")]);
+
+    let backend = Backend::new(BackendConfig::default());
+    let destination_outer = tempfile::tempdir().unwrap();
+
+    for name in ["first", "second"] {
+        let destination = destination_outer.path().join(name);
+        let (_, mut rx) = futures_block(backend.open_clone(
+            CloneRequest {
+                url: seed.root.to_string_lossy().into_owned(),
+                destination: destination.to_string_lossy().into_owned(),
+                ..Default::default()
+            },
+            Default::default(),
+        ))
+        .unwrap();
+
+        let mut completed_path = None;
+        while let Some(event) = futures_block(rx.recv()) {
+            match event {
+                CloneEvent::Completed { repo_path, .. } => {
+                    completed_path = Some(repo_path);
+                    break;
+                }
+                CloneEvent::Progress { .. } => {}
+                CloneEvent::Failed { code, message, .. } => {
+                    panic!("clone {name} failed ({code}): {message}");
+                }
+                CloneEvent::Cancelled { .. } => panic!("clone {name} was cancelled"),
+            }
+        }
+
+        let repo_path = completed_path.unwrap_or_else(|| panic!("clone {name} must complete"));
+        futures_block(backend.open_repository(std::path::Path::new(&repo_path)))
+            .unwrap_or_else(|error| panic!("opening clone {name} failed: {error}"));
+    }
+}
