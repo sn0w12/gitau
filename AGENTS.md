@@ -91,6 +91,7 @@ Default is no comment. Write one only when the code cannot say what it says. A c
     - Usage/condition docs on props, fields, constants: `/** Present when X */`, `/** Used by the fetch button */`, `/** Whether this panel is visible */`.
     - Styling/intent narration on class constants (`TRIGGER_EXTRAS`, `KIND_ROW_CLASS`); the Tailwind string says what it does.
     - Section banners and dividers: `// NAVIGATION`, `// ---- internals ----`.
+    - Narrating what a readable guard already says, including its downstream consequence: `interactive: conclusion !== "skipped"` needs no `// A skipped check has no job, so the API 404s`. The condition is the whole story.
     - Changelog-style or speculative notes ("will be used later" prose) without a concrete contract.
 
 `///` rustdoc follows the same rule: document public API only where it adds semantics beyond the signature, such as invariants, defaults, and failure behavior; omit it when it would just restate the item name. Vendored directories (`src/components/ui/`, `src/components/evilcharts/`) keep their upstream comments untouched.
