@@ -122,6 +122,24 @@ const components = {
             <ol {...props} className="my-2 list-decimal space-y-1 pr-0 pl-6" />
         );
     },
+    // GitHub leaves a task list item unmarked so the checkbox reads as the
+    // only bullet. The list keeps its gutter for every other item, so a task
+    // item cancels that padding and pulls itself back by the same amount.
+    // The hidden input `Checkbox` always renders is the signal, which also
+    // covers a checkbox the renderer never reached.
+    li(props) {
+        return (
+            <li
+                {...props}
+                className={cn(
+                    "has-[input[type=checkbox]]:list-none",
+                    "has-[input[type=checkbox]]:pl-0",
+                    "has-[input[type=checkbox]]:ms-[-1.5rem]",
+                    props.className
+                )}
+            />
+        );
+    },
     blockquote(props) {
         return (
             <blockquote
