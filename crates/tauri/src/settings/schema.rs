@@ -235,12 +235,27 @@ pub fn builtin() -> SettingsSchema {
                             shortcut("switchHistoryPanelShortcut", "Switch to History panel")
                                 .description("Shows the History panel in the sidebar.")
                                 .default_value(SettingValue::Str("Alt+2".to_owned())),
-                            shortcut("toggleGraphViewShortcut", "Toggle commit graph view")
-                                .description("Switches between Overview and Commit Graph.")
-                                .default_value(SettingValue::Str("Mod+G".to_owned())),
                             shortcut("filterChangesShortcut", "Filter file changes")
                                 .description("Focuses the file filter in the Changes panel.")
                                 .default_value(SettingValue::Str("Mod+F".to_owned())),
+                        ],
+                    },
+                    SettingsSection {
+                        id: "views",
+                        title: "Repo views",
+                        settings: vec![
+                            shortcut("switchOverviewViewShortcut", "Switch to Overview view")
+                                .description("Shows the Overview view in the main panel.")
+                                .default_value(SettingValue::Str("Mod+O".to_owned())),
+                            shortcut("switchGraphViewShortcut", "Switch to Commit Graph view")
+                                .description("Shows the Commit Graph view in the main panel.")
+                                .default_value(SettingValue::Str("Mod+G".to_owned())),
+                            shortcut("switchIssuesViewShortcut", "Switch to Issues view")
+                                .description("Shows the Issues view in the main panel.")
+                                .default_value(SettingValue::Str("Mod+I".to_owned())),
+                            shortcut("switchPullsViewShortcut", "Switch to Pull requests view")
+                                .description("Shows the Pull requests view in the main panel.")
+                                .default_value(SettingValue::Str("Mod+P".to_owned())),
                         ],
                     },
                     SettingsSection {

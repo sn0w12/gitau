@@ -89,7 +89,6 @@ export function RepoPage() {
     useRepoShortcuts({
         repoId: valid ? repoId : undefined,
         repoPath,
-        view,
         dispatch,
         containerRef,
         enabled: valid && entry !== undefined,

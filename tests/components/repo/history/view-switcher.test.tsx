@@ -2,9 +2,10 @@
 import { act } from "react";
 import type { ReactElement } from "react";
 import { createRoot } from "react-dom/client";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { RepoViewSwitcher } from "@/components/repo/history/view-switcher";
+import { seedSettingsForTests } from "@/stores/settings-store";
 
 (
     globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -51,6 +52,15 @@ async function waitFor(predicate: () => boolean): Promise<boolean> {
 }
 
 describe("RepoViewSwitcher", () => {
+    beforeEach(() => {
+        seedSettingsForTests({
+            switchOverviewViewShortcut: "Mod+O",
+            switchGraphViewShortcut: "Mod+G",
+            switchIssuesViewShortcut: "Mod+I",
+            switchPullsViewShortcut: "Mod+P",
+        });
+    });
+
     it("shows the active view and switches on click", async () => {
         // Issues and pull requests are live views backed by the GitHub
         // API.

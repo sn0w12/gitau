@@ -28,8 +28,11 @@ export interface SettingsValues {
     openShortcutsHelp: string;
     switchChangesPanelShortcut: string;
     switchHistoryPanelShortcut: string;
-    toggleGraphViewShortcut: string;
     filterChangesShortcut: string;
+    switchOverviewViewShortcut: string;
+    switchGraphViewShortcut: string;
+    switchIssuesViewShortcut: string;
+    switchPullsViewShortcut: string;
     stageAllShortcut: string;
     unstageAllShortcut: string;
     discardAllShortcut: string;
@@ -53,8 +56,11 @@ export const SHORTCUT_SETTING_KEYS = [
     "openShortcutsHelp",
     "switchChangesPanelShortcut",
     "switchHistoryPanelShortcut",
-    "toggleGraphViewShortcut",
     "filterChangesShortcut",
+    "switchOverviewViewShortcut",
+    "switchGraphViewShortcut",
+    "switchIssuesViewShortcut",
+    "switchPullsViewShortcut",
     "stageAllShortcut",
     "unstageAllShortcut",
     "discardAllShortcut",

@@ -6,10 +6,12 @@ import {
     MenuPopup,
     MenuRadioGroup,
     MenuRadioItem,
+    MenuShortcutBinding,
     MenuTrigger,
 } from "@/components/ui/menu";
 import { REPO_TOOLBAR_TRIGGER_CLASS } from "@/lib/constants";
 import type { RepoView } from "@/lib/routing/repo-search";
+import { REPO_VIEW_SHORTCUTS } from "@/lib/shortcuts";
 
 const VIEW_LABELS: Record<RepoView, string> = {
     overview: "Overview",
@@ -61,6 +63,9 @@ export function RepoViewSwitcher({
                                 aria-selected={view === repoView || undefined}
                             >
                                 {label}
+                                <MenuShortcutBinding
+                                    shortcut={REPO_VIEW_SHORTCUTS[repoView]}
+                                />
                             </MenuRadioItem>
                         );
                     })}

@@ -1,4 +1,13 @@
+import type { RepoView } from "@/lib/routing/repo-search";
+import type { ShortcutSettingKey } from "@/lib/settings/settings.generated";
 import { isMac } from "@/lib/utils";
+
+export const REPO_VIEW_SHORTCUTS: Record<RepoView, ShortcutSettingKey> = {
+    overview: "switchOverviewViewShortcut",
+    graph: "switchGraphViewShortcut",
+    issues: "switchIssuesViewShortcut",
+    pulls: "switchPullsViewShortcut",
+};
 
 export function displayToken(token: string): string {
     switch (token.toLowerCase()) {

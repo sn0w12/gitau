@@ -6,6 +6,9 @@ import type * as React from "react";
 
 import { cn } from "@/lib/utils";
 
+import type { AnyShortcut } from "./kbd";
+import { KeyboardShortcut } from "./kbd";
+
 export const MenuCreateHandle: typeof MenuPrimitive.createHandle =
     MenuPrimitive.createHandle;
 
@@ -222,7 +225,9 @@ export function MenuRadioItem({
                     <path d="M5.252 12.7 10.2 18.63 18.748 5.37" />
                 </svg>
             </MenuPrimitive.RadioItemIndicator>
-            <span className="col-start-2">{children}</span>
+            <span className="col-start-2 flex items-center gap-2">
+                {children}
+            </span>
         </MenuPrimitive.RadioItem>
     );
 }
@@ -272,6 +277,19 @@ export function MenuShortcut({
             )}
             data-slot="menu-shortcut"
             {...props}
+        />
+    );
+}
+
+export function MenuShortcutBinding({
+    shortcut,
+}: {
+    shortcut: AnyShortcut;
+}): React.ReactElement | null {
+    return (
+        <KeyboardShortcut
+            shortcut={shortcut}
+            className="ms-auto text-xs font-medium tracking-widest text-muted-foreground/72"
         />
     );
 }

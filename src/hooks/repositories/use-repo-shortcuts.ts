@@ -2,6 +2,7 @@ import type { Dispatch, RefObject } from "react";
 
 import { useSettingHotkey } from "@/hooks/settings/use-setting-hotkey";
 import type { RepoStateAction, RepoView } from "@/lib/routing/repo-search";
+import { REPO_VIEW_SHORTCUTS } from "@/lib/shortcuts";
 
 import { useChangeActions } from "./use-change-actions";
 import { useSyncActions } from "./use-sync-actions";
@@ -9,7 +10,6 @@ import { useSyncActions } from "./use-sync-actions";
 interface RepoShortcutScope {
     repoId: number | undefined;
     repoPath: string;
-    view: RepoView;
     dispatch: Dispatch<RepoStateAction>;
     containerRef: RefObject<HTMLDivElement | null>;
     enabled: boolean;
@@ -23,7 +23,6 @@ interface RepoShortcutScope {
 export function useRepoShortcuts({
     repoId,
     repoPath,
-    view,
     dispatch,
     containerRef,
     enabled,
@@ -39,6 +38,9 @@ export function useRepoShortcuts({
             containerRef.current?.querySelector<HTMLElement>(selector)?.focus();
         });
     };
+
+    const showView = (view: RepoView) => () =>
+        dispatch({ type: "SET_VIEW", data: view });
 
     useSettingHotkey("stageAllShortcut", () => void changes.stageAll(), {
         enabled,
@@ -62,15 +64,14 @@ export function useRepoShortcuts({
         () => dispatch({ type: "SET_TAB", data: "history" }),
         { enabled }
     );
-    useSettingHotkey(
-        "toggleGraphViewShortcut",
-        () =>
-            dispatch({
-                type: "SET_VIEW",
-                data: view === "graph" ? "overview" : "graph",
-            }),
-        { enabled }
-    );
+    useSettingHotkey(REPO_VIEW_SHORTCUTS.overview, showView("overview"), {
+        enabled,
+    });
+    useSettingHotkey(REPO_VIEW_SHORTCUTS.graph, showView("graph"), { enabled });
+    useSettingHotkey(REPO_VIEW_SHORTCUTS.issues, showView("issues"), {
+        enabled,
+    });
+    useSettingHotkey(REPO_VIEW_SHORTCUTS.pulls, showView("pulls"), { enabled });
     useSettingHotkey(
         "filterChangesShortcut",
         () => focusInChangesPanel("#changes-filter-input"),
