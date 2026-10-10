@@ -387,7 +387,7 @@ function HighlightedText({
         parts.push(
             <mark
                 key={`m-${index}`}
-                className="bg-transparent font-bold text-warning"
+                className="bg-info font-bold text-background dark:text-foreground"
             >
                 {text.slice(segment.start, segment.end)}
             </mark>
