@@ -112,8 +112,8 @@ interface CheckRow {
     checkRunId?: number;
     /** Commit statuses carry their own text, e.g. `Review in progress`. */
     detail?: string;
-    /** Whether there is a run to open. A commit status has none, so it is a
-     * plain row. */
+    /** Whether there is a run to open. A commit status has none, and a
+     * skipped check has no job, so those are plain rows. */
     interactive: boolean;
     appearance: { icon: React.ReactNode; className: string; label: string };
 }
@@ -179,7 +179,7 @@ function useCheckRows(
                 key: `check-${check.id}`,
                 name: check.name,
                 checkRunId: check.id,
-                interactive: true,
+                interactive: check.conclusion?.toLowerCase() !== "skipped",
                 appearance: checkAppearance(check),
             })),
             // Workflow runs only add runs the checks do not already cover, so
