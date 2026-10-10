@@ -88,7 +88,12 @@ export function Button({
     const defaultProps = {
         children: (
             <>
-                <div className={cn("opacity-100", loading && "opacity-0")}>
+                <div
+                    className={cn(
+                        "flex items-center gap-[inherit]",
+                        loading && "opacity-0"
+                    )}
+                >
                     {children}
                 </div>
                 {loading && (
