@@ -29,6 +29,9 @@ dev-workspace:
 build:
     npm run tauri build
 
+bench *args="":
+    cargo bench -p git-backend{{ if args == "" { "" } else { " " + args } }}
+
 settings:
     cargo run -p gitau --bin export_settings --features devtools
 
