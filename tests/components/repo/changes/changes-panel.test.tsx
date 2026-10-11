@@ -254,7 +254,11 @@ describe("ChangesPanel", () => {
             />
         );
 
-        await flush();
+        const rendered = await waitFor(() => {
+            const text = view.container.textContent ?? "";
+            return text.includes("a.ts") && text.includes("b.ts");
+        });
+        expect(rendered).toBe(true);
         expect(view.container.textContent).toContain("a.ts");
         expect(view.container.textContent).toContain("b.ts");
         // Section counts render as badges inside each collapsible trigger:

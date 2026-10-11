@@ -501,6 +501,10 @@ mod tests {
         let session = crate::engines::gix::GixSession::discover(&root).unwrap();
         let handle = session.handle();
         let stale = crate::engines::gix::session::open_index(&handle).unwrap();
+        assert!(
+            !stale.entries().is_empty(),
+            "committed repository must expose a non-empty index snapshot"
+        );
 
         // Mutation lands after the snapshot, through a separate handle the
         // way run_write stages.
