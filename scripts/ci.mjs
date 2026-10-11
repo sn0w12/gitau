@@ -47,6 +47,26 @@ const logDir = resolve(root, "node_modules/.cache/gitau-ci");
 const NEXTEST_CMD = ["cargo", "nextest", "run", "--workspace"];
 const CARGO_TEST_CMD = ["cargo", "test", "--workspace"];
 
+// Git exports these to hooks, and the pre-commit hook runs this script. gix
+// honors GIT_DIR/GIT_INDEX_FILE, so a test that builds its own repository
+// would otherwise read and write the invoking repository's index. The parent
+// process keeps them: git helpers here still need to see the real repository.
+const REPOSITORY_LOCAL_GIT_ENV = [
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_DIR",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_PREFIX",
+    "GIT_WORK_TREE",
+];
+
+function gateEnvironment() {
+    const env = { ...process.env };
+    for (const key of REPOSITORY_LOCAL_GIT_ENV) delete env[key];
+    return env;
+}
+
 // `optional` gates stay out of the default set. cargo check earns nothing next
 // to clippy: both run the same check pass over the same target dir, share no
 // build artifacts, so running both is the same compilation twice.
@@ -451,7 +471,7 @@ function runGate(gate, { onStart, onFinish, verbose }) {
                 detached: !shell,
                 stdio: verbose ? "inherit" : ["ignore", "pipe", "pipe"],
                 env: {
-                    ...process.env,
+                    ...gateEnvironment(),
                     // Kept in step with the reporter so a piped log never gets
                     // escape codes the reader cannot render.
                     CARGO_TERM_COLOR: useColor ? "always" : "never",
