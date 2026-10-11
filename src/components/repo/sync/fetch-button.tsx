@@ -285,7 +285,7 @@ const BADGE_TRANSITION = { duration: 0.18, ease: EASE_SNAPPY } as const;
 /** The compact `N↑ M↓` counts graphic GitHub Desktop renders on pull/push. */
 function AheadBehind({ ahead, behind }: { ahead: number; behind: number }) {
     return (
-        <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
             <AnimatePresence initial={false}>
                 {ahead > 0 && (
                     <motion.span
@@ -296,7 +296,7 @@ function AheadBehind({ ahead, behind }: { ahead: number; behind: number }) {
                         transition={BADGE_TRANSITION}
                     >
                         <Badge className="gap-0.5 pr-[1px]" size="sm">
-                            <span className="mt-[1.5px]">{ahead}</span>
+                            <span className="mt-[1px]">{ahead}</span>
                             <ArrowUp className="size-3" />
                         </Badge>
                     </motion.span>
@@ -310,7 +310,7 @@ function AheadBehind({ ahead, behind }: { ahead: number; behind: number }) {
                         transition={BADGE_TRANSITION}
                     >
                         <Badge className="gap-0.5 pr-[1px]" size="sm">
-                            <span className="mt-[1.5px]">{behind}</span>
+                            <span className="mt-[1px]">{behind}</span>
                             <ArrowDown className="size-3" />
                         </Badge>
                     </motion.span>
