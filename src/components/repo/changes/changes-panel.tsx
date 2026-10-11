@@ -552,7 +552,7 @@ function SectionHeader({
                 />
                 <span className="font-semibold">{title}</span>
                 <Badge
-                    className="h-6.5 rounded-md font-mono sm:h-5.5"
+                    className="h-5 rounded-md font-mono sm:h-5"
                     variant="outline"
                 >
                     {count}
