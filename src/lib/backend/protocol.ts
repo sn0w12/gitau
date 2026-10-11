@@ -219,8 +219,6 @@ export interface HistoryChartQuery {
      * (10y+ monthly, 6y+ weekly, 3y+ half-weekly, 1y+ two-day, 180d+ daily,
      * 90d+ half-daily, 14d+ quarter-daily, younger hourly). */
     bucket?: ChartBucketSize;
-    /** Walk cap; older commits past this are not charted. */
-    maxCommits?: number;
     /** Count merge commits toward `commits`; their line deltas never count. */
     includeMerges?: boolean;
 }
@@ -243,8 +241,6 @@ export interface HistoryChart {
     /** Chronological; gaps between first and last activity are zero-filled. */
     buckets: ChartBucket[];
     totalCommits: number;
-    /** True when the walk hit the commit cap and older history is not shown. */
-    truncated: boolean;
 }
 
 export interface UpstreamRef {

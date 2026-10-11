@@ -87,19 +87,7 @@ pub struct HistoryChartQuery {
     /// first commit: 10y+ monthly, 6y+ weekly, 3y+ half-weekly, 1y+ two-day,
     /// 180d+ daily, 90d+ half-daily, 14d+ quarter-daily, younger hourly.
     pub bucket: Option<BucketSize>,
-    /// Walk cap; older commits past this are not charted.
-    pub max_commits: Option<u32>,
     /// Merge commits contribute nothing when false (default): no commit
     /// count and no diff stats, avoiding double-counted branch lines.
     pub include_merges: bool,
-}
-
-pub const DEFAULT_MAX_CHART_COMMITS: u32 = 10_000;
-
-impl HistoryChartQuery {
-    pub fn max_commits(&self) -> u32 {
-        self.max_commits
-            .unwrap_or(DEFAULT_MAX_CHART_COMMITS)
-            .clamp(1, crate::runtime::history_cache::MAX_WALK_ENTRIES as u32)
-    }
 }

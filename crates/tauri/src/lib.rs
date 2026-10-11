@@ -85,6 +85,9 @@ pub fn run() {
                     state
                         .backend
                         .initialize_remote_info_cache(cache_dir.join("repo-info"));
+                    state
+                        .backend
+                        .initialize_history_stats_cache(cache_dir.join("history-stats"));
                 }
                 Err(error) => {
                     log::warn!("app cache dir unavailable; icons stay in memory: {error}");
@@ -154,9 +157,11 @@ pub fn run() {
                     cleanup_icons.prune_old_entries(git_backend::icons::IconConfig::default().prune_after);
                 let info_removed = cleanup_backend
                     .prune_remote_info_cache(git_backend::REMOTE_INFO_PRUNE_AFTER);
-                if icons_removed > 0 || info_removed > 0 {
+                let stats_removed = cleanup_backend
+                    .prune_history_stats_cache(git_backend::HISTORY_STATS_PRUNE_AFTER);
+                if icons_removed > 0 || info_removed > 0 || stats_removed > 0 {
                     log::info!(
-                        "cache cleanup removed {icons_removed} icons and {info_removed} repo-info entries"
+                        "cache cleanup removed {icons_removed} icons, {info_removed} repo-info entries, {stats_removed} history stat files"
                     );
                 }
             });

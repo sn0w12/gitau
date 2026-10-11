@@ -6,6 +6,7 @@ pub mod history_cache;
 pub mod invalidation;
 pub mod registry;
 pub mod scheduler;
+pub mod stats_store;
 pub mod watcher;
 
 pub use cancellation::CancellationToken;

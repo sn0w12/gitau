@@ -106,6 +106,4 @@ pub struct HistoryChart {
     pub buckets: Vec<ChartBucket>,
     /// Commits included in the aggregation (merges excluded by default).
     pub total_commits: u32,
-    /// True when the walk hit the commit cap and older history is not shown.
-    pub truncated: bool,
 }

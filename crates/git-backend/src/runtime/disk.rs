@@ -36,10 +36,17 @@ pub(crate) fn sanitize_component(input: &str) -> String {
 }
 
 fn fnv1a(input: &str) -> u32 {
-    let mut hash: u32 = 0x811c_9dc5;
-    for byte in input.as_bytes() {
-        hash ^= u32::from(*byte);
-        hash = hash.wrapping_mul(0x0100_0193);
+    fnv1a64(input.as_bytes()) as u32
+}
+
+/// 64-bit FNV-1a. Repo paths need more than 32 bits to stay distinct across
+/// a user's whole library; `sanitize_component` alone is lossy enough to
+/// collide.
+pub(crate) fn fnv1a64(bytes: &[u8]) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }
     hash
 }

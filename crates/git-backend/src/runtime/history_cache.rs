@@ -2,10 +2,16 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::domain::CommitSummary;
+use crate::domain::history::BucketSize;
 
 const MAX_CACHED_SUMMARIES: usize = 8192;
-const MAX_CACHED_STATS: usize = 131_072;
+/// Sized for a very large repository's full history rather than a typical
+/// page's working set. Past this the map is dropped wholesale, which only
+/// costs recomputation because every entry is immutable.
+const MAX_CACHED_STATS: usize = 1 << 21;
 const MAX_CACHED_WALKS: usize = 32;
+/// Pagination bound for the history list. The chart walks the full history
+/// and may leave a longer list behind, which pages then slice.
 pub const MAX_WALK_ENTRIES: usize = 50_000;
 
 /// Commit OIDs are immutable, so this cache intentionally survives
@@ -19,6 +25,28 @@ pub struct HistoryCache {
     /// would thrash while aggregating whole-history statistics.
     stats: HashMap<[u8; 20], CommitStatPoint>,
     tags: Option<Arc<HashMap<[u8; 20], Vec<String>>>>,
+    /// Read once per process; the points file only ever grows by oid, so a
+    /// second read would find the same commits.
+    points_loaded: bool,
+    /// Tip and walk order of the latest aggregation. The points file is
+    /// written from this so the file keeps the order the chart consumed.
+    chart_walk: Option<(Vec<[u8; 20]>, [u8; 20])>,
+    /// Aggregates computed since the last flush.
+    pending_charts: Vec<PendingChart>,
+}
+
+/// A finished aggregate waiting to be written to the chart cache.
+pub struct PendingChart {
+    pub tip: [u8; 20],
+    pub exclusions: u64,
+    /// What the caller asked for, which is what the file is named after. It
+    /// differs from `resolved_bucket` whenever auto-selection ran, and writing
+    /// to the resolved name would leave the auto request permanently missing.
+    pub requested_bucket: Option<BucketSize>,
+    pub resolved_bucket: BucketSize,
+    pub include_merges: bool,
+    pub total_commits: u32,
+    pub buckets: Vec<crate::domain::history::ChartBucket>,
 }
 
 pub type Oid = git2::Oid;
@@ -76,6 +104,62 @@ impl HistoryCache {
         self.stats.insert(oid, point);
     }
 
+    /// Inserts a batch recovered from disk. The map is emptied once up front
+    /// rather than repeatedly mid-insert, so a history larger than the cap
+    /// settles into one coherent map instead of clearing on every commit and
+    /// never converging.
+    pub fn extend_stats(&mut self, entries: Vec<([u8; 20], CommitStatPoint)>) {
+        if entries.is_empty() {
+            return;
+        }
+        if self.stats.len() + entries.len() > MAX_CACHED_STATS {
+            self.stats.clear();
+        }
+        self.stats.extend(entries);
+    }
+
+    /// Cached points for `oids` in walk order, skipping commits with no entry.
+    /// This is what the on-disk copy is written from, so the file preserves
+    /// the walk order the chart aggregated.
+    pub fn stats_in_walk_order(&self, oids: &[[u8; 20]]) -> Vec<([u8; 20], CommitStatPoint)> {
+        oids.iter()
+            .filter_map(|bytes| self.stats.get(bytes).map(|point| (*bytes, *point)))
+            .collect()
+    }
+
+    /// True exactly once per cache, for the caller that should merge the
+    /// on-disk points file in.
+    pub fn claim_points_load(&mut self) -> bool {
+        if self.points_loaded {
+            return false;
+        }
+        self.points_loaded = true;
+        true
+    }
+
+    pub fn record_chart(
+        &mut self,
+        tip: [u8; 20],
+        walk_order: Vec<[u8; 20]>,
+        pending: PendingChart,
+    ) {
+        self.chart_walk = Some((walk_order, tip));
+        self.pending_charts.push(pending);
+    }
+
+    pub fn chart_walk(&self) -> Option<([u8; 20], &[[u8; 20]])> {
+        self.chart_walk
+            .as_ref()
+            .map(|(order, tip)| (*tip, order.as_slice()))
+    }
+
+    pub fn pending_charts(&self) -> Vec<((Option<BucketSize>, bool), &PendingChart)> {
+        self.pending_charts
+            .iter()
+            .map(|chart| ((chart.requested_bucket, chart.include_merges), chart))
+            .collect()
+    }
+
     pub fn tags(&self) -> Option<Arc<HashMap<[u8; 20], Vec<String>>>> {
         self.tags.clone()
     }
@@ -89,6 +173,10 @@ impl HistoryCache {
         self.summaries.clear();
         self.stats.clear();
         self.tags = None;
+        self.pending_charts.clear();
+        // Forgetting everything means the next chart has to read the points
+        // file again, otherwise a cleared cache silently recomputes.
+        self.points_loaded = false;
     }
 
     /// Drops everything derived from ref tips: the tag map plus the

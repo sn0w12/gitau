@@ -201,5 +201,101 @@ fn bench_history(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_history);
+/// History chart cost against a real repository.
+///
+/// The synthetic fixture above commits a single one-line file per revision,
+/// which makes its per-commit cost roughly an order of magnitude below a real
+/// repository. Point `GITAU_BENCH_REPO` at an actual checkout to measure the
+/// cases that matter:
+///
+///   * `cold`  no in-memory or on-disk cache: the true first-run cost.
+///   * `disk`  on-disk cache present, in-memory cleared: what every app launch
+///     after the first one pays.
+///   * `warm`  everything cached: the floor.
+fn bench_real_chart(c: &mut Criterion) {
+    let Ok(raw) = std::env::var("GITAU_BENCH_REPO") else {
+        return;
+    };
+    let root = std::path::PathBuf::from(&raw);
+    if !root.exists() {
+        panic!("GITAU_BENCH_REPO does not exist: {}", root.display());
+    }
+
+    let cache_dir = tempfile::tempdir().unwrap();
+    let base = cache_dir.path().join("history-stats");
+
+    let backend = Backend::new(BackendConfig {
+        watch_worktree: false,
+        ..Default::default()
+    });
+    backend.initialize_history_stats_cache(base.clone());
+    let opened = runtime()
+        .block_on(backend.open_repository(&root))
+        .expect("open repository");
+
+    let query = HistoryChartQuery::default();
+
+    // Populate the on-disk cache and report the fixture size once.
+    let cold = runtime()
+        .block_on(backend.history_chart(opened.id, query.clone(), Default::default()))
+        .expect("cold chart");
+    let commits = cold.total_commits;
+    let mut store_bytes = 0u64;
+    if let Ok(entries) = std::fs::read_dir(&base) {
+        for entry in entries.flatten() {
+            store_bytes += entry.metadata().map(|m| m.len()).unwrap_or(0);
+        }
+    }
+    println!(
+        "\n  repo: {}\n  commits charted: {}\n  chart buckets: {}\n  cache on disk: {} bytes ({:.1} bytes/commit)\n",
+        root.display(),
+        commits,
+        cold.buckets.len(),
+        store_bytes,
+        store_bytes as f64 / f64::from(commits.max(1)),
+    );
+    assert!(commits > 0, "repository has no chartable commits");
+
+    c.bench_function("real/chart-cold", |b| {
+        b.iter(|| {
+            backend.clear_repository_history_caches(opened.id).unwrap();
+            backend.clear_repository_caches(opened.id).unwrap();
+            std::fs::remove_dir_all(&base).ok();
+            let chart = runtime().block_on(backend.history_chart(
+                opened.id,
+                black_box(query.clone()),
+                Default::default(),
+            ));
+            black_box(chart.unwrap().total_commits);
+        })
+    });
+
+    c.bench_function("real/chart-disk-cached", |b| {
+        b.iter(|| {
+            // In-memory caches cleared, on-disk kept: a fresh process on a
+            // repository it has seen before.
+            backend.clear_repository_history_caches(opened.id).unwrap();
+            backend.clear_repository_caches(opened.id).unwrap();
+            let chart = runtime().block_on(backend.history_chart(
+                opened.id,
+                black_box(query.clone()),
+                Default::default(),
+            ));
+            black_box(chart.unwrap().total_commits);
+        })
+    });
+
+    c.bench_function("real/chart-warm", |b| {
+        b.iter(|| {
+            let chart = runtime().block_on(backend.history_chart(
+                opened.id,
+                black_box(query.clone()),
+                Default::default(),
+            ));
+            black_box(chart.unwrap().total_commits);
+        })
+    });
+}
+
+criterion_group!(benches, bench_history, bench_real_chart);
 criterion_main!(benches);

@@ -3,7 +3,9 @@
 //! repository's age. Reuses the history pipeline's revwalk, walk cache, and
 //! per-commit diff stats.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Datelike, TimeZone, Utc};
 use git2::Sort;
@@ -30,14 +32,141 @@ const SECONDS_PER_WEEK: i64 = 7 * SECONDS_PER_DAY;
 /// Julian year; only used for auto-selection thresholds, never for alignment.
 const SECONDS_PER_YEAR: i64 = 365 * SECONDS_PER_DAY + SECONDS_PER_QUARTER_DAY;
 
+/// Aggregates the chart and consults the on-disk caches.
+///
+/// Two files back this. `chart` holds finished buckets for one
+/// `(tip, exclusions, bucket, merges)` tuple, so an unchanged tip answers
+/// without walking or diffing anything. `points` holds per-commit stats keyed
+/// by oid, which is what keeps a moved tip cheap: only commits that are
+/// genuinely new pay for a tree diff.
+pub fn history_chart_with_store(
+    session: &Git2Session,
+    query: &HistoryChartQuery,
+    snapshot_id: SnapshotId,
+    generation: Generation,
+    cache: &Arc<Mutex<HistoryCache>>,
+    base: Option<&std::path::Path>,
+    repo_root: &std::path::Path,
+) -> Result<HistoryChart> {
+    let Some(base) = base else {
+        return history_chart(session, query, snapshot_id, generation, cache);
+    };
+    let _ = std::fs::create_dir_all(base);
+
+    let resolved = resolve_shape(session, query);
+    let Some(shape) = resolved else {
+        return history_chart(session, query, snapshot_id, generation, cache);
+    };
+    let Shape {
+        tip: tip_bytes,
+        exclusions,
+    } = shape;
+    let fingerprint = crate::runtime::stats_store::exclusions_fingerprint(&exclusions);
+
+    let chart_path = crate::runtime::stats_store::chart_path(
+        base,
+        repo_root,
+        query.bucket,
+        query.include_merges,
+    );
+    if let Some(stored) = crate::runtime::stats_store::load_chart(
+        &chart_path,
+        tip_bytes,
+        fingerprint,
+        query.include_merges,
+    ) {
+        return Ok(HistoryChart {
+            snapshot_id,
+            generation,
+            bucket_size: stored.bucket,
+            buckets: stored.buckets,
+            total_commits: stored.total_commits,
+        });
+    }
+
+    // Merge the persisted per-commit points once per process. Entries are
+    // keyed by oid, so nothing here can be wrong for a commit it names.
+    {
+        let mut guard = cache.lock().unwrap();
+        if guard.claim_points_load() {
+            let points_path = crate::runtime::stats_store::points_path(base, repo_root);
+            if let Some(stored) = crate::runtime::stats_store::load_points(&points_path) {
+                guard.extend_stats(stored.records);
+            }
+        }
+    }
+
+    let chart = history_chart(session, query, snapshot_id, generation, cache)?;
+
+    let mut guard = cache.lock().unwrap();
+    let walk_key = crate::runtime::history_cache::WalkKey {
+        tip: Some(tip_bytes),
+        exclusions: exclusions.clone(),
+    };
+    let Some(walk) = guard.walk(&walk_key) else {
+        // No walk means an unborn HEAD, which produced no commits to record.
+        return Ok(chart);
+    };
+    let order: Vec<[u8; 20]> = walk.iter().map(|oid| oid_bytes(*oid)).collect();
+    guard.record_chart(
+        tip_bytes,
+        order,
+        crate::runtime::history_cache::PendingChart {
+            tip: tip_bytes,
+            exclusions: fingerprint,
+            requested_bucket: query.bucket,
+            resolved_bucket: chart.bucket_size,
+            include_merges: query.include_merges,
+            total_commits: chart.total_commits,
+            buckets: chart.buckets.clone(),
+        },
+    );
+    drop(guard);
+
+    // Persisting here rather than on a timer is deliberate: this branch only
+    // runs after a full aggregation, where a write is small next to the tree
+    // diffs that just happened. A chart served from the cache never writes.
+    crate::runtime::stats_store::flush(base, repo_root, &cache.lock().unwrap());
+    Ok(chart)
+}
+
+struct Shape {
+    tip: [u8; 20],
+    exclusions: Vec<[u8; 20]>,
+}
+
+/// Resolves the tip and hidden commits that identify an aggregate, or `None`
+/// when the revision does not resolve and the caller should fall back to the
+/// normal path and surface the error there.
+fn resolve_shape(session: &Git2Session, query: &HistoryChartQuery) -> Option<Shape> {
+    let resolved = session.with_repository(|repo| -> Result<Option<Shape>> {
+        let tip = if crate::engines::git2::history::is_default_revision(query.revision.as_ref()) {
+            crate::engines::git2::history::default_tip(repo)?
+        } else {
+            resolve_tip(repo, query.revision.as_ref()).ok()
+        };
+        let Some(tip) = tip else {
+            return Ok(None);
+        };
+        let mut exclusions = Vec::with_capacity(query.exclude_reachable_from.len());
+        for spec in &query.exclude_reachable_from {
+            exclusions.push(oid_bytes(resolve_tip(repo, Some(spec))?));
+        }
+        Ok(Some(Shape {
+            tip: oid_bytes(tip),
+            exclusions,
+        }))
+    });
+    resolved.ok().flatten()
+}
+
 pub fn history_chart(
     session: &Git2Session,
     query: &HistoryChartQuery,
     snapshot_id: SnapshotId,
     generation: Generation,
-    cache: &mut HistoryCache,
+    cache: &Arc<Mutex<HistoryCache>>,
 ) -> Result<HistoryChart> {
-    let max_commits = query.max_commits() as usize;
     session.with_repository(|repo| {
         // Unborn HEAD charts nothing; mirrors the empty shape below instead
         // of failing with `invalid revision HEAD`.
@@ -51,7 +180,6 @@ pub fn history_chart(
                         bucket_size: BucketSize::Day,
                         buckets: Vec::new(),
                         total_commits: 0,
-                        truncated: false,
                     });
                 }
             }
@@ -63,28 +191,22 @@ pub fn history_chart(
             exclusions.push(oid_bytes(resolve_tip(repo, Some(spec))?));
         }
 
-        // The OID list is immutable once walked. Prefer the shared walk the
-        // history pages built; only re-walk privately when the cached list
-        // cannot cover the chart's window, and only store back a list long
-        // enough to be worth sharing (a truncated chart walk would poison
-        // pagination for pages that read the same entry).
+        // The OID list is immutable once walked and is shared with the
+        // history pages and the graph, which key on the same tip.
         let walk_key = crate::runtime::history_cache::WalkKey {
             tip: Some(oid_bytes(tip)),
             exclusions,
         };
-        let (oids, truncated) = if let Some(list) = cache.walk(&walk_key) {
-            let cut = max_commits.min(list.len());
-            let truncated = cut < list.len();
-            (list[..cut].to_vec(), truncated)
-        } else {
-            let (oids, truncated) =
-                collect_walk(repo, tip, &query.exclude_reachable_from, max_commits)?;
-            // A complete list is always safe to share; a truncated one only
-            // when it stops at the same 50k cap history pages use.
-            if !truncated || oids.len() >= crate::runtime::history_cache::MAX_WALK_ENTRIES {
-                cache.store_walk(walk_key.clone(), std::sync::Arc::new(oids.clone()));
+        let oids: Arc<Vec<git2::Oid>> = {
+            let mut guard = cache.lock().unwrap();
+            match guard.walk(&walk_key) {
+                Some(list) => list,
+                None => {
+                    let list = Arc::new(collect_walk(repo, tip, &query.exclude_reachable_from)?);
+                    guard.store_walk(walk_key.clone(), list.clone());
+                    list
+                }
             }
-            (oids, truncated)
         };
 
         // Per-commit stats come from the immutable stat cache first, then
@@ -93,39 +215,51 @@ pub fn history_chart(
         // commits found in neither cache pay for a tree diff.
         let mut points: Vec<Option<CommitStatPoint>> = Vec::with_capacity(oids.len());
         let mut missing: Vec<usize> = Vec::new();
-        for (idx, oid) in oids.iter().enumerate() {
-            let bytes = oid_bytes(*oid);
-            if let Some(point) = cache.stat(&bytes) {
-                points.push(Some(point));
-                continue;
-            }
-            match cache.summary(&bytes) {
-                Some(summary) => {
-                    let point = CommitStatPoint {
-                        time_seconds: summary.committer.time_seconds,
-                        additions: summary.additions,
-                        deletions: summary.deletions,
-                        is_merge: summary.is_merge(),
-                    };
-                    cache.store_stat(bytes, point);
+        {
+            let mut guard = cache.lock().unwrap();
+            for (idx, oid) in oids.iter().enumerate() {
+                let bytes = oid_bytes(*oid);
+                if let Some(point) = guard.stat(&bytes) {
                     points.push(Some(point));
+                    continue;
                 }
-                None => {
-                    points.push(None);
-                    missing.push(idx);
+                match guard.summary(&bytes) {
+                    Some(summary) => {
+                        let point = CommitStatPoint {
+                            time_seconds: summary.committer.time_seconds,
+                            additions: summary.additions,
+                            deletions: summary.deletions,
+                            is_merge: summary.is_merge(),
+                        };
+                        guard.store_stat(bytes, point);
+                        points.push(Some(point));
+                    }
+                    None => {
+                        points.push(None);
+                        missing.push(idx);
+                    }
                 }
             }
         }
 
         if !missing.is_empty() {
+            // The cache lock is deliberately not held here. Diffing a large
+            // missing set takes seconds, and holding the lock would stall
+            // every other history read for this repository, including the
+            // list the user is looking at.
             let computed = compute_missing(repo, &oids, &missing)?;
+            let mut guard = cache.lock().unwrap();
             for (idx, point) in computed {
-                cache.store_stat(oid_bytes(oids[idx]), point);
+                guard.store_stat(oid_bytes(oids[idx]), point);
                 points[idx] = Some(point);
             }
         }
 
-        let included = included_points(points, query.include_merges);
+        let included: Vec<CommitStatPoint> = points
+            .into_iter()
+            .flatten()
+            .filter(|point| query.include_merges || !point.is_merge)
+            .collect();
         if included.is_empty() {
             return Ok(HistoryChart {
                 snapshot_id,
@@ -133,16 +267,16 @@ pub fn history_chart(
                 bucket_size: BucketSize::Day,
                 buckets: Vec::new(),
                 total_commits: 0,
-                truncated,
             });
         }
 
-        let bucket_size = query.bucket.unwrap_or_else(|| {
-            select_auto(
-                included[0].time_seconds,
-                included[included.len() - 1].time_seconds,
-            )
-        });
+        // Walk order is commit time, but points are keyed by committer time,
+        // so the bounds are taken explicitly rather than from the ends.
+        let oldest = included.iter().map(|p| p.time_seconds).min();
+        let newest = included.iter().map(|p| p.time_seconds).max();
+        let bucket_size = query
+            .bucket
+            .unwrap_or_else(|| select_auto(oldest.unwrap_or_default(), newest.unwrap_or_default()));
         let buckets = aggregate(&included, bucket_size)?;
 
         Ok(HistoryChart {
@@ -151,33 +285,16 @@ pub fn history_chart(
             total_commits: included.len() as u32,
             bucket_size,
             buckets,
-            truncated,
         })
     })
 }
 
-/// Flattens the slot list, drops merges unless requested, and sorts by time.
-fn included_points(
-    points: Vec<Option<CommitStatPoint>>,
-    include_merges: bool,
-) -> Vec<CommitStatPoint> {
-    let mut included: Vec<CommitStatPoint> = points
-        .into_iter()
-        .flatten()
-        .filter(|point| include_merges || !point.is_merge)
-        .collect();
-    included.sort_unstable_by_key(|point| point.time_seconds);
-    included
-}
-
-/// Walks newest-first, capped at `limit`; `truncated` reports whether older
-/// commits exist beyond the cap.
+/// Walks newest-first over everything reachable from `tip`.
 fn collect_walk(
     repo: &git2::Repository,
     tip: git2::Oid,
     exclude_reachable_from: &[RevisionSpec],
-    limit: usize,
-) -> Result<(Vec<git2::Oid>, bool)> {
+) -> Result<Vec<git2::Oid>> {
     let mut walk = repo.revwalk()?;
     walk.push(tip)?;
     // TOPOLOGICAL keeps children before parents when timestamps tie.
@@ -185,18 +302,12 @@ fn collect_walk(
     for spec in exclude_reachable_from {
         walk.hide(resolve_tip(repo, Some(spec))?)?;
     }
-
-    let mut oids = Vec::new();
-    for info in &mut walk {
-        if oids.len() >= limit {
-            break;
-        }
-        oids.push(info.map_err(|e| GitError::Internal {
+    walk.map(|info| {
+        info.map_err(|e| GitError::Internal {
             message: e.to_string(),
-        })?);
-    }
-    let truncated = oids.len() >= limit && walk.next().is_some();
-    Ok((oids, truncated))
+        })
+    })
+    .collect()
 }
 
 /// Computes stats for unknown commits in parallel over large chunks. A chunk
@@ -342,34 +453,52 @@ fn date_time(seconds: i64) -> Result<DateTime<Utc>> {
         .ok_or_else(|| GitError::internal("timestamp out of range"))
 }
 
-/// Rolls sorted points into zero-filled UTC buckets; bucket ends are
-/// exclusive, quiet spans stay visible as empty buckets.
+/// Rolls points into zero-filled UTC buckets; bucket ends are exclusive, quiet
+/// spans stay visible as empty buckets.
+///
+/// Points arrive in walk order, which is commit time and not necessarily the
+/// committer time these points are keyed by, so ordering is recovered from a
+/// `BTreeMap` over bucket boundaries. That costs one bucket's worth of memory
+/// instead of a full sort of every point, which matters once the walk is no
+/// longer capped.
 fn aggregate(points: &[CommitStatPoint], size: BucketSize) -> Result<Vec<ChartBucket>> {
-    let first = points[0].time_seconds;
-    let last = points[points.len() - 1].time_seconds;
-
-    let mut buckets = Vec::new();
-    let mut cursor = 0usize;
-    let mut start = bucket_start(first, size)?;
-    while start <= last {
-        let end = next_bucket_start(start, size)?;
-        let mut bucket = ChartBucket {
+    let mut filled: BTreeMap<i64, ChartBucket> = BTreeMap::new();
+    for point in points {
+        let start = bucket_start(point.time_seconds, size)?;
+        let bucket = filled.entry(start).or_insert(ChartBucket {
             start_seconds: start,
-            end_seconds: end,
+            end_seconds: 0,
             commits: 0,
             additions: 0,
             deletions: 0,
+        });
+        bucket.commits += 1;
+        bucket.additions += point.additions;
+        bucket.deletions += point.deletions;
+    }
+
+    let mut buckets: Vec<ChartBucket> = Vec::with_capacity(filled.len());
+    let mut previous: Option<i64> = None;
+    for (start, mut bucket) in filled {
+        // Boundaries advance monotonically, so every boundary skipped between
+        // two populated buckets is a quiet period that still needs to render.
+        let mut cursor = match previous {
+            Some(previous) => next_bucket_start(previous, size)?,
+            None => start,
         };
-        // Everything before `start` was consumed by earlier buckets because
-        // boundaries advance monotonically from below the first timestamp.
-        while cursor < points.len() && points[cursor].time_seconds < end {
-            bucket.commits += 1;
-            bucket.additions += points[cursor].additions;
-            bucket.deletions += points[cursor].deletions;
-            cursor += 1;
+        while cursor < start {
+            buckets.push(ChartBucket {
+                start_seconds: cursor,
+                end_seconds: next_bucket_start(cursor, size)?,
+                commits: 0,
+                additions: 0,
+                deletions: 0,
+            });
+            cursor = next_bucket_start(cursor, size)?;
         }
+        bucket.end_seconds = next_bucket_start(bucket.start_seconds, size)?;
+        previous = Some(bucket.start_seconds);
         buckets.push(bucket);
-        start = end;
     }
     Ok(buckets)
 }
@@ -394,6 +523,12 @@ mod tests {
             deletions: 0,
             is_merge: true,
         }
+    }
+
+    /// `history_chart` takes the shared cache handle so it can release the
+    /// lock across the tree diffs.
+    fn cache() -> Arc<Mutex<HistoryCache>> {
+        Arc::new(Mutex::new(HistoryCache::default()))
     }
 
     /// 2024-03-15T12:34:56Z
@@ -517,17 +652,46 @@ mod tests {
     }
 
     #[test]
-    fn merges_are_filtered_until_requested() {
-        let slots = vec![
+    fn aggregation_is_independent_of_input_order() {
+        let mut ordered = vec![
+            point(T, 3, 1),
+            point(T + SECONDS_PER_HOUR, 2, 0),
+            point(T + 3 * SECONDS_PER_HOUR, 5, 4),
+        ];
+        let shuffled = vec![ordered[2], ordered[0], ordered[1]];
+        ordered.reverse();
+
+        for size in [
+            BucketSize::Hour,
+            BucketSize::Day,
+            BucketSize::Week,
+            BucketSize::Month,
+        ] {
+            let a = aggregate(&ordered, size).unwrap();
+            let b = aggregate(&shuffled, size).unwrap();
+            assert_eq!(a, b, "bucket size {size:?}");
+            assert_eq!(a.iter().map(|x| x.commits).sum::<u32>(), 3);
+            assert_eq!(a.iter().map(|x| x.additions).sum::<u64>(), 10);
+        }
+    }
+
+    #[test]
+    fn merge_points_can_be_filtered_before_aggregation() {
+        let slots = [
             Some(point(T, 3, 1)),
             Some(merge(T)),
             None, // never filled; dropped like any gap
         ];
-        assert_eq!(included_points(slots.clone(), false).len(), 1);
-        let with_merges = included_points(slots, true);
-        assert_eq!(with_merges.len(), 2);
-        // Sorted chronologically regardless of input order.
-        assert!(with_merges[0].time_seconds <= with_merges[1].time_seconds);
+        let filter = |include: bool| -> Vec<CommitStatPoint> {
+            slots
+                .iter()
+                .flatten()
+                .filter(|point| include || !point.is_merge)
+                .copied()
+                .collect()
+        };
+        assert_eq!(filter(false).len(), 1);
+        assert_eq!(filter(true).len(), 2);
     }
 
     /// Commits `contents` as file.txt on `refname` (e.g. "HEAD" or
@@ -593,17 +757,16 @@ mod tests {
         );
 
         let session = Git2Session::new(temp.path().to_path_buf());
-        let mut cache = HistoryCache::default();
+        let cache = cache();
         let chart = history_chart(
             &session,
             &HistoryChartQuery::default(),
             SnapshotId(0),
             Generation(1),
-            &mut cache,
+            &cache,
         )
         .unwrap();
 
-        assert!(!chart.truncated);
         assert_eq!(chart.total_commits, 3);
         // A 40-day span lands in the quarter-day tier (14d..90d).
         assert_eq!(chart.bucket_size, BucketSize::QuarterDay);
@@ -635,7 +798,7 @@ mod tests {
             &HistoryChartQuery::default(),
             SnapshotId(1),
             Generation(1),
-            &mut cache,
+            &cache,
         )
         .unwrap();
         assert_eq!(again.buckets, chart.buckets);
@@ -650,7 +813,7 @@ mod tests {
             &weekly_query,
             SnapshotId(2),
             Generation(1),
-            &mut cache,
+            &cache,
         )
         .unwrap();
         assert_eq!(weekly.bucket_size, BucketSize::Week);
@@ -712,14 +875,14 @@ mod tests {
         .unwrap();
 
         let session = Git2Session::new(temp.path().to_path_buf());
-        let mut cache = HistoryCache::default();
+        let cache = cache();
 
         let without = history_chart(
             &session,
             &HistoryChartQuery::default(),
             SnapshotId(0),
             Generation(1),
-            &mut cache,
+            &cache,
         )
         .unwrap();
         assert_eq!(without.total_commits, 3); // root + both branch tips; the merge is excluded
@@ -728,14 +891,8 @@ mod tests {
             include_merges: true,
             ..Default::default()
         };
-        let with = history_chart(
-            &session,
-            &with_query,
-            SnapshotId(1),
-            Generation(1),
-            &mut cache,
-        )
-        .unwrap();
+        let with =
+            history_chart(&session, &with_query, SnapshotId(1), Generation(1), &cache).unwrap();
         assert_eq!(with.total_commits, 4);
         // Line totals unchanged: merge commits never contribute deltas.
         assert_eq!(

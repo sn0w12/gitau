@@ -133,6 +133,9 @@ pub struct Backend {
     github: Arc<GitHubAuth>,
     remote_info_cache: Arc<Mutex<RemoteInfoCacheState>>,
     language_stats_cache: LanguageStatsCache,
+    /// Root for the history chart's per-commit stat files. Absent means the
+    /// chart recomputes its tree diffs on every launch.
+    history_stats_dir: Arc<Mutex<Option<PathBuf>>>,
 }
 
 /// Language stats are recomputed only past this many distinct repos.
@@ -177,7 +180,25 @@ impl Backend {
             github,
             remote_info_cache: Arc::default(),
             language_stats_cache: Arc::default(),
+            history_stats_dir: Arc::default(),
         }
+    }
+
+    /// Points the history chart's per-commit stat cache at `dir`. Without it
+    /// the chart re-diffs every commit on every launch, which is the whole
+    /// cost the cache exists to remove.
+    pub fn initialize_history_stats_cache(&self, dir: PathBuf) {
+        let _ = std::fs::create_dir_all(&dir);
+        *self.history_stats_dir.lock().unwrap() = Some(dir);
+    }
+
+    /// Deletes cached stat files untouched for longer than `max_age`. Last use
+    /// is the file mtime, so repositories that are no longer open age out.
+    pub fn prune_history_stats_cache(&self, max_age: Duration) -> usize {
+        let Some(dir) = self.history_stats_dir.lock().unwrap().clone() else {
+            return 0;
+        };
+        prune_dir_older_than_matching(&dir, max_age, "bin", false)
     }
 
     /// Points the remote-info disk cache at `dir`. Missing directories are
@@ -661,19 +682,20 @@ impl Backend {
         let generation = entry.generation();
 
         let history_cache = entry.history_cache();
+        let base = self.history_stats_dir.lock().unwrap().clone();
+        let repo_root = path.clone();
         let chart = self
             .scheduler
             .run(&token, move || {
-                // Same engine and cache as history pages: the walk is shared,
-                // and per-commit stat points are immutable once computed.
-                let mut guard = history_cache.lock().unwrap();
                 let session = crate::engines::git2::Git2Session::new(path);
-                crate::engines::git2::chart::history_chart(
+                crate::engines::git2::chart::history_chart_with_store(
                     &session,
                     &query,
                     snapshot_id,
                     generation,
-                    &mut guard,
+                    &history_cache,
+                    base.as_deref(),
+                    &repo_root,
                 )
             })
             .await?;
@@ -2595,11 +2617,28 @@ fn touch_cache_file(path: &Path) {
 /// cache retention so both disk caches share one cleanup horizon.
 pub const REMOTE_INFO_PRUNE_AFTER: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
+/// Same retention horizon for the history chart's stat files. These are
+/// larger than the other caches and keyed by repository path, so a repository
+/// that is closed and never reopened has to age out on its own.
+pub const HISTORY_STATS_PRUNE_AFTER: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+
 /// Recursively deletes `*.json` cache files untouched for longer than
 /// `max_age`, using mtime with a fetch-time fallback for filesystems
 /// without reliable mtimes. Prunes empty directories on the way out and
 /// returns the number of files removed.
 fn prune_dir_older_than(dir: &Path, max_age: Duration) -> usize {
+    prune_dir_older_than_matching(dir, max_age, "json", true)
+}
+
+/// `read_fetched_at` only applies to the remote-info payloads: when the mtime
+/// is unreadable they fall back to the timestamp inside the file. The binary
+/// stat files carry no such fallback, so an unreadable mtime is simply old.
+fn prune_dir_older_than_matching(
+    dir: &Path,
+    max_age: Duration,
+    extension: &str,
+    read_fetched_at: bool,
+) -> usize {
     let now_system = SystemTime::now();
     let now_ms_value = now_ms();
     let mut removed = 0;
@@ -2609,7 +2648,7 @@ fn prune_dir_older_than(dir: &Path, max_age: Duration) -> usize {
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            removed += prune_dir_older_than(&path, max_age);
+            removed += prune_dir_older_than_matching(&path, max_age, extension, read_fetched_at);
             if std::fs::read_dir(&path)
                 .map(|mut rest| rest.next().is_none())
                 .unwrap_or(false)
@@ -2618,7 +2657,7 @@ fn prune_dir_older_than(dir: &Path, max_age: Duration) -> usize {
             }
             continue;
         }
-        if path.extension().is_none_or(|ext| ext != "json") {
+        if path.extension().is_none_or(|ext| ext != extension) {
             continue;
         }
         let recent = entry
@@ -2626,13 +2665,14 @@ fn prune_dir_older_than(dir: &Path, max_age: Duration) -> usize {
             .and_then(|m| m.modified())
             .map(|mtime| now_system.duration_since(mtime).unwrap_or(Duration::ZERO) <= max_age)
             .unwrap_or_else(|_| {
-                std::fs::read(&path)
-                    .ok()
-                    .and_then(|raw| serde_json::from_slice::<RemoteRepoInfo>(&raw).ok())
-                    .is_some_and(|info| {
-                        now_ms_value.saturating_sub(info.fetched_at_ms.unwrap_or(0))
-                            <= max_age.as_millis() as u64
-                    })
+                read_fetched_at
+                    && std::fs::read(&path)
+                        .ok()
+                        .and_then(|raw| serde_json::from_slice::<RemoteRepoInfo>(&raw).ok())
+                        .is_some_and(|info| {
+                            now_ms_value.saturating_sub(info.fetched_at_ms.unwrap_or(0))
+                                <= max_age.as_millis() as u64
+                        })
             });
         if !recent && std::fs::remove_file(&path).is_ok() {
             removed += 1;

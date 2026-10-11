@@ -10,7 +10,7 @@ pub mod icons;
 pub mod runtime;
 pub mod streaming;
 
-pub use application::{Backend, BackendConfig, REMOTE_INFO_PRUNE_AFTER};
+pub use application::{Backend, BackendConfig, HISTORY_STATS_PRUNE_AFTER, REMOTE_INFO_PRUNE_AFTER};
 pub use error::{GitError, Result};
 pub use github::{
     AccountProfile, DeviceFlowStart, GitHubAuth, GithubOrg, PublishRepositoryRequest, PublishResult,
