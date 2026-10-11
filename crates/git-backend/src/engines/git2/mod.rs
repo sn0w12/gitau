@@ -6,6 +6,7 @@ pub mod hooks;
 pub mod lfs;
 pub(crate) mod local;
 pub mod mutations;
+pub mod numstat;
 pub mod remotes;
 pub mod session;
 pub mod status;

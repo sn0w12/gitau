@@ -47,6 +47,10 @@ name = "history"
 harness = false
 
 [[bench]]
+name = "numstat"
+harness = false
+
+[[bench]]
 name = "highlight"
 harness = false
 

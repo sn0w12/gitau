@@ -239,8 +239,9 @@ fn resolve_local_branch(repo: &git2::Repository, spec: Option<&str>) -> Option<S
 }
 
 /// Per-commit stats against the first parent (root commits diff the empty
-/// tree). Line counts come from libgit2's diff stats, so binary files count
-/// toward `files_changed` but contribute no insertions/deletions.
+/// tree). Line counts come from [`crate::engines::git2::numstat`], which counts
+/// without the patch `Diff::stats` builds for the same lines. Binary files
+/// contribute no insertions or deletions.
 pub(crate) fn commit_diff_stats(
     repo: &git2::Repository,
     commit: &git2::Commit<'_>,
@@ -252,12 +253,17 @@ pub(crate) fn commit_diff_stats(
         Some(&tree),
         Some(&mut DiffOptions::new()),
     )?;
-    let stats = diff.stats()?;
-    Ok((
-        stats.files_changed() as u32,
-        stats.insertions() as u64,
-        stats.deletions() as u64,
-    ))
+
+    let mut files_changed = 0u32;
+    let mut additions = 0u64;
+    let mut deletions = 0u64;
+    for delta in diff.deltas() {
+        files_changed += 1;
+        let (added, deleted) = crate::engines::git2::numstat::delta_numstat(repo, &delta);
+        additions += added;
+        deletions += deleted;
+    }
+    Ok((files_changed, additions, deletions))
 }
 
 /// Tag names whose target (peeled for annotated tags) resolves to `oid`.
