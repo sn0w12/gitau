@@ -57,9 +57,19 @@ fn fixture_repo() -> &'static PathBuf {
 }
 
 fn session_for(root: &std::path::Path) -> git_backend::engines::gix::GixSession {
-    use std::sync::OnceLock as OL;
-    static S: OL<git_backend::engines::gix::GixSession> = OL::new();
-    S.get_or_init(|| git_backend::engines::gix::GixSession::discover(root).unwrap())
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    // Keyed by path: the diff fixtures open two repositories, and a single
+    // cached session would hand the commit-diff fixture the wrong repo.
+    static SESSIONS: OnceLock<Mutex<HashMap<PathBuf, git_backend::engines::gix::GixSession>>> =
+        OnceLock::new();
+    let mut sessions = SESSIONS
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap();
+    sessions
+        .entry(root.to_path_buf())
+        .or_insert_with(|| git_backend::engines::gix::GixSession::discover(root).unwrap())
         .clone()
 }
 
