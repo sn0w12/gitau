@@ -66,7 +66,22 @@ jobs:
               if: runner.os == 'Linux'
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev xdg-utils patchelf
+                  sudo apt-get install -y --no-install-recommends libgtk-4-dev libgtk-3-dev librsvg2-dev xdg-utils patchelf \
+                    libnss3 libgbm1 libasound2t64 libudev1 libxkbcommon-x11-0
+
+            - name: Resolve CEF version
+              if: runner.os == 'Linux'
+              id: cef
+              run: |
+                  version=$(grep -A1 '^name = "cef"$' Cargo.lock | grep -m1 version | cut -d'"' -f2)
+                  echo "version=$version" >> "$GITHUB_OUTPUT"
+
+            - name: Cache CEF
+              if: runner.os == 'Linux'
+              uses: actions/cache@v5.0.3
+              with:
+                  path: ~/.cache/tauri-cef
+                  key: cef-${{ matrix.platform }}-${{ steps.cef.outputs.version }}
 
             - name: Install frontend dependencies
               run: npm ci

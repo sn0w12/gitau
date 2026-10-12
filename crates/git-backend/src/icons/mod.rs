@@ -296,10 +296,10 @@ impl IconFetcher for HttpFetcher {
                 });
             }
 
-            if let Some(length) = response.content_length() {
-                if length as usize > max_bytes {
-                    return Err(IconError::TooLarge { url });
-                }
+            if let Some(length) = response.content_length()
+                && length as usize > max_bytes
+            {
+                return Err(IconError::TooLarge { url });
             }
 
             // Stream with a hard cap regardless of advertised length.

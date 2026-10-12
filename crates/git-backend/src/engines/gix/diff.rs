@@ -663,15 +663,15 @@ fn sniff_delta_binary(session: &GixSession, blobs: &BlobCache, delta: &Renamed) 
 
 fn blob_or_worktree_is_binary(session: &GixSession, blobs: &BlobCache, delta: &Renamed) -> bool {
     let repo = session.handle();
-    if let Some(id) = delta.old_id {
-        if blob_is_binary(&repo, blobs, id) {
-            return true;
-        }
+    if let Some(id) = delta.old_id
+        && blob_is_binary(&repo, blobs, id)
+    {
+        return true;
     }
-    if let Some(id) = delta.new_id {
-        if blob_is_binary(&repo, blobs, id) {
-            return true;
-        }
+    if let Some(id) = delta.new_id
+        && blob_is_binary(&repo, blobs, id)
+    {
+        return true;
     }
     if delta.worktree && !delta.symlink {
         return worktree_prefix_is_binary(session, delta.path.as_bytes());

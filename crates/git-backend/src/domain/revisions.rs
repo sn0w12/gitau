@@ -26,10 +26,10 @@ impl RevisionSpec {
                 "revision contains control characters",
             ));
         }
-        if let Some(first) = trimmed.chars().next() {
-            if first == '-' {
-                return Err(GitError::invalid_input("revision must not start with `-`"));
-            }
+        if let Some(first) = trimmed.chars().next()
+            && first == '-'
+        {
+            return Err(GitError::invalid_input("revision must not start with `-`"));
         }
         Ok(Self(trimmed.to_owned()))
     }

@@ -256,10 +256,10 @@ pub fn parse_line_continued(
     }
 
     fn close_run(spans: &mut Vec<u32>, run: &mut Run, units: usize) {
-        if let Some(id) = run.style_id {
-            if units > run.start {
-                spans.extend_from_slice(&[run.start as u32, (units - run.start) as u32, id]);
-            }
+        if let Some(id) = run.style_id
+            && units > run.start
+        {
+            spans.extend_from_slice(&[run.start as u32, (units - run.start) as u32, id]);
         }
         run.style_id = None;
     }

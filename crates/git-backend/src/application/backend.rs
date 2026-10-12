@@ -493,10 +493,10 @@ impl Backend {
         let mut best: Option<(Generation, Arc<StatusReport>)> = None;
         for g in (1..current_gen.0).rev() {
             let key = (Generation(g), *options);
-            if let Some(CachedValue::Status(report)) = entry.cached("status", &key) {
-                if best.as_ref().is_none_or(|(bg, _)| g > bg.0) {
-                    best = Some((Generation(g), report));
-                }
+            if let Some(CachedValue::Status(report)) = entry.cached("status", &key)
+                && best.as_ref().is_none_or(|(bg, _)| g > bg.0)
+            {
+                best = Some((Generation(g), report));
             }
         }
         best.map(|(_, report)| report)
@@ -2448,13 +2448,13 @@ fn try_read_readme(repo_path: &Path) -> String {
     ];
     for name in &readme_names {
         let path = workdir.join(name);
-        if let Ok(content) = std::fs::read_to_string(&path) {
-            if let Some(paragraph) = crate::domain::readme::first_paragraph(
+        if let Ok(content) = std::fs::read_to_string(&path)
+            && let Some(paragraph) = crate::domain::readme::first_paragraph(
                 &content,
                 crate::domain::readme::README_DESCRIPTION_MAX_CHARS,
-            ) {
-                return paragraph;
-            }
+            )
+        {
+            return paragraph;
         }
     }
     String::new()

@@ -148,13 +148,13 @@ impl DiffOperation {
         let mut guard = self.inner.lock().unwrap();
         let section = section_mut(&mut guard, section_id)?;
         let added = chunk.len() as u64;
-        if let Some(declared) = section.declared_rows {
-            if section.row_count + added > declared {
-                return Err(GitError::internal(format!(
-                    "section {section_id} chunk exceeds declared {} rows",
-                    declared
-                )));
-            }
+        if let Some(declared) = section.declared_rows
+            && section.row_count + added > declared
+        {
+            return Err(GitError::internal(format!(
+                "section {section_id} chunk exceeds declared {} rows",
+                declared
+            )));
         }
         section.chunks.push(chunk);
         section.row_count += added;

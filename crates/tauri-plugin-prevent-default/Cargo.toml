@@ -1,0 +1,20 @@
+[package]
+name = "tauri-plugin-prevent-default"
+version = "6.0.1"
+description = "Disable default browser shortcuts in a webview"
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT"
+publish = false
+
+# Vendored from ferreira-tb/tauri-plugin-prevent-default 6.0.1, which pins
+# `tauri` to 2.x. The optional Windows platform hooks are left out: their
+# `tauri/wry` feature was removed in Tauri 3 and the app never enabled them,
+# so only the injected script and the shortcut builders remain.
+[dependencies]
+bitflags = "2.13"
+itertools = "0.15"
+serde = { version = "1", features = ["derive"] }
+strum = { version = "0.28", features = ["derive"] }
+tauri = { version = "3.0.0-alpha.4", default-features = false }
+thiserror = "2"

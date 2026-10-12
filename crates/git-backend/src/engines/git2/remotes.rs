@@ -29,10 +29,10 @@ fn callbacks<'cb>(
                 if allowed_types.contains(CredentialType::DEFAULT) {
                     return Cred::default();
                 }
-                if let Some(user) = username_from_url {
-                    if allowed_types.contains(CredentialType::USERNAME) {
-                        return Cred::username(user);
-                    }
+                if let Some(user) = username_from_url
+                    && allowed_types.contains(CredentialType::USERNAME)
+                {
+                    return Cred::username(user);
                 }
                 Err(git2::Error::from_str("no credentials available"))
             }

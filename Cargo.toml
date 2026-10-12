@@ -3,13 +3,14 @@ resolver = "2"
 members = [
     "crates/git-backend",
     "crates/tauri",
+    "crates/tauri-plugin-prevent-default",
     "crates/tauri-plugin-snap-layout",
 ]
 
 [workspace.package]
 version = "0.2.1"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.95"
 
 [workspace.dependencies]
 base64 = "0.22"
@@ -44,16 +45,18 @@ syntect = { version = "5", default-features = false, features = [
     "default-syntaxes",
     "regex-onig",
 ] }
-tauri = "2"
-tauri-build = "2"
-tauri-plugin-dialog = "2"
-tauri-plugin-log = "2"
-tauri-plugin-opener = "2"
-tauri-plugin-os = "2"
-tauri-plugin-prevent-default = "5"
-tauri-plugin-process = "2"
+tauri = "3.0.0-alpha.4"
+tauri-build = "3.0.0-alpha.3"
+tauri-plugin-dialog = "3.0.0-alpha.3"
+tauri-plugin-log = "3.0.0-alpha.2"
+tauri-plugin-opener = "3.0.0-alpha.2"
+tauri-plugin-os = "3.0.0-alpha.2"
+tauri-plugin-prevent-default = { path = "crates/tauri-plugin-prevent-default" }
+tauri-plugin-process = "3.0.0-alpha.2"
 tauri-plugin-snap-layout = { path = "crates/tauri-plugin-snap-layout" }
-tauri-plugin-updater = "2"
+tauri-plugin-updater = "3.0.0-alpha.2"
+tauri-runtime-cef = "3.0.0-alpha.5"
+tauri-runtime-wry = "3.0.0-alpha.4"
 tempfile = "3"
 thiserror = "2"
 tokio = { version = "1", features = [

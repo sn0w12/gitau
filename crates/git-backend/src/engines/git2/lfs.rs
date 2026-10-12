@@ -46,10 +46,10 @@ pub fn lfs_smudge(repo: &git2::Repository) -> Result<usize> {
             continue;
         };
         let target = workdir.join(file.path.replace('/', std::path::MAIN_SEPARATOR_STR));
-        if let Some(parent) = target.parent() {
-            if std::fs::create_dir_all(parent).is_err() {
-                continue;
-            }
+        if let Some(parent) = target.parent()
+            && std::fs::create_dir_all(parent).is_err()
+        {
+            continue;
         }
         if std::fs::copy(&store_path, &target).is_ok() {
             written += 1;
@@ -76,10 +76,10 @@ fn walk_tree(
         if entry.kind() == Some(git2::ObjectType::Tree) {
             let subtree = obj.peel_to_tree()?;
             walk_tree(repo, &subtree, &path, patterns, out)?;
-        } else if patterns.iter().any(|g| g.matches(&path)) {
-            if let Some(info) = classify(repo, &path, &obj) {
-                out.push(info);
-            }
+        } else if patterns.iter().any(|g| g.matches(&path))
+            && let Some(info) = classify(repo, &path, &obj)
+        {
+            out.push(info);
         }
     }
     Ok(())

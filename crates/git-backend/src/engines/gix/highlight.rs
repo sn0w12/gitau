@@ -378,10 +378,10 @@ pub fn detect_syntax(path: &str) -> Option<&'static SyntaxReference> {
     let base = path.rsplit(['/', '\\']).next().unwrap_or(path);
     let lowered = base.to_lowercase();
 
-    if FILENAME_LANGUAGES.contains(&base) || base.starts_with("Dockerfile.") {
-        if let Some(found) = probe(&[base.to_string(), lowered.clone()]) {
-            return Some(found);
-        }
+    if (FILENAME_LANGUAGES.contains(&base) || base.starts_with("Dockerfile."))
+        && let Some(found) = probe(&[base.to_string(), lowered.clone()])
+    {
+        return Some(found);
     }
 
     let dot = base.rfind('.')?;
@@ -651,20 +651,18 @@ impl SectionHighlighter {
 
         // Old side fills gaps first; new side wins on context rows, matching
         // byte-identical content on both sides.
-        if !need_old.is_empty() {
-            if let Some(side) = self.old.as_mut() {
-                for (lineno, spans) in side.advance(max_of(&need_old), &need_old, &mut self.styles)
-                {
-                    fill_rows(rows, lineno, &spans, false);
-                }
+        if !need_old.is_empty()
+            && let Some(side) = self.old.as_mut()
+        {
+            for (lineno, spans) in side.advance(max_of(&need_old), &need_old, &mut self.styles) {
+                fill_rows(rows, lineno, &spans, false);
             }
         }
-        if !need_new.is_empty() {
-            if let Some(side) = self.new.as_mut() {
-                for (lineno, spans) in side.advance(max_of(&need_new), &need_new, &mut self.styles)
-                {
-                    fill_rows(rows, lineno, &spans, true);
-                }
+        if !need_new.is_empty()
+            && let Some(side) = self.new.as_mut()
+        {
+            for (lineno, spans) in side.advance(max_of(&need_new), &need_new, &mut self.styles) {
+                fill_rows(rows, lineno, &spans, true);
             }
         }
     }
@@ -697,7 +695,12 @@ fn fill_rows(rows: &mut [DiffRow], lineno: u32, spans: &[u32], overwrite: bool) 
             continue;
         }
         let limit = row.content.len() as u32;
-        if spans.chunks_exact(3).all(|t| t[0] + t[1] <= limit) {
+        if spans
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .all(|t| t[0] + t[1] <= limit)
+        {
             row.spans = Some(spans.to_vec());
         }
     }
@@ -838,7 +841,7 @@ fn main() {
         let spans = row.spans.as_ref().unwrap();
         let mut out = String::new();
         let mut cursor = 0usize;
-        for t in spans.chunks_exact(3) {
+        for t in spans.as_chunks::<3>().0 {
             let (start, len) = (t[0] as usize, t[1] as usize);
             out.push_str(&row.content[cursor..start]);
             out.push_str(&row.content[start..start + len]);
@@ -872,7 +875,9 @@ fn main() {
         let region_start = assignment.content.find("\"world\"").unwrap();
         let region_end = region_start + "\"world\"".len();
         let covering = spans
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .filter(|t| {
                 (t[0] as usize) < region_end && (t[0] as usize + t[1] as usize) > region_start
             })

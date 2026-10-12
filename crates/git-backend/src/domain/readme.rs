@@ -132,18 +132,19 @@ fn markdown_links_to_text(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut cursor = 0;
     while cursor < bytes.len() {
-        if bytes[cursor] == b'!' && bytes.get(cursor + 1) == Some(&b'[') {
-            if let Some((_, span_end)) = markdown_link_span(bytes, cursor + 1) {
-                cursor = span_end;
-                continue;
-            }
+        if bytes[cursor] == b'!'
+            && bytes.get(cursor + 1) == Some(&b'[')
+            && let Some((_, span_end)) = markdown_link_span(bytes, cursor + 1)
+        {
+            cursor = span_end;
+            continue;
         }
-        if bytes[cursor] == b'[' {
-            if let Some((label_close, span_end)) = markdown_link_span(bytes, cursor) {
-                out.push_str(&markdown_links_to_text(&text[cursor + 1..label_close]));
-                cursor = span_end;
-                continue;
-            }
+        if bytes[cursor] == b'['
+            && let Some((label_close, span_end)) = markdown_link_span(bytes, cursor)
+        {
+            out.push_str(&markdown_links_to_text(&text[cursor + 1..label_close]));
+            cursor = span_end;
+            continue;
         }
         let ch = text[cursor..].chars().next().unwrap();
         out.push(ch);

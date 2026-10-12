@@ -160,7 +160,7 @@ impl AreaBuilder {
                 snap::update_snap_bounds,
                 snap::detach_snap_bounds
             ])
-            .js_init_script(injection_script)
+            .initialization_script(injection_script)
             .build()
     }
 }

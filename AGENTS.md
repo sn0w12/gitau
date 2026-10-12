@@ -2,10 +2,11 @@
 
 ## Project overview
 
-gitau is a cross-platform Git desktop client: a Tauri 2 shell (Rust workspace) plus a React 19 frontend. Git work happens entirely in Rust (libgit2 + gitoxide); the frontend never shells out to the git CLI.
+gitau is a cross-platform Git desktop client: a Tauri 3 (alpha) shell (Rust workspace) plus a React 19 frontend. Git work happens entirely in Rust (libgit2 + gitoxide); the frontend never shells out to the git CLI.
 
 - `crates/git-backend/` is the pure-Rust git engine library: status, diff, history, remotes, mutations; dual engines (`git2` 0.21 as reference/mutation engine, `gix` 0.86 for fast reads); syntect syntax highlighting.
 - `crates/tauri/` holds the Tauri commands and app setup, bridging webview ↔ backend over IPC (~52 registered commands).
+- Webview runtime: Tauri 3 selects it through a runtime crate rather than a `tauri` feature. Linux builds depend on `tauri-runtime-cef` (bundled Chromium) under `[target.'cfg(target_os = "linux")'.dependencies]`; every other target depends on `tauri-runtime-wry` (the system webview). `crates/tauri/src/lib.rs` picks the runtime with the cfg-gated `runtime_attrs()`, and `crates/tauri/src/main.rs` carries the CEF helper entry point on Linux.
 
 ## Architecture and data flow
 
@@ -161,7 +162,7 @@ Every word written in this repo follows this: comments, markdown docs, commit me
 ## Runtime and tooling preferences
 
 - npm is the package manager (`package-lock.json`, CI uses `npm ci`). Ignore `.cta.json`'s stale `pnpm`/file-router fields, scaffold leftovers.
-- Node LTS, Rust 1.85+ (workspace `rust-version = "1.85"`; git-backend uses edition 2024).
+- Node LTS, Rust 1.95+ (workspace `rust-version = "1.95"`; the Tauri 3 alpha requires it; git-backend uses edition 2024).
 - Lint/format: oxlint + oxfmt, not ESLint/Prettier (VS Code defaults to the oxc extension, Prettier disabled). oxlint `correctness` rules are errors; React purity/immutability/exhaustive-deps warnings exist, so don't add code that trips them.
 - Tailwind CSS v4 CSS-first (no tailwind.config): theme tokens in `src/styles.css`, dark mode is a `.dark` class on `<html>` via theme-store. Icons: lucide-react.
 - Release builds run through the GitHub Actions tag workflow (`v*.*.*`) using tauri-action; bundles nsis/msi/dmg/appimage/deb.

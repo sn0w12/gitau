@@ -64,13 +64,13 @@ pub fn add_submodule(repo: &git2::Repository, request: &SubmoduleAddRequest) -> 
     update.checkout(checkout);
     sm.clone(Some(&mut update))?;
 
-    if let Some(branch) = &request.branch {
-        if let Ok(nested) = sm.open() {
-            let _ = nested
-                .find_branch(branch, git2::BranchType::Local)
-                .map(|b| b.into_reference())
-                .map(|reference| nested.set_head(reference.name().expect("branch ref")));
-        }
+    if let Some(branch) = &request.branch
+        && let Ok(nested) = sm.open()
+    {
+        let _ = nested
+            .find_branch(branch, git2::BranchType::Local)
+            .map(|b| b.into_reference())
+            .map(|reference| nested.set_head(reference.name().expect("branch ref")));
     }
 
     sm.add_to_index(true)?;
@@ -120,16 +120,17 @@ fn update_named(
         update.allow_fetch(true);
         sm.update(request.init, Some(&mut update))?;
 
-        if request.recursive && depth < RECURSE_DEPTH_LIMIT {
-            if let Ok(nested) = sm.open() {
-                let nested_names: Vec<String> = nested
-                    .submodules()?
-                    .into_iter()
-                    .filter_map(|child| child.name().ok().map(str::to_owned))
-                    .collect();
-                if !nested_names.is_empty() {
-                    update_named(&nested, &nested_names, request, depth + 1)?;
-                }
+        if request.recursive
+            && depth < RECURSE_DEPTH_LIMIT
+            && let Ok(nested) = sm.open()
+        {
+            let nested_names: Vec<String> = nested
+                .submodules()?
+                .into_iter()
+                .filter_map(|child| child.name().ok().map(str::to_owned))
+                .collect();
+            if !nested_names.is_empty() {
+                update_named(&nested, &nested_names, request, depth + 1)?;
             }
         }
     }

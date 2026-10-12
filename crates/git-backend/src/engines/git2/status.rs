@@ -182,10 +182,10 @@ pub(crate) fn conflicted_paths(repo: &git2::Repository) -> Result<Vec<RelativePa
     let statuses = repo.statuses(None)?;
     let mut out = Vec::new();
     for entry in statuses.iter() {
-        if entry.status().contains(Status::CONFLICTED) {
-            if let Ok(path) = entry.path() {
-                out.push(RelativePath::parse(&path.replace('\\', "/"))?);
-            }
+        if entry.status().contains(Status::CONFLICTED)
+            && let Ok(path) = entry.path()
+        {
+            out.push(RelativePath::parse(&path.replace('\\', "/"))?);
         }
     }
     Ok(out)

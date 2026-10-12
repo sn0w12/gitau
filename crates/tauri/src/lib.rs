@@ -15,7 +15,7 @@ const LOG_FILE_NAME: &str = if cfg!(debug_assertions) {
     "gitau"
 };
 
-fn prevent_default() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+fn prevent_default<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
     use tauri_plugin_prevent_default::Flags;
     #[cfg(debug_assertions)]
     {
@@ -31,6 +31,16 @@ fn prevent_default() -> tauri::plugin::TauriPlugin<tauri::Wry> {
     }
 }
 
+#[cfg(target_os = "linux")]
+fn runtime_attrs() -> tauri_runtime_cef::Cef {
+    tauri_runtime_cef::Cef::default()
+}
+
+#[cfg(not(target_os = "linux"))]
+fn runtime_attrs() -> tauri_runtime_wry::Wry {
+    tauri_runtime_wry::Wry::default()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // The webview stays hidden until it finishes loading, so the elapsed
@@ -38,6 +48,7 @@ pub fn run() {
     let started_at = std::time::Instant::now();
     let started_wall = std::time::SystemTime::now();
     tauri::Builder::default()
+        .runtime(runtime_attrs())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Info)

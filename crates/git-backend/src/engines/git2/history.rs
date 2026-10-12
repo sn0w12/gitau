@@ -229,10 +229,10 @@ fn unpushed_ids(
 fn resolve_local_branch(repo: &git2::Repository, spec: Option<&str>) -> Option<String> {
     let spec = spec?;
     for candidate in [spec, spec.strip_prefix("refs/heads/").unwrap_or(spec)] {
-        if let Ok(branch) = repo.find_branch(candidate, git2::BranchType::Local) {
-            if let Some(name) = branch.name().ok().flatten() {
-                return Some(name.to_owned());
-            }
+        if let Ok(branch) = repo.find_branch(candidate, git2::BranchType::Local)
+            && let Some(name) = branch.name().ok().flatten()
+        {
+            return Some(name.to_owned());
         }
     }
     None

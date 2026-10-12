@@ -159,13 +159,13 @@ pub fn commit(
     if request.run_hooks {
         super::hooks::capture_existing(repo, "pre-commit", &mut hook_runs, events.as_ref())?;
         // pre-commit gates the commit like git's own pipeline.
-        if let Some(result) = hook_runs.last() {
-            if !result.success {
-                return Err(GitError::HookFailed {
-                    hook: result.hook.clone(),
-                    details: hook_failure_details(result),
-                });
-            }
+        if let Some(result) = hook_runs.last()
+            && !result.success
+        {
+            return Err(GitError::HookFailed {
+                hook: result.hook.clone(),
+                details: hook_failure_details(result),
+            });
         }
     }
 
@@ -175,12 +175,13 @@ pub fn commit(
     let tree = repo.find_tree(tree_id)?;
 
     let head = head_commit(repo)?;
-    if let Some(parent) = &head {
-        if parent.tree_id() == tree_id && !request.allow_empty {
-            return Err(GitError::invalid_input(
-                "no staged changes; use allowEmpty to force an empty commit",
-            ));
-        }
+    if let Some(parent) = &head
+        && parent.tree_id() == tree_id
+        && !request.allow_empty
+    {
+        return Err(GitError::invalid_input(
+            "no staged changes; use allowEmpty to force an empty commit",
+        ));
     }
 
     let committer = resolve_signature(repo)?;
