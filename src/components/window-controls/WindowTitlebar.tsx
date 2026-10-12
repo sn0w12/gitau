@@ -3,7 +3,6 @@ import type { HTMLProps } from "react";
 
 import { cn } from "@/lib/utils";
 
-import { dragRegionProps } from "./drag-region";
 import { detectPlatform } from "./platform";
 import { styles } from "./styles";
 import type { Platform, WindowTitlebarProps } from "./types";
@@ -25,6 +24,9 @@ export function WindowTitlebar({
             windowControlsProps?.platform === "macos") ||
         (controlsOrder === "system" && platform === "macos");
 
+    // A decorated window draws its own buttons on Linux.
+    const showControls = platform !== "gnome";
+
     const controlsProps = {
         ...windowControlsProps,
         justify: false,
@@ -37,18 +39,22 @@ export function WindowTitlebar({
     return (
         <div
             className={cn(styles.titlebar, className)}
-            {...dragRegionProps()}
+            data-tauri-drag-region
             {...props}
         >
             {left ? (
                 <>
-                    <WindowControls {...controlsProps} />
+                    {showControls ? (
+                        <WindowControls {...controlsProps} />
+                    ) : null}
                     {children}
                 </>
             ) : (
                 <>
                     {children}
-                    <WindowControls {...controlsProps} />
+                    {showControls ? (
+                        <WindowControls {...controlsProps} />
+                    ) : null}
                 </>
             )}
         </div>

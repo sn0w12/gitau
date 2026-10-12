@@ -16,7 +16,7 @@ import {
 import type { ComponentType, ReactNode } from "react";
 import { useMemo, useRef } from "react";
 
-import { dragRegionProps, WindowTitlebar } from "@/components/window-controls";
+import { WindowTitlebar } from "@/components/window-controls";
 import { useAppServices } from "@/contexts/services-context";
 import { TabTitleContext } from "@/contexts/tab-title-context";
 import { useActiveTabHistory } from "@/hooks/tabs/use-active-tab-router";
@@ -71,7 +71,7 @@ export function Titlebar() {
                     "flex h-full min-w-0 items-center gap-1 pl-2",
                     !isMac() && "pl-13"
                 )}
-                {...dragRegionProps()}
+                data-tauri-drag-region
             >
                 <TitlebarHistory />
                 <TitlebarTabList />

@@ -8,9 +8,6 @@ export {
 } from "./platform";
 export { createWindowControls } from "./window";
 export type { WindowControlsApi } from "./window";
-export { dragRegionProps } from "./drag-region";
-export type { DragRegionProps } from "./drag-region";
-export { WindowResizeHandles } from "./resize-handles";
 export { icons } from "./icons-data";
 export type { IconData } from "./icons-data";
 export { styles } from "./styles";
