@@ -2303,6 +2303,7 @@ name = "gitau"
 version = "0.2.1"
 dependencies = [
  "git-backend",
+ "gtk4",
  "log",
  "pico-args",
  "serde",

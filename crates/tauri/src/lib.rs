@@ -41,6 +41,21 @@ fn runtime_attrs() -> tauri_runtime_wry::Wry {
     tauri_runtime_wry::Wry::default()
 }
 
+#[cfg(target_os = "linux")]
+fn install_window_drag_strip(window: &tauri::WebviewWindow) -> tauri::Result<()> {
+    use gtk4::prelude::*;
+
+    // The CEF runtime lays the webview out inside this vbox and repositions its
+    // X11 host over that area on every layout, so a widget prepended here takes
+    // the top strip and the webview moves below it.
+    let vbox = window.default_vbox()?;
+    let strip = gtk4::WindowHandle::new();
+    strip.set_height_request(8);
+    strip.set_hexpand(true);
+    vbox.prepend(&strip);
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // The webview stays hidden until it finishes loading, so the elapsed
@@ -84,6 +99,19 @@ pub fn run() {
             let handle = app.handle().clone();
             let _launch = boot_trace::span_from("rust.launch", started_at, started_wall);
             let _hook = boot_trace::span("rust.setup.hook");
+
+            // Wayland gives a client no way to place a toplevel, and CEF's child
+            // X11 host window takes the pointer press, so neither setPosition nor
+            // the webview's own startDragging can move a frameless window there
+            // (tauri-apps/tauri#14963). A GtkWindowHandle gives GTK a strip that
+            // owns the press, so GTK drives the compositor move, the way wry's
+            // in-process WebKitGTK does. Works on Wayland and X11.
+            #[cfg(target_os = "linux")]
+            if let Some(window) = app.get_webview_window("main") {
+                if let Err(error) = install_window_drag_strip(&window) {
+                    log::warn!("could not install the window drag strip: {error}");
+                }
+            }
 
             // Settings live in the platform config dir; if it is unavailable
             // the store keeps operating on in-memory defaults.
