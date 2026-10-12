@@ -9,6 +9,48 @@ export interface DragRegionProps {
     onPointerDown?: (event: ReactPointerEvent<HTMLDivElement>) => void;
 }
 
+// Same clickable set tauri's drag.js uses to decide a press belongs to a
+// control rather than to the window.
+const CLICKABLE_TAGS = new Set([
+    "A",
+    "BUTTON",
+    "INPUT",
+    "SELECT",
+    "TEXTAREA",
+    "LABEL",
+    "SUMMARY",
+]);
+const INTERACTIVE_ROLES = new Set([
+    "button",
+    "link",
+    "menuitem",
+    "tab",
+    "checkbox",
+    "radio",
+    "switch",
+    "option",
+]);
+
+function isClickable(element: HTMLElement): boolean {
+    return (
+        CLICKABLE_TAGS.has(element.tagName) ||
+        (element.hasAttribute("contenteditable") &&
+            element.getAttribute("contenteditable") !== "false") ||
+        (element.hasAttribute("tabindex") &&
+            element.getAttribute("tabindex") !== "-1") ||
+        INTERACTIVE_ROLES.has(element.getAttribute("role") ?? "")
+    );
+}
+
+function belongsToControl(event: ReactPointerEvent<HTMLDivElement>): boolean {
+    for (const node of event.nativeEvent.composedPath()) {
+        if (!(node instanceof HTMLElement)) continue;
+        if (node === event.currentTarget) return false;
+        if (isClickable(node)) return true;
+    }
+    return false;
+}
+
 // Window drag on Linux/X11: Chromium's X connection owns the pointer grab, so
 // the window manager ignores the _NET_WM_MOVERESIZE that startDragging() (and
 // the data-tauri-drag-region handler) asks for, and a frameless window simply
@@ -18,13 +60,14 @@ export interface DragRegionProps {
 // upstream handles drag on Linux CEF.
 function dragFromPointer(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0 || !event.isPrimary) return;
+    // Unlike the native bare region, the whole region drags so the empty
+    // titlebar area works even where child elements cover the region element.
+    if (belongsToControl(event)) return;
+    event.preventDefault();
+    // The same press also reaches the outer titlebar region; only this one moves.
+    event.stopPropagation();
 
     const region = event.currentTarget;
-    // Tabs and window controls are children with their own pointer handling;
-    // only a press on the region itself starts a move.
-    if (event.target !== region) return;
-    event.preventDefault();
-
     const appWindow = getCurrentWindow();
     const pointerX = event.screenX;
     const pointerY = event.screenY;
