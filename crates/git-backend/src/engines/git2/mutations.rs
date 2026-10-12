@@ -284,27 +284,30 @@ pub fn checkout(repo: &mut git2::Repository, request: &CheckoutRequest) -> Resul
                     .name()
                     .map(|n| n.starts_with("refs/heads/"))
                     .unwrap_or(false);
-                let mut builder = CheckoutBuilder::new();
-                if request.force {
-                    builder.force();
-                }
-                if is_local_branch {
-                    repo.set_head(reference.name().expect("named ref"))?;
-                    repo.checkout_tree(commit.as_object(), Some(&mut builder))?;
-                } else {
-                    repo.set_head_detached(commit.id())?;
-                    repo.checkout_tree(commit.as_object(), Some(&mut builder))?;
-                }
-                Ok(())
-            }
-            Err(_) => {
-                let commit = crate::streaming::pipeline::resolve_commit(repo, &request.target)?;
-                repo.set_head_detached(commit.id())?;
+                // checkout_tree uses the current HEAD tree as its baseline, so
+                // HEAD must move only after the checkout. Setting it first
+                // makes the baseline equal the target and the checkout a no-op
+                // that leaves the worktree and index on the old branch.
                 let mut builder = CheckoutBuilder::new();
                 if request.force {
                     builder.force();
                 }
                 repo.checkout_tree(commit.as_object(), Some(&mut builder))?;
+                if is_local_branch {
+                    repo.set_head(reference.name().expect("named ref"))?;
+                } else {
+                    repo.set_head_detached(commit.id())?;
+                }
+                Ok(())
+            }
+            Err(_) => {
+                let commit = crate::streaming::pipeline::resolve_commit(repo, &request.target)?;
+                let mut builder = CheckoutBuilder::new();
+                if request.force {
+                    builder.force();
+                }
+                repo.checkout_tree(commit.as_object(), Some(&mut builder))?;
+                repo.set_head_detached(commit.id())?;
                 Ok(())
             }
         }
@@ -336,9 +339,9 @@ pub fn create_branch(repo: &git2::Repository, request: &BranchCreateRequest) -> 
     let branch = repo.branch(name.as_str(), &commit, request.force)?;
 
     if request.checkout {
-        repo.set_head(branch.get().name().expect("branch ref"))?;
         let mut builder = CheckoutBuilder::new();
         repo.checkout_tree(commit.as_object(), Some(&mut builder))?;
+        repo.set_head(branch.get().name().expect("branch ref"))?;
     }
 
     branch_info(repo, name.clone())
