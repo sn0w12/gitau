@@ -94,7 +94,7 @@ Default is no comment. Write one only when the code cannot say what it says. A c
     - Narrating what a readable guard already says, including its downstream consequence: `interactive: conclusion !== "skipped"` needs no `// A skipped check has no job, so the API 404s`. The condition is the whole story.
     - Changelog-style or speculative notes ("will be used later" prose) without a concrete contract.
 
-`///` rustdoc follows the same rule: document public API only where it adds semantics beyond the signature, such as invariants, defaults, and failure behavior; omit it when it would just restate the item name. Vendored directories (`src/components/ui/`, `src/components/evilcharts/`) keep their upstream comments untouched.
+`///` rustdoc follows the same rule: document public API only where it adds semantics beyond the signature, such as invariants, defaults, and failure behavior; omit it when it would just restate the item name. Vendored directories (`src/components/ui/`) keep their upstream comments untouched.
 
 When editing code whose comment you invalidate (renamed threshold, changed ladder, moved file path), fix the comment in the same change; stale why-comments are worse than none.
 
