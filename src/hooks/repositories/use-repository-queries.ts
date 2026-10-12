@@ -187,6 +187,16 @@ export function usePrefetchHistoryPage(repoId: number) {
     }, [backend, queryClient, repoId]);
 }
 
+/** Warms the chart buckets so the history chart opens without a spinner. */
+export function usePrefetchHistoryChart(repoId: number) {
+    const { backend } = useAppServices();
+    const queryClient = useQueryClient();
+    useEffect(() => {
+        if (!Number.isInteger(repoId) || repoId <= 0) return;
+        void queryClient.prefetchQuery(historyChartQuery({ backend }, repoId));
+    }, [backend, queryClient, repoId]);
+}
+
 export function useCommitDetail(repoId: number, revision: string) {
     const { backend } = useAppServices();
     return useQuery({
@@ -236,6 +246,7 @@ export function useRepository(
     const snapshot = useRepositorySnapshot(repoId);
     const status = useRepositoryStatus(repoId, options);
     usePrefetchHistoryPage(repoId ?? 0);
+    usePrefetchHistoryChart(repoId ?? 0);
     return { snapshot, status, generation: snapshot.data?.generation };
 }
 
