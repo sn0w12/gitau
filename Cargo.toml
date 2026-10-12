@@ -47,7 +47,9 @@ syntect = { version = "5", default-features = false, features = [
 ] }
 tauri = "3.0.0-alpha.4"
 tauri-build = "3.0.0-alpha.3"
-tauri-plugin-dialog = "3.0.0-alpha.3"
+tauri-plugin-dialog = { version = "3.0.0-alpha.3", default-features = false, features = [
+    "xdg-portal",
+] }
 tauri-plugin-log = "3.0.0-alpha.2"
 tauri-plugin-opener = "3.0.0-alpha.2"
 tauri-plugin-os = "3.0.0-alpha.2"
