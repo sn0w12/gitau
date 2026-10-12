@@ -1,10 +1,8 @@
 //! App session persistence: the whole UI state (tabs, active tab, and which
 //! repositories were open) as a versioned JSON document beside settings.
 //!
-//! The frontend owns the document's schema; the store keeps it as opaque
-//! JSON and only enforces `version` (see [`SESSION_VERSION`]). [`repo_paths`]
-//! is the one schema read, used so startup can pre-open repositories. That
-//! keeps tab/href evolution from churning Rust types.
+//! The frontend owns the document's schema; the only field read here is the
+//! repo paths, for startup pre-open.
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -178,8 +176,6 @@ impl Default for SessionStore {
     }
 }
 
-/// Repository paths the session references, deduped, from both the explicit
-/// repository list and any tab-bound paths. Used to pre-open repos at startup.
 pub fn repo_paths(doc: &Value) -> Vec<String> {
     let mut paths: Vec<String> = Vec::new();
     let repositories = doc

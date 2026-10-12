@@ -5,12 +5,21 @@ import { createRoot } from "react-dom/client";
 import { ActiveTabHost } from "@/components/active-tab-host";
 import { AppLayout } from "@/components/app-layout";
 import { AppServicesProvider } from "@/components/providers/app-services-provider";
+import { loadHistoryChart } from "@/components/repo/history/history-chart-loader";
 import { Button } from "@/components/ui/button";
 import { WindowReveal } from "@/components/window-reveal";
 import { AppCommandProvider } from "@/contexts/app-command-context";
 import { expectOk } from "@/lib/backend/transport/result";
 import { getAppRuntime } from "@/lib/bootstrap/app-runtime";
-import { bootMark, bootSpan } from "@/lib/bootstrap/boot-timing";
+import {
+    bootLongFrames,
+    bootLongTasks,
+    bootMark,
+    bootNavigationTimings,
+    bootPaintTimings,
+    bootResourceTimings,
+    bootSpan,
+} from "@/lib/bootstrap/boot-timing";
 import {
     hydrateSession,
     initSessionPersistence,
@@ -28,6 +37,20 @@ const container = document.getElementById("root");
 if (!container) throw new Error("missing #root element");
 const root = createRoot(container);
 const bootstrapSpan = bootSpan("bootstrap");
+
+bootPaintTimings();
+bootLongTasks();
+bootLongFrames();
+window.addEventListener(
+    "load",
+    () => {
+        bootResourceTimings();
+        void document.fonts.ready.then(() => bootMark("fonts.ready"));
+        // loadEventEnd is only set once the load event finishes dispatching.
+        setTimeout(bootNavigationTimings, 0);
+    },
+    { once: true }
+);
 
 async function loadInitialSnapshot() {
     const backend = getAppRuntime().backend.settings;
@@ -129,6 +152,7 @@ async function bootstrap(): Promise<void> {
         scheduleReopenRetry(restored.failedPaths, services.backend);
     }
 
+    bootMark("render.call");
     root.render(
         <StrictMode>
             <AppServicesProvider>
@@ -145,6 +169,7 @@ async function bootstrap(): Promise<void> {
     );
     bootMark("first.render");
     bootstrapSpan.end();
+    requestIdleCallback(() => void loadHistoryChart(), { timeout: 1000 });
 }
 
 bootstrap().catch((error) => {

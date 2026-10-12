@@ -28,7 +28,6 @@ export interface OpenedRepository {
     snapshot: RepoSnapshot;
 }
 
-/** One session repository the backend opened at startup. */
 export interface SessionRepository {
     path: string;
     repoId?: number;

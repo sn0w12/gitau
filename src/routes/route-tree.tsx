@@ -3,6 +3,7 @@
 import {
     createRootRoute,
     createRoute,
+    lazyRouteComponent,
     Outlet,
     redirect,
 } from "@tanstack/react-router";
@@ -24,19 +25,37 @@ import {
 import { getAppRuntime } from "@/lib/bootstrap/app-runtime";
 import { openRepositoryByPath } from "@/lib/repositories/open-repository";
 import { validateRepoSearch } from "@/lib/routing/repo-search";
-import { AccountPage } from "@/routes/account-page";
-import { DevPage } from "@/routes/dev-page";
-import { InboxPage } from "@/routes/inbox-page";
-import { IssuesPage } from "@/routes/issues-page";
-import { PullsPage } from "@/routes/pulls-page";
 import { RepoPage } from "@/routes/repo-page";
-import { SettingsPage } from "@/routes/settings-page";
 import { associateTabWithRepoPath, setTabTitle } from "@/stores/app-store";
 import { getEntryByRepoId } from "@/stores/repository-store";
 
 import { HomePage } from "./home-page";
-import { IssuePage } from "./repo/issue";
-import { PullRequestPage } from "./repo/pull";
+
+const SettingsPage = lazyRouteComponent(
+    () => import("@/routes/settings-page"),
+    "SettingsPage"
+);
+const AccountPage = lazyRouteComponent(
+    () => import("@/routes/account-page"),
+    "AccountPage"
+);
+const InboxPage = lazyRouteComponent(
+    () => import("@/routes/inbox-page"),
+    "InboxPage"
+);
+const IssuesPage = lazyRouteComponent(
+    () => import("@/routes/issues-page"),
+    "IssuesPage"
+);
+const PullsPage = lazyRouteComponent(
+    () => import("@/routes/pulls-page"),
+    "PullsPage"
+);
+const IssuePage = lazyRouteComponent(() => import("./repo/issue"), "IssuePage");
+const PullRequestPage = lazyRouteComponent(
+    () => import("./repo/pull"),
+    "PullRequestPage"
+);
 
 /**
  * Fresh route-tree instances per call: routers mutate their route nodes
@@ -122,7 +141,10 @@ export function createTabRouteTree(options: { tabId?: string } = {}) {
         ? createRoute({
               getParentRoute: () => rootRoute,
               path: "/dev",
-              component: DevPage,
+              component: lazyRouteComponent(
+                  () => import("@/routes/dev-page"),
+                  "DevPage"
+              ),
               loader: () => applyTitle("Dev"),
           })
         : null;

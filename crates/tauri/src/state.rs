@@ -15,7 +15,6 @@ pub struct AppState {
     pub startup_repos: Arc<tokio::sync::OnceCell<Vec<PreOpenedRepo>>>,
 }
 
-/// One session repository opened during startup, or the reason it failed.
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreOpenedRepo {

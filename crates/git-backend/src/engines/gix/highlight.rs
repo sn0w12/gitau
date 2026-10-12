@@ -29,9 +29,6 @@ const EXTENSION_ALIASES: &[(&str, &str)] = &[("ph", "php"), ("jsonc", "json")];
 
 fn syntax_set() -> &'static SyntaxSet {
     static SYNTAX_SET: OnceLock<SyntaxSet> = OnceLock::new();
-    // `extra_newlines` already returns a built set; rebuilding it through
-    // `into_builder().build()` re-resolves every grammar link and costs far
-    // more than the load itself.
     SYNTAX_SET.get_or_init(two_face::syntax::extra_newlines)
 }
 

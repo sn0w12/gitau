@@ -1,11 +1,3 @@
-//! Startup span tracing in Chrome Trace format.
-//!
-//! Each span logs one JSON event on a line prefixed with `[boottrace]`.
-//! `scripts/boot-trace.mjs` reads those lines back out of a log file and packs
-//! them into a trace that Perfetto or chrome://tracing renders. Timestamps are
-//! wall-clock microseconds so spans from this process and the webview share one
-//! axis; lane ids keep concurrent spans on separate rows.
-
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};

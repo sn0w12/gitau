@@ -22,14 +22,13 @@ import {
     type CSSProperties,
 } from "react";
 
-export interface HistoryChartRow {
-    label: string;
-    additions: number;
-    deletions: number;
-    commits: number;
-}
+import {
+    HISTORY_CHART_HEIGHT,
+    type HistoryChartRow,
+} from "@/components/repo/history/history-chart-types";
 
-export const HISTORY_CHART_HEIGHT = 73;
+export { HISTORY_CHART_HEIGHT };
+export type { HistoryChartRow };
 
 const BAR_RADIUS = 4;
 const BAR_GROW_MS = 350;

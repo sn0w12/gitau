@@ -28,9 +28,6 @@ export interface ReopenResult {
  * Reopens every repo referenced by the session (by path) and reports
  * path->id mappings plus failures. Backend repoIds are process-local, so
  * persisted tab bindings must be remapped through this after restore.
- *
- * The backend pre-opens these paths during startup, so this normally just
- * collects an already-finished result.
  */
 export async function reopenSessionRepositories(
     session: SessionDocument,

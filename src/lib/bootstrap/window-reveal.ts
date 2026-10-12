@@ -16,5 +16,6 @@ export function revealWindow(): void {
     bootMark("window.reveal");
     getCurrentWindow()
         .show()
+        .then(() => bootMark("window.shown"))
         .catch(() => undefined);
 }

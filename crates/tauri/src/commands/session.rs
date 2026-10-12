@@ -20,8 +20,6 @@ pub fn session_save(state: SharedState<'_>, doc: Value) -> CommandResult<()> {
     state.session.save(doc).map_err(to_session_serialized)
 }
 
-/// Opens every repository concurrently. Shared by the setup pre-open and the
-/// command so the work happens at most once per process.
 pub(crate) async fn open_session_repositories(
     backend: Arc<Backend>,
     paths: Vec<String>,
@@ -53,8 +51,6 @@ pub(crate) async fn open_session_repositories(
     opened
 }
 
-/// Restores the session's repositories. Reuses the setup pre-open when it has
-/// already run; any path it did not cover is opened here.
 #[tauri::command]
 pub async fn session_repositories(
     state: SharedState<'_>,

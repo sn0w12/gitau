@@ -1,12 +1,16 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 
+import { loadHistoryChart } from "@/components/repo/history/history-chart-loader";
 import {
-    HistoryChart,
     HISTORY_CHART_HEIGHT,
     type HistoryChartRow,
-} from "@/components/repo/history/history-chart";
+} from "@/components/repo/history/history-chart-types";
 import { useHistoryChart } from "@/hooks/repositories/use-repository-queries";
 import type { ChartBucketSize } from "@/lib/backend/protocol";
+
+type HistoryChartComponent = ComponentType<{
+    rows: readonly HistoryChartRow[];
+}>;
 
 /** UTC-only formatters: bucket starts are epoch-aligned to UTC boundaries. */
 function createTickFormatter(bucketSize: ChartBucketSize) {
@@ -50,6 +54,17 @@ function createTickFormatter(bucketSize: ChartBucketSize) {
 export function HistoryChartView({ repoId }: { repoId: number }) {
     const chart = useHistoryChart(repoId);
     const data = chart.data;
+    const [Chart, setChart] = useState<HistoryChartComponent | null>(null);
+
+    useEffect(() => {
+        let live = true;
+        void loadHistoryChart().then((module) => {
+            if (live) setChart(() => module.HistoryChart);
+        });
+        return () => {
+            live = false;
+        };
+    }, []);
 
     const rows = useMemo<HistoryChartRow[]>(() => {
         if (!data || data.buckets.length === 0) return [];
@@ -80,8 +95,9 @@ export function HistoryChartView({ repoId }: { repoId: number }) {
             style={{ height: HISTORY_CHART_HEIGHT }}
             className="relative w-full border-b"
         >
-            {rows.length > 0 && <HistoryChart rows={rows} />}
-            {chart.isPending && (
+            {Chart !== null && rows.length > 0 ? (
+                <Chart rows={rows} />
+            ) : (
                 <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
                     <div className="flex items-center justify-center gap-2 rounded-md border bg-background px-2 py-0.5 text-sm text-primary">
                         <div className="h-3 w-3 animate-spin rounded-full border border-border border-t-primary" />

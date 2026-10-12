@@ -1,6 +1,5 @@
 import { useStore } from "@tanstack/react-store";
 import { TriangleAlert } from "lucide-react";
-import mermaid from "mermaid";
 import { useEffect, useId, useState } from "react";
 
 import { CodeBlock } from "@/components/github/code-block";
@@ -145,6 +144,7 @@ export function MermaidDiagram({ text }: { text: string }) {
         // second diagram on the same page repaint this one, since `render` is
         // async and reads the shared config when it runs.
         void (async () => {
+            const { default: mermaid } = await import("mermaid");
             mermaid.initialize({
                 startOnLoad: false,
                 // Diagram text comes from a pull request body, so labels are

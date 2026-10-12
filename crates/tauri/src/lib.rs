@@ -71,8 +71,6 @@ pub fn run() {
         .manage(AppState::default())
         .setup(move |app| {
             let handle = app.handle().clone();
-            // Tauri builds the webview window before this hook runs, so the
-            // launch span covers WebView2 startup; the hook span is our code.
             let _launch = boot_trace::span_from("rust.launch", started_at, started_wall);
             let _hook = boot_trace::span("rust.setup.hook");
 
@@ -140,9 +138,6 @@ pub fn run() {
             }
             session_span.end();
 
-            // Open the session's repositories while the webview finishes
-            // loading, instead of waiting for the frontend to ask. The
-            // frontend then gets the results from the command below.
             let session_paths = crate::session::repo_paths(&state.session.load());
             if !session_paths.is_empty() {
                 let cell = Arc::clone(&state.startup_repos);
@@ -368,24 +363,49 @@ pub fn run() {
             commands::session::session_save,
             commands::session::session_repositories,
         ])
-        .on_page_load(move |webview, payload| {
-            if webview.label() == "main"
-                && matches!(payload.event(), tauri::webview::PageLoadEvent::Finished)
-            {
-                boot_trace::record("rust.webview.load", started_at, started_wall);
-                // The frontend reveals the window once the theme is applied
-                // and the first frame has committed, so the pre-render page
-                // never becomes visible. This is the fallback for a frontend
-                // that never gets that far (bundle failure, crash before
-                // render): without it the window would stay hidden with
-                // nothing on screen to explain why.
-                let window = webview.window();
-                tauri::async_runtime::spawn(async move {
-                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                    if !matches!(window.is_visible(), Ok(true)) {
-                        let _ = window.show();
+        .on_page_load({
+            let navigation = std::sync::Arc::new(std::sync::Mutex::new(None));
+            move |webview, payload| {
+                if webview.label() != "main" {
+                    return;
+                }
+                let lock = || {
+                    navigation
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                };
+                match payload.event() {
+                    tauri::webview::PageLoadEvent::Started => {
+                        let started = (std::time::Instant::now(), std::time::SystemTime::now());
+                        *lock() = Some(started);
+                        boot_trace::record(
+                            "rust.webview.contentStart",
+                            started_at,
+                            started_wall,
+                        );
                     }
-                });
+                    tauri::webview::PageLoadEvent::Finished => {
+                        boot_trace::record("rust.webview.load", started_at, started_wall);
+                        let content_started = lock().take();
+                        if let Some((instant, wall)) = content_started {
+                            boot_trace::record("rust.webview.content", instant, wall);
+                        }
+                        // The frontend reveals the window once the theme is
+                        // applied and the first frame has committed, so the
+                        // pre-render page never becomes visible. This is the
+                        // fallback for a frontend that never gets that far
+                        // (bundle failure, crash before render): without it the
+                        // window would stay hidden with nothing on screen to
+                        // explain why.
+                        let window = webview.window();
+                        tauri::async_runtime::spawn(async move {
+                            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                            if !matches!(window.is_visible(), Ok(true)) {
+                                let _ = window.show();
+                            }
+                        });
+                    }
+                }
             }
         })
         .run(tauri::generate_context!())
