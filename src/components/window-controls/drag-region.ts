@@ -9,8 +9,9 @@ export interface DragRegionProps {
     onPointerDown?: (event: ReactPointerEvent<HTMLDivElement>) => void;
 }
 
-// Same clickable set tauri's drag.js uses to decide a press belongs to a
-// control rather than to the window.
+// Same clickable set tauri's drag.js uses to decide a press belongs to a control
+// rather than to the window. Generic tabindex is deliberately not a signal: the
+// scroll viewport is focusable but should still drag.
 const CLICKABLE_TAGS = new Set([
     "A",
     "BUTTON",
@@ -36,8 +37,6 @@ function isClickable(element: HTMLElement): boolean {
         CLICKABLE_TAGS.has(element.tagName) ||
         (element.hasAttribute("contenteditable") &&
             element.getAttribute("contenteditable") !== "false") ||
-        (element.hasAttribute("tabindex") &&
-            element.getAttribute("tabindex") !== "-1") ||
         INTERACTIVE_ROLES.has(element.getAttribute("role") ?? "")
     );
 }
