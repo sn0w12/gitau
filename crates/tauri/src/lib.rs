@@ -1,3 +1,4 @@
+mod boot_trace;
 mod commands;
 pub mod session;
 pub mod settings;
@@ -35,6 +36,7 @@ pub fn run() {
     // The webview stays hidden until it finishes loading, so the elapsed
     // logged there is the perceived launch time.
     let started_at = std::time::Instant::now();
+    let started_wall = std::time::SystemTime::now();
     tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -69,10 +71,12 @@ pub fn run() {
         .manage(AppState::default())
         .setup(move |app| {
             let handle = app.handle().clone();
+            let _setup = boot_trace::span_from("rust.setup", started_at, started_wall);
 
             // Settings live in the platform config dir; if it is unavailable
             // the store keeps operating on in-memory defaults.
             let state = handle.state::<AppState>();
+            let settings_span = boot_trace::span("rust.settings.init");
             match handle.path().app_config_dir() {
                 Ok(config_dir) => {
                     state.settings.initialize(config_dir.join("settings.json"));
@@ -82,9 +86,11 @@ pub fn run() {
                     log::warn!("app config dir unavailable; settings stay in memory: {error}");
                 }
             }
+            settings_span.end();
 
             // Remote icons and remote repo info caches under the platform
             // cache dir; without it both stay in-memory only.
+            let cache_span = boot_trace::span("rust.cache.init");
             match handle.path().app_cache_dir() {
                 Ok(cache_dir) => {
                     state.icons.initialize(cache_dir.join("remote-icons"));
@@ -99,10 +105,12 @@ pub fn run() {
                     log::warn!("app cache dir unavailable; icons stay in memory: {error}");
                 }
             }
+            cache_span.end();
 
             // The whole UI session (tabs + open repos) lives beside settings.
             // `--session <path>` overrides it so the dev workspace can run
             // against a fixture file.
+            let session_span = boot_trace::span("rust.session.init");
             if let Some(path) = crate::session::session_path_override() {
                 // A missing override would silently start empty (the store
                 // treats it as first run), which looks like the flag was
@@ -127,9 +135,11 @@ pub fn run() {
                     }
                 }
             }
+            session_span.end();
 
             // GitHub account profile cache beside settings; the access
             // token itself lives in the OS keychain, never on this path.
+            let github_span = boot_trace::span("rust.github.init");
             match handle.path().app_config_dir() {
                 Ok(config_dir) => {
                     state
@@ -143,6 +153,7 @@ pub fn run() {
                     );
                 }
             }
+            github_span.end();
 
             // Periodically revalidate stale owner/org avatars in the
             // background for as long as the process lives. Setup runs on the
@@ -159,6 +170,7 @@ pub fn run() {
             let cleanup_icons = Arc::clone(&state.icons);
             let cleanup_backend = Arc::clone(&state.backend);
             tauri::async_runtime::spawn_blocking(move || {
+                let _span = boot_trace::span("rust.cache_cleanup");
                 let icons_removed =
                     cleanup_icons.prune_old_entries(git_backend::icons::IconConfig::default().prune_after);
                 let info_removed = cleanup_backend
@@ -174,11 +186,16 @@ pub fn run() {
 
             // Persisted syntax themes must be active before the warm-up
             // snapshot is taken, otherwise the first diffs use defaults.
+            let theme_span = boot_trace::span("rust.apply_syntax_theme");
             commands::settings::apply_syntax_theme(&handle.state::<AppState>());
+            theme_span.end();
 
             // Warm the syntax highlighter (grammar dumps + embedded themes)
             // off the main thread so the first diff paints fully styled.
-            tauri::async_runtime::spawn_blocking(git_backend::engines::gix::highlight::warm_up);
+            tauri::async_runtime::spawn_blocking(|| {
+                let _span = boot_trace::span("rust.warmup.highlight");
+                git_backend::engines::gix::highlight::warm_up();
+            });
 
             let mut rx = handle.state::<AppState>().backend.subscribe_invalidations();
             tauri::async_runtime::spawn(async move {
@@ -193,7 +210,7 @@ pub fn run() {
                     }
                 }
             });
-            log::info!("setup complete in {:?}", started_at.elapsed());
+            log::info!("setup complete");
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -335,10 +352,7 @@ pub fn run() {
             if webview.label() == "main"
                 && matches!(payload.event(), tauri::webview::PageLoadEvent::Finished)
             {
-                log::info!(
-                    "main webview finished loading in {:?}",
-                    started_at.elapsed()
-                );
+                boot_trace::record("rust.webview.load", started_at, started_wall);
                 // The frontend reveals the window once the theme is applied
                 // and the first frame has committed, so the pre-render page
                 // never becomes visible. This is the fallback for a frontend

@@ -12,6 +12,7 @@
         "lint:fix": "oxlint --fix",
         "format": "oxfmt",
         "format:check": "oxfmt --check",
+        "boot-trace": "node scripts/boot-trace.mjs",
         "typecheck": "tsc --noEmit",
         "tauri": "dotenv -- tauri",
         "set-version": "node scripts/version.mjs",

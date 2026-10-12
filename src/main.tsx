@@ -10,7 +10,7 @@ import { WindowReveal } from "@/components/window-reveal";
 import { AppCommandProvider } from "@/contexts/app-command-context";
 import { expectOk } from "@/lib/backend/transport/result";
 import { getAppRuntime } from "@/lib/bootstrap/app-runtime";
-import { bootMark } from "@/lib/bootstrap/boot-timing";
+import { bootMark, bootSpan } from "@/lib/bootstrap/boot-timing";
 import {
     hydrateSession,
     initSessionPersistence,
@@ -27,11 +27,13 @@ import { startThemeEngine } from "@/stores/theme-store";
 const container = document.getElementById("root");
 if (!container) throw new Error("missing #root element");
 const root = createRoot(container);
+const bootstrapSpan = bootSpan("bootstrap");
 
 async function loadInitialSnapshot() {
     const backend = getAppRuntime().backend.settings;
+    const span = bootSpan("settings.load");
     const loaded = await backend.load();
-    bootMark("settings.load");
+    span.end();
     if (!loaded.ok) throw loaded.error;
     return loaded.value;
 }
@@ -46,8 +48,9 @@ type RestoreOutcome =
 // could not read would destroy the user's tabs.
 async function restoreSession(): Promise<RestoreOutcome> {
     const backend = getAppRuntime().backend.session;
+    const loadSpan = bootSpan("session.load");
     const loaded = await backend.load();
-    bootMark("session.load");
+    loadSpan.end();
     if (!loaded.ok) {
         return {
             kind: "loadFailed",
@@ -57,8 +60,9 @@ async function restoreSession(): Promise<RestoreOutcome> {
     const doc = loaded.value;
     if (!doc || !Array.isArray(doc.tabs)) return { kind: "empty" };
 
+    const reopenSpan = bootSpan("repos.reopen");
     const { idByPath, failedPaths } = await reopenSessionRepositories(doc);
-    bootMark("repos.reopen");
+    reopenSpan.end();
     hydrateSession(doc, idByPath);
     return { kind: "restored", failedPaths };
 }
@@ -101,6 +105,7 @@ async function bootstrap(): Promise<void> {
 
     if (restored.kind === "loadFailed") {
         root.render(<BootstrapError message={restored.message} />);
+        bootstrapSpan.end();
         return;
     }
 
@@ -139,6 +144,7 @@ async function bootstrap(): Promise<void> {
         </StrictMode>
     );
     bootMark("first.render");
+    bootstrapSpan.end();
 }
 
 bootstrap().catch((error) => {
@@ -147,4 +153,5 @@ bootstrap().catch((error) => {
             message={error instanceof Error ? error.message : String(error)}
         />
     );
+    bootstrapSpan.end();
 });

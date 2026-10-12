@@ -32,6 +32,9 @@ build:
 bench *args="":
     cargo bench -p git-backend{{ if args == "" { "" } else { " " + args } }}
 
+trace *args="release":
+    node scripts/boot-trace.mjs {{ args }}
+
 settings:
     cargo run -p gitau --bin export_settings --features devtools
 

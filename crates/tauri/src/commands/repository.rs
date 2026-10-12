@@ -16,18 +16,14 @@ pub async fn git_open_repository(
     state: SharedState<'_>,
     request: OpenRepositoryRequest,
 ) -> CommandResult<git_backend::application::OpenedRepository> {
-    let started_at = std::time::Instant::now();
     let path = std::path::PathBuf::from(&request.path);
+    let span = crate::boot_trace::span_detailed("git.open_repository", request.path.as_str());
     let opened = state
         .backend
         .open_repository(&path)
         .await
         .map_err(to_serialized)?;
-    log::info!(
-        "git_open_repository {} in {:?}",
-        request.path,
-        started_at.elapsed()
-    );
+    span.end();
     Ok(opened)
 }
 
