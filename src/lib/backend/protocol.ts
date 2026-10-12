@@ -28,6 +28,13 @@ export interface OpenedRepository {
     snapshot: RepoSnapshot;
 }
 
+/** One session repository the backend opened at startup. */
+export interface SessionRepository {
+    path: string;
+    repoId?: number;
+    error?: string;
+}
+
 export interface CreateRepositoryRequest {
     parentDirectory: string;
     /** Empty initializes parentDirectory itself instead of a new subfolder. */

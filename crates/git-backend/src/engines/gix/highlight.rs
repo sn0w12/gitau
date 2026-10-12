@@ -25,21 +25,14 @@ const FILENAME_LANGUAGES: &[&str] = &["CMakeLists.txt", "Dockerfile", "Makefile"
 
 /// Extension spellings that resolve to a different extension whose grammar
 /// is the correct one for the language.
-const EXTENSION_ALIASES: &[(&str, &str)] = &[("ph", "php")];
+const EXTENSION_ALIASES: &[(&str, &str)] = &[("ph", "php"), ("jsonc", "json")];
 
 fn syntax_set() -> &'static SyntaxSet {
     static SYNTAX_SET: OnceLock<SyntaxSet> = OnceLock::new();
-    SYNTAX_SET.get_or_init(|| {
-        // bat's JSON grammar already tolerates comments; registering the
-        // jsonc spelling points JSONC files at that same grammar.
-        let mut builder = two_face::syntax::extra_newlines().into_builder();
-        if let Some(json) = builder.syntaxes().iter().find(|s| s.name == "JSON") {
-            let mut jsonc = json.clone();
-            jsonc.file_extensions.push("jsonc".to_string());
-            builder.add(jsonc);
-        }
-        builder.build()
-    })
+    // `extra_newlines` already returns a built set; rebuilding it through
+    // `into_builder().build()` re-resolves every grammar link and costs far
+    // more than the load itself.
+    SYNTAX_SET.get_or_init(two_face::syntax::extra_newlines)
 }
 
 /// Themes built into the binary and exposed as settings. Entries must stay
@@ -315,6 +308,18 @@ mod theme_tests {
         SERIAL
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    #[test]
+    fn jsonc_maps_to_the_json_grammar() {
+        let syntax = detect_syntax("config.jsonc").expect("jsonc resolves");
+        assert_eq!(syntax.name, "JSON");
+    }
+
+    #[test]
+    fn jsonc_fence_resolves_to_json() {
+        let syntax = syntax_for_language("jsonc").expect("jsonc fence resolves");
+        assert_eq!(syntax.name, "JSON");
     }
 
     #[test]
@@ -721,6 +726,7 @@ const LANGUAGE_ALIASES: &[(&str, &str)] = &[
     ("dockerfile", "Dockerfile"),
     ("golang", "go"),
     ("javascript", "js"),
+    ("jsonc", "json"),
     ("makefile", "Makefile"),
     ("markdown", "md"),
     ("powershell", "ps1"),

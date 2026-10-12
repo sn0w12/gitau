@@ -28,6 +28,9 @@ export interface ReopenResult {
  * Reopens every repo referenced by the session (by path) and reports
  * path->id mappings plus failures. Backend repoIds are process-local, so
  * persisted tab bindings must be remapped through this after restore.
+ *
+ * The backend pre-opens these paths during startup, so this normally just
+ * collects an already-finished result.
  */
 export async function reopenSessionRepositories(
     session: SessionDocument,
@@ -46,13 +49,38 @@ export async function reopenSessionRepositories(
 
     const client = backend ?? getAppRuntime().backend;
 
+    // List every repo immediately, even before its open resolves, so
+    // failed paths stay visible and retryable instead of vanishing.
+    for (const repoPath of paths) ensureRepo(repoPath);
+
     const idByPath = new Map<string, number>();
     const failedPaths: string[] = [];
+
+    const restored = await client.session.repositories(paths);
+    if (restored.ok) {
+        for (const repo of restored.value) {
+            if (repo.repoId !== undefined) {
+                registerOpen(repo.path, repo.repoId);
+                idByPath.set(repo.path, repo.repoId);
+                continue;
+            }
+            const message = repo.error ?? "unknown error";
+            console.warn(
+                `could not reopen repository "${repo.path}":`,
+                message
+            );
+            setEntryError(repo.path, message);
+            failedPaths.push(repo.path);
+        }
+        return { idByPath, failedPaths };
+    }
+
+    console.warn(
+        "session_repositories failed, reopening individually:",
+        restored.error.message
+    );
     await Promise.all(
         paths.map(async (repoPath) => {
-            // List the repo immediately, even before its open resolves, so
-            // failed paths stay visible and retryable instead of vanishing.
-            ensureRepo(repoPath);
             const opened = await client.repositories.open(repoPath);
             if (!opened.ok) {
                 console.warn(

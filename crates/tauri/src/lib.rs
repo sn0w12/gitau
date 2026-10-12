@@ -71,7 +71,10 @@ pub fn run() {
         .manage(AppState::default())
         .setup(move |app| {
             let handle = app.handle().clone();
-            let _setup = boot_trace::span_from("rust.setup", started_at, started_wall);
+            // Tauri builds the webview window before this hook runs, so the
+            // launch span covers WebView2 startup; the hook span is our code.
+            let _launch = boot_trace::span_from("rust.launch", started_at, started_wall);
+            let _hook = boot_trace::span("rust.setup.hook");
 
             // Settings live in the platform config dir; if it is unavailable
             // the store keeps operating on in-memory defaults.
@@ -136,6 +139,22 @@ pub fn run() {
                 }
             }
             session_span.end();
+
+            // Open the session's repositories while the webview finishes
+            // loading, instead of waiting for the frontend to ask. The
+            // frontend then gets the results from the command below.
+            let session_paths = crate::session::repo_paths(&state.session.load());
+            if !session_paths.is_empty() {
+                let cell = Arc::clone(&state.startup_repos);
+                let backend = Arc::clone(&state.backend);
+                tauri::async_runtime::spawn(async move {
+                    let _ = cell
+                        .get_or_init(|| {
+                            commands::session::open_session_repositories(backend, session_paths)
+                        })
+                        .await;
+                });
+            }
 
             // GitHub account profile cache beside settings; the access
             // token itself lives in the OS keychain, never on this path.
@@ -347,6 +366,7 @@ pub fn run() {
             commands::icons::git_repo_icon_by_path,
             commands::session::session_load,
             commands::session::session_save,
+            commands::session::session_repositories,
         ])
         .on_page_load(move |webview, payload| {
             if webview.label() == "main"

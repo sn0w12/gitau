@@ -19,7 +19,23 @@ function fakeBackend(
         | { ok: false; error: { message: string } }
     >
 ): BackendClient {
-    return { repositories: { open } } as unknown as BackendClient;
+    return {
+        repositories: { open },
+        session: {
+            repositories: async (paths: string[]) => {
+                const value = [];
+                for (const path of paths) {
+                    const opened = await open(path);
+                    value.push(
+                        opened.ok
+                            ? { path, repoId: opened.value.id }
+                            : { path, error: opened.error.message }
+                    );
+                }
+                return { ok: true as const, value };
+            },
+        },
+    } as unknown as BackendClient;
 }
 
 function resetStores() {
@@ -240,6 +256,35 @@ describe("session restore", () => {
         expect(appStore.state.tabs[0].lastResolvedHref).toBe(
             "/repo/99/commits?view=graph&commit=abc"
         );
+    });
+
+    it("falls back to individual opens when the batch command fails", async () => {
+        const open = vi.fn(async () => ({
+            ok: true as const,
+            value: { id: 3, snapshot: null },
+        }));
+        const backend = {
+            repositories: { open },
+            session: {
+                repositories: async () => ({
+                    ok: false as const,
+                    error: { message: "batch unavailable" },
+                }),
+            },
+        } as unknown as BackendClient;
+
+        const { idByPath, failedPaths } = await reopenSessionRepositories(
+            {
+                version: 1,
+                tabs: [{ tabId: "t1", title: "x", repoPath: "/r" }],
+                activeTabId: "t1",
+            },
+            backend
+        );
+
+        expect(failedPaths).toEqual([]);
+        expect(idByPath.get("/r")).toBe(3);
+        expect(open).toHaveBeenCalledWith("/r");
     });
 });
 

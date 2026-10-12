@@ -1,8 +1,9 @@
 //! App session persistence: the whole UI state (tabs, active tab, and which
 //! repositories were open) as a versioned JSON document beside settings.
 //!
-//! The frontend owns the document's schema; this store treats it as opaque
-//! JSON with one contract: `version` must match [`SESSION_VERSION`]. That
+//! The frontend owns the document's schema; the store keeps it as opaque
+//! JSON and only enforces `version` (see [`SESSION_VERSION`]). [`repo_paths`]
+//! is the one schema read, used so startup can pre-open repositories. That
 //! keeps tab/href evolution from churning Rust types.
 
 use std::path::PathBuf;
@@ -175,6 +176,34 @@ impl Default for SessionStore {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Repository paths the session references, deduped, from both the explicit
+/// repository list and any tab-bound paths. Used to pre-open repos at startup.
+pub fn repo_paths(doc: &Value) -> Vec<String> {
+    let mut paths: Vec<String> = Vec::new();
+    let repositories = doc
+        .get("repositories")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten();
+    let tabs = doc
+        .get("tabs")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten();
+    for entry in repositories.chain(tabs) {
+        let path = entry
+            .get("path")
+            .or_else(|| entry.get("repoPath"))
+            .and_then(Value::as_str);
+        if let Some(path) = path {
+            if !paths.iter().any(|existing| existing == path) {
+                paths.push(path.to_owned());
+            }
+        }
+    }
+    paths
 }
 
 fn backup(path: &std::path::Path) {
@@ -370,6 +399,30 @@ mod tests {
         assert!(parsed.unwrap().ends_with("custom.json"));
         assert!(session_path_override_from(args(&["--other", "value"])).is_none());
         assert!(session_path_override_from(Vec::<std::ffi::OsString>::new()).is_none());
+    }
+
+    #[test]
+    fn repo_paths_dedupes_repos_and_tabs() {
+        let doc = json!({
+            "version": 1,
+            "activeTabId": "t1",
+            "repositories": [
+                { "path": "/a", "addedAt": 1 },
+                { "path": "/b", "addedAt": 2 }
+            ],
+            "tabs": [
+                { "tabId": "t1", "repoPath": "/a" },
+                { "tabId": "t2", "repoPath": "/c" },
+                { "tabId": "t3" }
+            ]
+        });
+        assert_eq!(repo_paths(&doc), vec!["/a", "/b", "/c"]);
+    }
+
+    #[test]
+    fn repo_paths_tolerate_missing_fields() {
+        assert!(repo_paths(&json!({ "version": 1 })).is_empty());
+        assert!(repo_paths(&json!({ "tabs": [{}] })).is_empty());
     }
 
     #[test]

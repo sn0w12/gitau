@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use git_backend::icons::{HttpFetcher, IconConfig, IconService};
 use git_backend::{Backend, BackendConfig};
+use serde::Serialize;
 
 use crate::session::SessionStore;
 use crate::settings::SettingsStore;
@@ -11,6 +12,18 @@ pub struct AppState {
     pub settings: Arc<SettingsStore>,
     pub session: Arc<SessionStore>,
     pub icons: Arc<IconService>,
+    pub startup_repos: Arc<tokio::sync::OnceCell<Vec<PreOpenedRepo>>>,
+}
+
+/// One session repository opened during startup, or the reason it failed.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreOpenedRepo {
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo_id: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 impl Default for AppState {
@@ -23,6 +36,7 @@ impl Default for AppState {
                 IconConfig::default(),
                 Arc::new(HttpFetcher::default()),
             )),
+            startup_repos: Arc::new(tokio::sync::OnceCell::new()),
         }
     }
 }

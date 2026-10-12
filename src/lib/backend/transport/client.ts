@@ -67,6 +67,7 @@ import type {
     ResetKind,
     ResolveSide,
     SessionDocument,
+    SessionRepository,
     SettingValue,
     SettingsSnapshot,
     StashEntry,
@@ -929,6 +930,10 @@ function createRawBackendClient() {
             load: () => invokeCommand<SessionDocument | null>("session_load"),
             save: (doc: SessionDocument) =>
                 invokeCommand<void>("session_save", { args: { doc } }),
+            repositories: (paths: string[]) =>
+                invokeCommand<SessionRepository[]>("session_repositories", {
+                    args: { paths },
+                }),
         },
     };
 }
