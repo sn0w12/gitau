@@ -14,6 +14,7 @@ import { Titlebar } from "./titlebar";
 import { SidebarInset, SidebarProvider } from "./ui/sidebar";
 import { ToastProvider } from "./ui/toast";
 import { UpdateChecker } from "./updates/update-checker";
+import { WindowResizeHandles } from "./window-controls";
 
 export function AppLayout({ children }: { children: ReactNode }) {
     useInsetBackdropClip();
@@ -24,6 +25,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 <ConfirmProvider>
                     <AppShortcuts />
                     <Titlebar />
+                    <WindowResizeHandles />
                     <SidebarProvider open={false} className="min-h-0 flex-1">
                         <AppSidebar />
                         <SidebarInset className="min-h-0">

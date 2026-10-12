@@ -3,6 +3,7 @@ import type { HTMLProps } from "react";
 
 import { cn } from "@/lib/utils";
 
+import { dragRegionProps } from "./drag-region";
 import { detectPlatform } from "./platform";
 import { styles } from "./styles";
 import type { Platform, WindowTitlebarProps } from "./types";
@@ -36,7 +37,7 @@ export function WindowTitlebar({
     return (
         <div
             className={cn(styles.titlebar, className)}
-            data-tauri-drag-region
+            {...dragRegionProps()}
             {...props}
         >
             {left ? (

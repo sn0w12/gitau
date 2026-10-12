@@ -47,6 +47,7 @@ void globalsInstalled;
 
 vi.mock("@/components/window-controls", () => ({
     WindowTitlebar: ({ children }: { children?: React.ReactNode }) => children,
+    dragRegionProps: () => ({ "data-tauri-drag-region": true }),
 }));
 
 function Shell() {
