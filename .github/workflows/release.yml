@@ -90,6 +90,11 @@ jobs:
               uses: tauri-apps/tauri-action@v1
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  # sharun_cef.rs downloads quick-sharun.sh from a fork that still
+                  # points anylinux.c and gtk-class-fix.c at upstream main, which 404s
+                  # (tauri-apps/tauri#16204). Pin both to the last commit the fork merged.
+                  ANYLINUX_LIB_SOURCE: https://raw.githubusercontent.com/pkgforge-dev/Anylinux-AppImages/d1bb26882eded9576bb0760aeb848179bbf64e9b/useful-tools/lib/anylinux.c
+                  GTK_CLASS_FIX_SOURCE: https://raw.githubusercontent.com/pkgforge-dev/Anylinux-AppImages/d1bb26882eded9576bb0760aeb848179bbf64e9b/useful-tools/lib/gtk-class-fix.c
               with:
                   tagName: v__VERSION__
                   releaseName: "Release v__VERSION__"
