@@ -8,6 +8,12 @@ use std::sync::Arc;
 use state::AppState;
 use tauri::Manager;
 
+const LOG_FILE_NAME: &str = if cfg!(debug_assertions) {
+    "gitau-dev"
+} else {
+    "gitau"
+};
+
 fn prevent_default() -> tauri::plugin::TauriPlugin<tauri::Wry> {
     use tauri_plugin_prevent_default::Flags;
     #[cfg(debug_assertions)]
@@ -40,7 +46,7 @@ pub fn run() {
                 .targets([
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
-                        file_name: None,
+                        file_name: Some(LOG_FILE_NAME.to_owned()),
                     }),
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
                 ])
