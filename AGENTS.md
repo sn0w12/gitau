@@ -83,16 +83,24 @@ oxfmt-enforced, match manually: double quotes, semicolons, 4-space indent, print
 
 ### Comments
 
-Default is no comment. Write one only when the code cannot say what it says. A comment earns its place by explaining a non-obvious why, such as an invariant, a workaround, or a rationale for something that looks wrong:
+Default is no comment. The right number of comments for most code is zero, and "explain the why" is not on its own a reason to write one. A comment is allowed only when the code is correct but a competent reader would otherwise misread it, misuse the API, or "fix" it into a bug, and the comment names a concrete constraint the code cannot express. Examples that qualify:
 
-- Good: library quirks (`@dnd-kit` snapshot shapes drop prototype getters), measurement guards (hidden tabs report 0x0), crash-safety ordering (flush before rename so a crash can't truncate), parity notes (matching libgit2's xdiff output), protocol/wire contracts.
-- Bad, never add these:
-    - Restating the name or the next line: `/// Tunables for the icon service`, `// Re-render when runtimes are created/disposed`.
-    - Usage/condition docs on props, fields, constants: `/** Present when X */`, `/** Used by the fetch button */`, `/** Whether this panel is visible */`.
-    - Styling/intent narration on class constants (`TRIGGER_EXTRAS`, `KIND_ROW_CLASS`); the Tailwind string says what it does.
-    - Section banners and dividers: `// NAVIGATION`, `// ---- internals ----`.
-    - Narrating what a readable guard already says, including its downstream consequence: `interactive: conclusion !== "skipped"` needs no `// A skipped check has no job, so the API 404s`. The condition is the whole story.
-    - Changelog-style or speculative notes ("will be used later" prose) without a concrete contract.
+- A required ordering: flush before rename so a crash can't truncate.
+- An invariant: this list is sorted by start offset.
+- A guard tied to a measured value: hidden tabs report 0x0.
+- An external contract: output matches libgit2's xdiff; the serializer reads camelCase.
+- A library behavior invisible at the call site: `@dnd-kit` snapshot shapes drop prototype getters.
+
+The words why, workaround, quirk, and rationale are not loopholes. Delete every comment you can, then delete the rest unless its absence would cause a real bug or misread.
+
+Never add these:
+
+- Restating the name or the next line: `/// Tunables for the icon service`, `// Re-render when runtimes are created/disposed`.
+- Usage/condition docs on props, fields, constants: `/** Present when X */`, `/** Used by the fetch button */`, `/** Whether this panel is visible */`.
+- Styling/intent narration on class constants (`TRIGGER_EXTRAS`, `KIND_ROW_CLASS`); the Tailwind string says what it does.
+- Section banners and dividers: `// NAVIGATION`, `// ---- internals ----`.
+- Narrating what a readable guard already says, including its downstream consequence: `interactive: conclusion !== "skipped"` needs no `// A skipped check has no job, so the API 404s`. The condition is the whole story.
+- Changelog-style or speculative notes ("will be used later" prose) without a concrete contract.
 
 `///` rustdoc follows the same rule: document public API only where it adds semantics beyond the signature, such as invariants, defaults, and failure behavior; omit it when it would just restate the item name. Vendored directories (`src/components/ui/`) keep their upstream comments untouched.
 
