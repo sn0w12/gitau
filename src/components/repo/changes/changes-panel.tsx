@@ -552,7 +552,7 @@ function SectionHeader({
             data-disabled={disabled}
         >
             <CollapsibleTrigger
-                className="flex min-w-0 flex-1 items-center gap-1 border-transparent px-1.5 py-1 text-foreground data-panel-open:[&_svg]:rotate-180"
+                className="flex min-w-0 flex-1 items-center gap-1 border-transparent px-1.5 py-0.5 text-foreground data-panel-open:[&_svg]:rotate-180"
                 disabled={disabled}
             >
                 <ChevronUp className="mr-0.5 size-4 shrink-0 text-muted-foreground" />
