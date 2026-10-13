@@ -285,7 +285,10 @@ function HistoryRow({
                                     field="author"
                                 />
                             </span>
-                            <span className="hidden lg:inline">●</span>
+                            <span
+                                aria-hidden="true"
+                                className="hidden size-1 shrink-0 rounded-full bg-muted-foreground lg:inline-block"
+                            />
                             <span className="hidden lg:inline">
                                 {formatRelativeDate(
                                     commit.committer.timeSeconds * 1000
