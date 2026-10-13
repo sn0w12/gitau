@@ -1,6 +1,6 @@
 {
     "name": "gitau",
-    "version": "0.2.1",
+    "version": "0.2.2-preview.1",
     "type": "module",
     "scripts": {
         "dev": "vite dev --port 3000",
