@@ -34,7 +34,6 @@ import { fileURLToPath } from "node:url";
  * @property {boolean} changed
  * @property {string} base
  * @property {number} jobs
- * @property {boolean} bail
  * @property {boolean} verbose
  * @property {boolean|null} nextest
  * @property {boolean} list
@@ -172,7 +171,7 @@ const USAGE = [
     "",
     "Execution:",
     "  -j, --jobs <n>       max concurrent unlocked gates (default: cpu count)",
-    "      --bail           stop scheduling new gates after a failure",
+    "                       the first failure kills gates still in flight",
     "  -v, --verbose        stream gate output live instead of buffering it",
     "                       (counts are read from the buffered output, so",
     "                        verbose mode does not report them)",
@@ -273,7 +272,6 @@ const FLAGS = {
     "--help": ["help", "flag"],
     "-v": ["verbose", "flag"],
     "--verbose": ["verbose", "flag"],
-    "--bail": ["bail", "flag"],
     "--list": ["list", "flag"],
     "--changed": ["changed", "flag"],
     "--with-check": ["withCheck", "flag"],
@@ -299,7 +297,6 @@ export function parseArgs(argv) {
         changed: false,
         base: "HEAD",
         jobs: availableParallelism(),
-        bail: false,
         verbose: false,
         nextest: null,
         list: false,
@@ -485,12 +482,16 @@ function runGate(gate, { onStart, onFinish, verbose }) {
             if (settled) return;
             settled = true;
             liveChildren.delete(child);
-            onFinish(gate, {
-                code,
-                signal,
-                durationMs: performance.now() - startedAt,
-                output: Buffer.concat(chunks).toString("utf-8"),
-            });
+            onFinish(
+                gate,
+                {
+                    code,
+                    signal,
+                    durationMs: performance.now() - startedAt,
+                    output: Buffer.concat(chunks).toString("utf-8"),
+                },
+                child
+            );
             done();
         };
 
@@ -511,7 +512,7 @@ async function runLane(lane, gates, context) {
     const queue = [...lane.gateIds];
     const workers = Array.from({ length: lane.concurrency }, async () => {
         while (queue.length > 0) {
-            if (context.bail && context.failed > 0) return;
+            if (context.failed > 0) return;
             const gate = gates.get(queue.shift());
             if (gate === undefined) return;
             await runGate(gate, context);
@@ -725,24 +726,42 @@ async function runCi(options) {
     const reporter = createReporter(states, gates, { live });
     const write = (text) => process.stdout.write(text);
     const context = {
-        bail: options.bail,
         failed: 0,
+        aborted: false,
+        abortedChildren: new Set(),
         verbose: options.verbose,
+        abort() {
+            if (context.aborted) return;
+            context.aborted = true;
+            for (const child of liveChildren) {
+                // A child that already exited is reporting its own result;
+                // do not relabel a real failure as killed by the abort.
+                if (child.exitCode !== null) continue;
+                context.abortedChildren.add(child);
+                killTree(child);
+            }
+        },
         onStart(gate) {
             const state = states.get(gate.id);
             state.startedAt = performance.now();
             state.status = "running";
             reporter.render();
         },
-        onFinish(gate, result) {
+        onFinish(gate, result, child) {
             const state = states.get(gate.id);
+            const aborted = context.abortedChildren.delete(child);
             Object.assign(state, result, {
-                status: result.code === 0 ? "ok" : "fail",
-                counts: options.verbose
-                    ? null
-                    : parseTestCounts(gate.tests, result.output),
+                status: aborted ? "skip" : result.code === 0 ? "ok" : "fail",
+                reason: aborted ? "killed, fail-fast" : null,
+                counts:
+                    aborted || options.verbose
+                        ? null
+                        : parseTestCounts(gate.tests, result.output),
             });
-            if (result.code !== 0) context.failed++;
+            if (!aborted && result.code !== 0) {
+                context.failed++;
+                context.abort();
+            }
             reporter.render();
             // A piped reader has no live block to watch, and a failure is the
             // one thing they cannot afford to wait out.
@@ -770,7 +789,7 @@ async function runCi(options) {
     for (const state of states.values()) {
         if (state.status === "pending") {
             state.status = "skip";
-            state.reason = "not run, bail";
+            state.reason = "not run, fail-fast";
         }
     }
 
