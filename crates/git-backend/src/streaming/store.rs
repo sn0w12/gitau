@@ -263,8 +263,9 @@ fn section_mut(inner: &mut Inner, section_id: u32) -> Result<&mut SectionData> {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiffImageSide {
-    pub data: Vec<u8>,
-    pub mime_type: String,
+    /// `data:<mime>;base64,...`; a byte array would cross IPC as a JSON
+    /// number array, several times larger and parsed element by element.
+    pub data_url: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -229,18 +229,17 @@ pub fn materialize(
         || is_image_path(plan.meta.path.as_str().as_bytes())
     {
         let image = if plan.meta.image {
+            let mime = mime_type(plan.meta.path.as_str());
             Some(crate::streaming::store::DiffImage {
                 old: plan
                     .old_id
                     .is_some()
                     .then_some(crate::streaming::store::DiffImageSide {
-                        data: old_bytes.to_vec(),
-                        mime_type: mime_type(plan.meta.path.as_str()),
+                        data_url: crate::icons::encode_data_url(&mime, old_bytes),
                     }),
                 new: (plan.new_id.is_some() || plan.worktree).then_some(
                     crate::streaming::store::DiffImageSide {
-                        data: new_bytes.to_vec(),
-                        mime_type: mime_type(plan.meta.path.as_str()),
+                        data_url: crate::icons::encode_data_url(&mime, new_bytes),
                     },
                 ),
             })

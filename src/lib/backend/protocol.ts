@@ -560,8 +560,7 @@ export interface RangeRow extends DiffRow {
 }
 
 export interface DiffImageSide {
-    data: number[];
-    mimeType: string;
+    dataUrl: string;
 }
 
 export interface DiffImage {

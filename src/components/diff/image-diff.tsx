@@ -1,14 +1,8 @@
 import * as React from "react";
 
 import type { ImageDiffViewMode } from "@/hooks/changes/use-image-diff-view-mode";
+import type { DiffImageSide } from "@/lib/backend/protocol";
 import { cn } from "@/lib/utils";
-
-function imageUrl(data: number[], mimeType: string): string {
-    const bytes = new Uint8Array(data);
-    let binary = "";
-    for (const byte of bytes) binary += String.fromCharCode(byte);
-    return `data:${mimeType};base64,${btoa(binary)}`;
-}
 
 export function BinaryDiffView({ path }: { path: string }) {
     return (
@@ -27,12 +21,12 @@ export function ImageDiffView({
     newImage,
     mode,
 }: {
-    oldImage?: { data: number[]; mimeType: string };
-    newImage?: { data: number[]; mimeType: string };
+    oldImage?: DiffImageSide;
+    newImage?: DiffImageSide;
     mode: ImageDiffViewMode;
 }) {
-    const oldUrl = oldImage && imageUrl(oldImage.data, oldImage.mimeType);
-    const newUrl = newImage && imageUrl(newImage.data, newImage.mimeType);
+    const oldUrl = oldImage?.dataUrl;
+    const newUrl = newImage?.dataUrl;
     if (mode === "swipe") {
         return <SwipeImage oldUrl={oldUrl} newUrl={newUrl} />;
     }
