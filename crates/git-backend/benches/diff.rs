@@ -169,6 +169,56 @@ fn commit_fixture_repo() -> &'static PathBuf {
     })
 }
 
+/// A wider tree: 40 dirs x 100 files (4000 files) with 400 changed. On a repo
+/// this size the repo-proportional work (flattening HEAD, scanning the index,
+/// hashing every changed file) dominates a diff, which is what a path-scoped
+/// request avoids.
+fn large_fixture_repo() -> &'static PathBuf {
+    static FIXTURE: OnceLock<PathBuf> = OnceLock::new();
+    FIXTURE.get_or_init(|| {
+        let outer = tempfile::tempdir().unwrap();
+        let root = outer.path().join("bench-large-diff");
+        std::fs::create_dir_all(&root).unwrap();
+        let repo = git2::Repository::init(&root).unwrap();
+        let mut config = repo.config().unwrap();
+        config.set_str("user.name", "Bench").unwrap();
+        config.set_str("user.email", "bench@example.com").unwrap();
+        config.set_str("core.autocrlf", "false").unwrap();
+        drop(config);
+
+        for d in 0..40u32 {
+            let dir = root.join(format!("dir{d:02}"));
+            std::fs::create_dir_all(&dir).unwrap();
+            for i in 0..100u32 {
+                let content: String = (0..30)
+                    .map(|j| format!("dir {d} file {i} line {j}\n"))
+                    .collect();
+                std::fs::write(dir.join(format!("file{i:03}.txt")), &content).unwrap();
+            }
+        }
+        let mut index = repo.index().unwrap();
+        index
+            .add_all(["*"], git2::IndexAddOption::DEFAULT, None)
+            .unwrap();
+        index.write().unwrap();
+        let tree_id = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_id).unwrap();
+        let sig = git2::Signature::now("Bench", "bench@example.com").unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, "base", &tree, &[])
+            .unwrap();
+
+        // 400 changed files spread across every directory.
+        for d in 0..40u32 {
+            for i in 0..10u32 {
+                let changed: String = (0..30).map(|j| format!("EDITED {d} {i} {j}\n")).collect();
+                std::fs::write(root.join(format!("dir{d:02}/file{i:03}.txt")), &changed).unwrap();
+            }
+        }
+        std::mem::forget(outer);
+        root
+    })
+}
+
 fn bench_diff_stream(c: &mut Criterion) {
     let root = fixture_repo().clone();
 
@@ -229,6 +279,56 @@ fn bench_diff_stream(c: &mut Criterion) {
             )
             .unwrap();
             assert_eq!(plans.len(), 60);
+        })
+    });
+
+    // The shape a change-row click sends: scoped to one path. Enumeration
+    // must not pay for the other 59 changed files.
+    let one_file = DiffRequest {
+        paths: vec!["src/file30.txt".to_owned()],
+        ..DiffRequest::default()
+    };
+    c.bench_function("diff/enumerate-one-file-of-60", |b| {
+        let session = session_for(root.as_path());
+        let blobs = git_backend::engines::gix::diff::new_blob_cache();
+        let request = one_file.clone();
+        b.iter(|| {
+            let plans =
+                git_backend::engines::gix::diff::enumerate(&session, &request, &blobs).unwrap();
+            assert_eq!(plans.len(), 1);
+        })
+    });
+
+    c.bench_function("diff/time-to-first-chunk-one-file", |b| {
+        let request = one_file.clone();
+        b.iter(|| {
+            let op = Arc::new(DiffOperation::new(RepoId(4), OperationId(4), Generation(1)));
+            let (tx, mut rx) = tokio::sync::mpsc::channel(1024);
+            let job = DiffJob::new(
+                root.to_path_buf(),
+                request.clone(),
+                OperationId(4),
+                SnapshotId(0),
+                Generation(1),
+                session_for(root.as_path()),
+            );
+            let op_for_job = op.clone();
+            let got_chunk = runtime().block_on(async {
+                let handle =
+                    tokio::task::spawn_blocking(move || pipeline::run(job, op_for_job, tx));
+                let mut first_rows = 0usize;
+                while let Some(event) = rx.recv().await {
+                    if let DiffEvent::Chunk { rows, .. } = event {
+                        first_rows = rows.len();
+                        break;
+                    }
+                }
+                op.cancel();
+                while rx.recv().await.is_some() {}
+                handle.await.unwrap();
+                first_rows
+            });
+            assert!(got_chunk > 0);
         })
     });
 
@@ -321,6 +421,71 @@ fn bench_diff_stream(c: &mut Criterion) {
             )
             .unwrap();
             assert_eq!(plans.len(), 5);
+        })
+    });
+
+    // Wide working tree (4000 files, 400 changed): the full scan versus the
+    // one-path scope a change-row click sends.
+    let large_root = large_fixture_repo().clone();
+    let large_session = session_for(large_root.as_path());
+    let large_one = DiffRequest {
+        paths: vec!["dir07/file005.txt".to_owned()],
+        ..DiffRequest::default()
+    };
+
+    c.bench_function("diff/enumerate-large-working-tree", |b| {
+        let blobs = git_backend::engines::gix::diff::new_blob_cache();
+        b.iter(|| {
+            let plans = git_backend::engines::gix::diff::enumerate(
+                &large_session,
+                &DiffRequest::default(),
+                &blobs,
+            )
+            .unwrap();
+            assert_eq!(plans.len(), 400);
+        })
+    });
+
+    c.bench_function("diff/enumerate-one-file-of-4000", |b| {
+        let blobs = git_backend::engines::gix::diff::new_blob_cache();
+        b.iter(|| {
+            let plans =
+                git_backend::engines::gix::diff::enumerate(&large_session, &large_one, &blobs)
+                    .unwrap();
+            assert_eq!(plans.len(), 1);
+        })
+    });
+
+    c.bench_function("diff/time-to-first-chunk-one-file-of-4000", |b| {
+        let request = large_one.clone();
+        b.iter(|| {
+            let op = Arc::new(DiffOperation::new(RepoId(5), OperationId(5), Generation(1)));
+            let (tx, mut rx) = tokio::sync::mpsc::channel(1024);
+            let job = DiffJob::new(
+                large_root.to_path_buf(),
+                request.clone(),
+                OperationId(5),
+                SnapshotId(0),
+                Generation(1),
+                session_for(large_root.as_path()),
+            );
+            let op_for_job = op.clone();
+            let got_chunk = runtime().block_on(async {
+                let handle =
+                    tokio::task::spawn_blocking(move || pipeline::run(job, op_for_job, tx));
+                let mut first_rows = 0usize;
+                while let Some(event) = rx.recv().await {
+                    if let DiffEvent::Chunk { rows, .. } = event {
+                        first_rows = rows.len();
+                        break;
+                    }
+                }
+                op.cancel();
+                while rx.recv().await.is_some() {}
+                handle.await.unwrap();
+                first_rows
+            });
+            assert!(got_chunk > 0);
         })
     });
 }

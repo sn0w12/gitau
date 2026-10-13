@@ -250,4 +250,38 @@ describe("CommitDiffView", () => {
         );
         view.unmount();
     });
+
+    it("keeps the previous commit's diff painted while the next one opens", async () => {
+        seedSettingsForTests({ diffViewMode: "unified" });
+        const emitting = fakeBackend(eventsForTwoFiles());
+        const silent = fakeBackend([]);
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+        const root = createRoot(container);
+        const render = (backend: AppServices, commitId: string) => {
+            act(() => {
+                root.render(
+                    <AppServicesContext.Provider value={backend}>
+                        <CommitDiffView
+                            repoId={1}
+                            commitId={commitId}
+                            dispatch={() => {}}
+                        />
+                    </AppServicesContext.Provider>
+                );
+            });
+        };
+
+        render(emitting, "abc123");
+        await settle();
+        expect(container.textContent).toContain("a-old");
+
+        // The second commit's stream never emits; the first diff must stay
+        // painted instead of blanking the pane.
+        render(silent, "def456");
+        expect(container.textContent).toContain("a-old");
+
+        act(() => root.unmount());
+        container.remove();
+    });
 });

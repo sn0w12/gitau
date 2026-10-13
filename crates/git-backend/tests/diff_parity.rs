@@ -37,6 +37,9 @@ fn reference_sections(root: &std::path::Path, request: &DiffRequest) -> Vec<RefS
         .recurse_untracked_dirs(true)
         .show_untracked_content(true)
         .skip_binary_check(false);
+    for path in &request.paths {
+        opts.pathspec(path.as_str());
+    }
     let head_tree = {
         repo.head()
             .ok()
@@ -378,6 +381,45 @@ fn additions_deletions_and_untracked_match_reference() {
     repo.write("fresh.txt", "brand new\n");
     repo.write("nested/dir/deep.txt", "deep\n");
     assert_parity(&repo, base_request());
+}
+
+/// A `paths` request must match the reference's pathspec: only the selected
+/// file is enumerated, and the scoped walk must not miss its own change.
+#[test]
+fn scoped_path_matches_reference() {
+    let repo = TestRepo::init("dp-scoped-one");
+    repo.initial_commit(&[("a.txt", "one\ntwo\nthree\n"), ("b.txt", "one\ntwo\n")]);
+    repo.write("a.txt", "one\nTWO\nthree\n");
+    repo.write("b.txt", "one\nTWO\n");
+    assert_parity(
+        &repo,
+        DiffRequest {
+            paths: vec!["a.txt".into()],
+            ..base_request()
+        },
+    );
+}
+
+/// A scoped request that selects a deleted file and an added file, leaving a
+/// modified file out, must match the reference for both selected paths.
+#[test]
+fn scoped_paths_include_added_and_deleted_match_reference() {
+    let repo = TestRepo::init("dp-scoped-many");
+    repo.initial_commit(&[
+        ("gone.txt", "delete me\n"),
+        ("stay.txt", "stay\n"),
+        ("other.txt", "other\n"),
+    ]);
+    repo.delete("gone.txt");
+    repo.write("fresh.txt", "brand new\n");
+    repo.write("stay.txt", "stay edited\n");
+    assert_parity(
+        &repo,
+        DiffRequest {
+            paths: vec!["gone.txt".into(), "fresh.txt".into()],
+            ..base_request()
+        },
+    );
 }
 
 #[test]

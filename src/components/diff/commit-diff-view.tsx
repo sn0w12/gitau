@@ -65,7 +65,6 @@ export function CommitDiffView({
         <DiffSessionGate
             repoId={repoId}
             request={request}
-            resetKey={commitId}
             tabId={tabId}
             emptyTitle="No changes in this commit"
             emptyDescription="The commit touches no files."

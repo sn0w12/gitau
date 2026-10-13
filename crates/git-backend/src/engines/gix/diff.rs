@@ -47,9 +47,13 @@ pub fn enumerate(
     blobs: &BlobCache,
 ) -> Result<Vec<SectionPlan>> {
     let repo = session.handle();
+    // `paths` scopes the walk itself. Without this, selecting one changed file
+    // pays to enumerate every changed file in the repository, then drops all
+    // but the selection in the filter below.
+    let scope: Option<Vec<String>> = (!request.paths.is_empty()).then(|| request.paths.clone());
     let mut raw: Vec<Renamed> = match &request.comparison {
-        DiffComparison::WorkingTree => head_vs_workdir(session, blobs)?,
-        DiffComparison::Unstaged => unstaged_changes(&repo)?,
+        DiffComparison::WorkingTree => head_vs_workdir(session, blobs, scope.as_deref())?,
+        DiffComparison::Unstaged => unstaged_changes(&repo, scope.as_deref())?,
         DiffComparison::Staged => head_vs_index_changes(&repo)?,
         DiffComparison::TreeToTree { old, new } => {
             tree_vs_tree_changes(&repo, tree_at(&repo, old)?, tree_at(&repo, new)?)?
@@ -475,15 +479,14 @@ fn flatten_tree(repo: &gix::Repository, tree_id: Oid, out: &mut StateMap) -> Res
     Ok(())
 }
 
-fn index_state(repo: &gix::Repository) -> Result<StateMap> {
-    let index = crate::engines::gix::session::open_index(repo)?;
+fn index_state(index: &gix::index::File) -> Result<StateMap> {
     let mut map = StateMap::new();
     for entry in index.entries() {
         if entry.stage() != gix::index::entry::Stage::Unconflicted {
             continue;
         }
         map.insert(
-            entry.path(&index).to_owned(),
+            entry.path(index).to_owned(),
             (
                 entry
                     .mode
@@ -1262,6 +1265,7 @@ fn run_index_worktree_status<S>(
     collector: &mut WtCollector,
     options: gix::status::index_worktree::Options,
     submodule: S,
+    patterns: &[&BStr],
 ) -> Result<()>
 where
     S: SubmoduleStatus<Output = gix::submodule::Status> + Send + Clone,
@@ -1269,7 +1273,7 @@ where
     let should_interrupt = std::sync::atomic::AtomicBool::new(false);
     repo.index_worktree_status(
         index,
-        [] as [&gix::bstr::BStr; 0],
+        patterns.iter().copied(),
         collector,
         FastEq,
         submodule,
@@ -1281,10 +1285,13 @@ where
     Ok(())
 }
 
-fn worktree_changes(repo: &gix::Repository) -> Result<WtCollector> {
+fn worktree_changes(
+    repo: &gix::Repository,
+    index: &gix::index::File,
+    scope: Option<&[String]>,
+) -> Result<WtCollector> {
     use gix::status::index_worktree::BuiltinSubmoduleStatus;
 
-    let index = crate::engines::gix::session::open_index(repo)?;
     let dirwalk_options = {
         let mut options = repo.dirwalk_options().map_err(internal)?;
         options.set_emit_untracked(gix::dir::walk::EmissionMode::Matching);
@@ -1297,21 +1304,52 @@ fn worktree_changes(repo: &gix::Repository) -> Result<WtCollector> {
         rewrites: Some(rewrites()),
         thread_limit: None,
     };
+    // `:(top,literal)` anchors each pattern at the worktree root (gix
+    // normalizes bare patterns against the process CWD) and disables glob
+    // interpretation, so a path like `a[1].txt` matches itself.
+    let patterns: Vec<Vec<u8>> = scope
+        .map(|paths| {
+            paths
+                .iter()
+                .map(|p| {
+                    let mut pattern = b":(top,literal)".to_vec();
+                    pattern.extend_from_slice(p.as_bytes());
+                    pattern
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let pattern_refs: Vec<&BStr> = patterns.iter().map(|p| BStr::new(p.as_slice())).collect();
     let mut collector = WtCollector::default();
-    if has_gitmodules(repo, &index) {
+    if has_gitmodules(repo, index) {
         let submodule = BuiltinSubmoduleStatus::new(repo.clone().into_sync(), Default::default())
             .map_err(internal)?;
-        run_index_worktree_status(repo, &index, &mut collector, options, submodule)?;
+        run_index_worktree_status(
+            repo,
+            index,
+            &mut collector,
+            options,
+            submodule,
+            &pattern_refs,
+        )?;
     } else {
-        run_index_worktree_status(repo, &index, &mut collector, options, NoSubmodules)?;
+        run_index_worktree_status(
+            repo,
+            index,
+            &mut collector,
+            options,
+            NoSubmodules,
+            &pattern_refs,
+        )?;
     }
 
     Ok(collector)
 }
 
 /// Unstaged: index versus working tree.
-fn unstaged_changes(repo: &gix::Repository) -> Result<Vec<Renamed>> {
-    let collector = worktree_changes(repo)?;
+fn unstaged_changes(repo: &gix::Repository, scope: Option<&[String]>) -> Result<Vec<Renamed>> {
+    let index = crate::engines::gix::session::open_index(repo)?;
+    let collector = worktree_changes(repo, &index, scope)?;
     let mut deltas = Vec::new();
     for (path, change) in collector.changes {
         match change {
@@ -1368,19 +1406,36 @@ struct MergeRow {
 /// Working tree: HEAD versus merged index+worktree truth. Only changed paths
 /// are touched; HEAD blobs resolve per path instead of flattening whole
 /// trees.
-fn head_vs_workdir(session: &GixSession, blobs: &BlobCache) -> Result<Vec<Renamed>> {
+fn head_vs_workdir(
+    session: &GixSession,
+    blobs: &BlobCache,
+    scope: Option<&[String]>,
+) -> Result<Vec<Renamed>> {
+    let repo = session.handle();
+    // One index read shared by both passes; parsing it twice doubles the
+    // fixed cost of a scoped single-file diff.
+    let index = Arc::new(crate::engines::gix::session::open_index(&repo)?);
+
     // The staged and worktree passes are independent; overlap them.
     let side_session = session.clone();
     let warm_cache = Arc::clone(blobs);
+    let side_scope: Option<Vec<String>> = scope.map(<[String]>::to_vec);
+    let side_index = Arc::clone(&index);
     let staged_thread = std::thread::Builder::new()
         .name("gix-diff::staged".into())
-        .spawn(move || staged_state(&side_session, &warm_cache))
+        .spawn(move || {
+            staged_state(
+                &side_session,
+                &warm_cache,
+                side_scope.as_deref(),
+                &side_index,
+            )
+        })
         .map_err(|e| GitError::Internal {
             message: format!("spawning staged pass failed: {e}"),
         })?;
 
-    let repo = session.handle();
-    let wt = worktree_changes(&repo)?;
+    let wt = worktree_changes(&repo, &index, scope)?;
     let (old_state, staged) = staged_thread
         .join()
         .map_err(|_| GitError::internal("staged pass panicked"))??;
@@ -1515,35 +1570,86 @@ enum StagedState {
 fn staged_state(
     session: &GixSession,
     blobs: &BlobCache,
+    scope: Option<&[String]>,
+    index: &gix::index::File,
 ) -> Result<(StateMap, Vec<(BString, StagedState)>)> {
     let repo = session.handle();
-    // Pure HEAD-vs-index comparison: no worktree rules involved, so direct
-    // state maps beat spinning up gix's tree-index diff machinery. The
-    // flattened HEAD state doubles as the merge baseline, so it is computed
-    // exactly once per diff.
-    let mut old: StateMap = StateMap::new();
-    if let Some(tree_id) = head_tree_id(&repo)? {
-        flatten_tree(&repo, tree_id, &mut old)?;
-    }
-    let new = index_state(&repo)?;
-
-    let mut out = Vec::new();
-    let mut paths = old.keys().chain(new.keys()).cloned().collect::<Vec<_>>();
-    paths.sort();
-    paths.dedup();
-    for path in paths {
-        match (old.get(&path), new.get(&path)) {
-            (Some(_), None) => out.push((path, StagedState::Absent)),
-            (None, Some((mode, id))) => out.push((path, StagedState::Blob(*id, *mode))),
-            (Some((om, oid)), Some((nm, nid))) => {
-                if oid == nid && om == nm {
-                    continue;
-                }
-                out.push((path, StagedState::Blob(*nid, *nm)));
+    let (old, out) = match scope {
+        // Pure HEAD-vs-index comparison: no worktree rules involved, so direct
+        // state maps beat spinning up gix's tree-index diff machinery. The
+        // flattened HEAD state doubles as the merge baseline, so it is computed
+        // exactly once per diff.
+        None => {
+            let mut old: StateMap = StateMap::new();
+            if let Some(tree_id) = head_tree_id(&repo)? {
+                flatten_tree(&repo, tree_id, &mut old)?;
             }
-            (None, None) => {}
+            let new = index_state(index)?;
+
+            let mut out = Vec::new();
+            let mut paths = old.keys().chain(new.keys()).cloned().collect::<Vec<_>>();
+            paths.sort();
+            paths.dedup();
+            for path in paths {
+                match (old.get(&path), new.get(&path)) {
+                    (Some(_), None) => out.push((path, StagedState::Absent)),
+                    (None, Some((mode, id))) => out.push((path, StagedState::Blob(*id, *mode))),
+                    (Some((om, oid)), Some((nm, nid))) => {
+                        if oid == nid && om == nm {
+                            continue;
+                        }
+                        out.push((path, StagedState::Blob(*nid, *nm)));
+                    }
+                    (None, None) => {}
+                }
+            }
+            (old, out)
         }
-    }
+        // A scoped request resolves just the selected paths instead of
+        // flattening the whole HEAD tree and index.
+        Some(paths) => {
+            let tree = head_tree_id(&repo)?
+                .map(|id| repo.find_tree(id))
+                .transpose()
+                .map_err(internal)?;
+            let mut old = StateMap::new();
+            let mut out = Vec::new();
+            for path in paths {
+                let key: BString = path.as_bytes().to_vec().into();
+                let rel = BStr::new(path.as_bytes());
+                let head = match &tree {
+                    Some(tree) => tree
+                        .lookup_entry_by_path(gix::path::from_bstr(rel))
+                        .map_err(internal)?
+                        .map(|entry| (entry.mode(), (*entry.oid()).into())),
+                    None => None,
+                };
+                let index_entry = index.entry_by_path(rel).map(|entry| {
+                    (
+                        entry
+                            .mode
+                            .to_tree_entry_mode()
+                            .unwrap_or_else(regular_file_mode),
+                        entry.id,
+                    )
+                });
+                if let Some((mode, id)) = head {
+                    old.insert(key.clone(), (mode, id));
+                }
+                match (head, index_entry) {
+                    (Some(_), None) => out.push((key, StagedState::Absent)),
+                    (None, Some((mode, id))) => out.push((key, StagedState::Blob(id, mode))),
+                    (Some((om, oid)), Some((nm, nid))) => {
+                        if oid != nid || om != nm {
+                            out.push((key, StagedState::Blob(nid, nm)));
+                        }
+                    }
+                    (None, None) => {}
+                }
+            }
+            (old, out)
+        }
+    };
     // The worktree status pass still has I/O of its own to do; loading the
     // HEAD/index blobs this diff will materialize overlaps that window.
     let warmed_old = out

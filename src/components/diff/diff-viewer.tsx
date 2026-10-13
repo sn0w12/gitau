@@ -44,6 +44,7 @@ export function DiffViewer({
             request={request}
             generation={generation}
             tabId={tabId}
+            pendingPath={pathList[0]}
             emptyTitle="No changes"
             emptyDescription="This view has nothing to diff right now."
         >
