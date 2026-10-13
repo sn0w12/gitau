@@ -297,5 +297,110 @@ fn bench_real_chart(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_history, bench_real_chart);
+/// History page cost against a real repository, next to `bench_real_chart`.
+///
+/// The synthetic fixture commits a one-line file per revision, which is far
+/// below a real repository's per-commit diff size. Point `GITAU_BENCH_REPO` at
+/// an actual checkout to measure:
+///
+///   * `warm`  page in the LRU: the floor.
+///   * `cold`  page and immutable caches cleared with the chart's per-commit
+///     points already on disk, which is what a relaunch sees after the
+///     repo-open chart prefetch has run once.
+///   * `barren` the points file removed too: the true first-run cost.
+fn bench_real_history_page(c: &mut Criterion) {
+    let Ok(raw) = std::env::var("GITAU_BENCH_REPO") else {
+        return;
+    };
+    let root = std::path::PathBuf::from(&raw);
+    if !root.exists() {
+        panic!("GITAU_BENCH_REPO does not exist: {}", root.display());
+    }
+
+    let query = HistoryPageQuery {
+        limit: 100,
+        ..Default::default()
+    };
+
+    // Primed: the chart prefetch has written per-commit points, which is what
+    // a relaunch sees before it opens History.
+    let primed_dir = tempfile::tempdir().unwrap();
+    let primed = Backend::new(BackendConfig {
+        watch_worktree: false,
+        ..Default::default()
+    });
+    primed.initialize_history_stats_cache(primed_dir.path().join("history-stats"));
+    let primed_repo = runtime()
+        .block_on(primed.open_repository(&root))
+        .expect("open repository");
+    runtime()
+        .block_on(primed.history_chart(
+            primed_repo.id,
+            HistoryChartQuery::default(),
+            Default::default(),
+        ))
+        .expect("prime chart");
+    runtime()
+        .block_on(primed.history_page(primed_repo.id, query.clone(), Default::default()))
+        .expect("prime history page");
+
+    c.bench_function("real/history-page-warm", |b| {
+        b.iter(|| {
+            let page = runtime().block_on(primed.history_page(
+                primed_repo.id,
+                black_box(query.clone()),
+                Default::default(),
+            ));
+            black_box(page.unwrap().commits.len());
+        })
+    });
+
+    c.bench_function("real/history-page-cold", |b| {
+        b.iter(|| {
+            primed.clear_repository_caches(primed_repo.id).unwrap();
+            primed
+                .clear_repository_history_caches(primed_repo.id)
+                .unwrap();
+            let page = runtime().block_on(primed.history_page(
+                primed_repo.id,
+                black_box(query.clone()),
+                Default::default(),
+            ));
+            black_box(page.unwrap().commits.len());
+        })
+    });
+
+    // Barren: no points on disk, the true first-run cost.
+    let barren_dir = tempfile::tempdir().unwrap();
+    let barren = Backend::new(BackendConfig {
+        watch_worktree: false,
+        ..Default::default()
+    });
+    barren.initialize_history_stats_cache(barren_dir.path().join("history-stats"));
+    let barren_repo = runtime()
+        .block_on(barren.open_repository(&root))
+        .expect("open repository");
+
+    c.bench_function("real/history-page-barren", |b| {
+        b.iter(|| {
+            barren.clear_repository_caches(barren_repo.id).unwrap();
+            barren
+                .clear_repository_history_caches(barren_repo.id)
+                .unwrap();
+            let page = runtime().block_on(barren.history_page(
+                barren_repo.id,
+                black_box(query.clone()),
+                Default::default(),
+            ));
+            black_box(page.unwrap().commits.len());
+        })
+    });
+}
+
+criterion_group!(
+    benches,
+    bench_history,
+    bench_real_chart,
+    bench_real_history_page
+);
 criterion_main!(benches);

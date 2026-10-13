@@ -635,6 +635,7 @@ impl Backend {
             return Ok(cached);
         }
         let path = entry.canonical_path.clone();
+        let base = self.history_stats_dir.lock().unwrap().clone();
         let snapshot_id = entry.next_snapshot_id();
         let generation = entry.generation();
 
@@ -651,6 +652,15 @@ impl Backend {
                 // redoing the diff stats.
                 let _computation = lock_entry.history_lock().lock().unwrap();
                 let mut guard = history_cache.lock().unwrap();
+                if let Some(base) = base.as_deref() {
+                    if guard.claim_points_load() {
+                        let points_path = crate::runtime::stats_store::points_path(base, &path);
+                        if let Some(stored) = crate::runtime::stats_store::load_points(&points_path)
+                        {
+                            guard.extend_stats(stored.records);
+                        }
+                    }
+                }
                 let session = crate::engines::git2::Git2Session::new(path);
                 crate::engines::git2::history::history_page(
                     &session,

@@ -229,6 +229,7 @@ pub fn history_chart(
                             time_seconds: summary.committer.time_seconds,
                             additions: summary.additions,
                             deletions: summary.deletions,
+                            files_changed: summary.files_changed,
                             is_merge: summary.is_merge(),
                         };
                         guard.store_stat(bytes, point);
@@ -334,11 +335,10 @@ fn compute_missing(
                     let commit = wrepo.find_commit(oids[*idx])?;
                     let is_merge = commit.parent_count() > 1;
                     let time_seconds = commit.time().seconds();
-                    let (additions, deletions) = if is_merge {
-                        (0, 0)
+                    let (files_changed, additions, deletions) = if is_merge {
+                        (0, 0, 0)
                     } else {
-                        let (_, additions, deletions) = commit_diff_stats(wrepo, &commit)?;
-                        (additions, deletions)
+                        commit_diff_stats(wrepo, &commit)?
                     };
                     chunk.push((
                         *idx,
@@ -346,6 +346,7 @@ fn compute_missing(
                             time_seconds,
                             additions,
                             deletions,
+                            files_changed,
                             is_merge,
                         },
                     ));
@@ -512,6 +513,7 @@ mod tests {
             time_seconds: time,
             additions: adds,
             deletions: dels,
+            files_changed: 0,
             is_merge: false,
         }
     }
@@ -521,6 +523,7 @@ mod tests {
             time_seconds: time,
             additions: 0,
             deletions: 0,
+            files_changed: 0,
             is_merge: true,
         }
     }

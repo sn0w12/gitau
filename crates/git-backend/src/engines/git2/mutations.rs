@@ -586,11 +586,23 @@ pub(crate) fn summarize_with_tag_names(
     commit: &git2::Commit<'_>,
     tag_names: Vec<String>,
 ) -> Result<CommitSummary> {
+    let (files_changed, additions, deletions) =
+        crate::engines::git2::history::commit_diff_stats(repo, commit)?;
+    summarize_with_stats(commit, tag_names, files_changed, additions, deletions)
+}
+
+/// Summary from stats that are already known, so no tree diff runs. Used when
+/// a cached per-commit point supplies the numbers.
+pub(crate) fn summarize_with_stats(
+    commit: &git2::Commit<'_>,
+    tag_names: Vec<String>,
+    files_changed: u32,
+    additions: u64,
+    deletions: u64,
+) -> Result<CommitSummary> {
     let oid = commit.id();
     let message_raw = commit.message_bytes();
     let full = String::from_utf8_lossy(message_raw).into_owned();
-    let (files_changed, additions, deletions) =
-        crate::engines::git2::history::commit_diff_stats(repo, commit)?;
     Ok(CommitSummary {
         id: ObjectId::from_bytes(oid.as_bytes())?,
         tree_id: ObjectId::from_bytes(commit.tree_id().as_bytes())?,

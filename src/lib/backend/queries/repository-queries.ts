@@ -57,7 +57,7 @@ export function statusQuery(
         queryKey: repositoryKeys.status(repoId, options),
         queryFn: async () =>
             expectOk(await deps.backend.changes.status(repoId, options)),
-        staleTime: 5_000,
+        staleTime: 30_000,
         gcTime: 10 * 60_000,
     });
 }
@@ -228,7 +228,7 @@ export function historyPageQuery(
         queryKey: historyKeyFor(repoId, "page", resolved),
         queryFn: async () =>
             fetchHistoryPage(deps, repoId, { skip: 0, ...resolved }),
-        staleTime: 30_000,
+        staleTime: 60_000,
         gcTime: 10 * 60_000,
         // Pagination/filtering swaps render the previous page instead of
         // flashing skeletons; the page itself is prefetched on repo open.
@@ -263,7 +263,7 @@ export function infiniteHistoryPageQuery(
         initialPageParam: 0,
         getNextPageParam: (lastPage, allPages) =>
             lastPage.hasMore ? allPages.length * pageSize : undefined,
-        staleTime: 30_000,
+        staleTime: 60_000,
         gcTime: 10 * 60_000,
         // Switching a search keeps the previous list visible while the new
         // page loads instead of flashing skeletons.

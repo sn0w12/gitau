@@ -12,6 +12,7 @@ use crate::engines::git2::local;
 use crate::engines::git2::mutations;
 use crate::engines::git2::session::Git2Session;
 use crate::error::{GitError, Result};
+use crate::runtime::history_cache::CommitStatPoint;
 
 pub fn history_page(
     session: &Git2Session,
@@ -125,27 +126,49 @@ pub fn history_page(
 
         let mut slots: Vec<Option<Arc<CommitSummary>>> =
             (0..page_oids.len()).map(|_| None).collect();
-        let mut missing: Vec<(usize, git2::Oid)> = Vec::new();
+        let mut missing: Vec<(usize, git2::Oid, Option<CommitStatPoint>)> = Vec::new();
         for (idx, oid) in page_oids.iter().enumerate() {
             match cache.summary(&oid_bytes(*oid)) {
                 Some(summary) => slots[idx] = Some(summary),
-                None => missing.push((idx, *oid)),
+                None => {
+                    // Merge points carry zeroed line deltas for the chart, so
+                    // only non-merge points can stand in for a page summary.
+                    let point = cache.stat(&oid_bytes(*oid)).filter(|point| !point.is_merge);
+                    missing.push((idx, *oid, point));
+                }
             }
         }
 
-        let computed = summarize_page(repo, &missing, &tags)?;
+        let computed = summarize_page(repo, &missing)?;
         for (idx, arc) in computed {
             cache.store_summary(oid_bytes(page_oids[idx]), arc.clone());
+            if !arc.is_merge() {
+                cache.store_stat(
+                    oid_bytes(page_oids[idx]),
+                    CommitStatPoint {
+                        time_seconds: arc.committer.time_seconds,
+                        additions: arc.additions,
+                        deletions: arc.deletions,
+                        files_changed: arc.files_changed,
+                        is_merge: false,
+                    },
+                );
+            }
             slots[idx] = Some(arc);
         }
 
-        let mut commits = slots
-            .into_iter()
-            .map(|slot| -> Result<CommitSummary> {
-                let arc = slot.ok_or_else(|| GitError::internal("summary slot unfilled"))?;
-                Ok((*arc).clone())
-            })
-            .collect::<Result<Vec<_>>>()?;
+        let mut commits = Vec::with_capacity(slots.len());
+        for (idx, slot) in slots.into_iter().enumerate() {
+            let arc = slot.ok_or_else(|| GitError::internal("summary slot unfilled"))?;
+            let mut summary = (*arc).clone();
+            // Decorations resolve here, not in the cached summary, so a ref
+            // change refreshes names without recomputing diff stats.
+            summary.tags = tags
+                .get(&oid_bytes(page_oids[idx]))
+                .cloned()
+                .unwrap_or_default();
+            commits.push(summary);
+        }
 
         if !search.is_empty() {
             for commit in &mut commits {
@@ -295,20 +318,28 @@ fn tag_map(repo: &git2::Repository) -> Result<HashMap<git2::Oid, Vec<String>>> {
 
 /// Summarizes missing commits in parallel. libgit2 handles are not `Sync`, so
 /// each worker thread uses its own cached handle; output pairs keep the input
-/// index order.
+/// index order. Summaries are stored tag-less; decorations attach at assembly.
+/// A cached stat point skips the tree diff and line count.
 fn summarize_page(
     repo: &git2::Repository,
-    missing: &[(usize, git2::Oid)],
-    tags: &HashMap<[u8; 20], Vec<String>>,
+    missing: &[(usize, git2::Oid, Option<CommitStatPoint>)],
 ) -> Result<Vec<(usize, Arc<CommitSummary>)>> {
     let git_dir: PathBuf = repo.path().to_path_buf();
     let results: Vec<Result<(usize, Arc<CommitSummary>)>> = missing
         .par_iter()
-        .map(|(idx, oid)| {
+        .map(|(idx, oid, point)| {
             local::with_repository(&git_dir, |wrepo| {
                 let commit = wrepo.find_commit(*oid)?;
-                let names = tags.get(oid.as_bytes()).cloned().unwrap_or_default();
-                let summary = mutations::summarize_with_tag_names(wrepo, &commit, names)?;
+                let summary = match point {
+                    Some(point) => mutations::summarize_with_stats(
+                        &commit,
+                        Vec::new(),
+                        point.files_changed,
+                        point.additions,
+                        point.deletions,
+                    )?,
+                    None => mutations::summarize_with_tag_names(wrepo, &commit, Vec::new())?,
+                };
                 Ok((*idx, Arc::new(summary)))
             })
         })

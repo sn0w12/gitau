@@ -19,6 +19,8 @@ pub const MAX_WALK_ENTRIES: usize = 50_000;
 #[derive(Default)]
 pub struct HistoryCache {
     walks: HashMap<WalkKey, Arc<Vec<Oid>>>,
+    /// Tag names are attached at page assembly, never stored here, so a ref
+    /// change cannot strand stale decorations in a summary.
     summaries: HashMap<[u8; 20], Arc<CommitSummary>>,
     /// Compact per-commit aggregate inputs for the history chart. Kept
     /// separate from `summaries`: those evict-all at 8192 entries, which
@@ -57,12 +59,14 @@ pub struct WalkKey {
     pub exclusions: Vec<[u8; 20]>,
 }
 
-/// Everything the chart aggregation needs from one commit.
+/// Everything the history chart and list need from one commit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CommitStatPoint {
     pub time_seconds: i64,
     pub additions: u64,
     pub deletions: u64,
+    /// Deltas against the first parent, the number a history row shows.
+    pub files_changed: u32,
     /// Merge commits are stored with zero line deltas (never diffed) so
     /// `include_merges` toggles only affect the commit count.
     pub is_merge: bool,
@@ -179,13 +183,12 @@ impl HistoryCache {
         self.points_loaded = false;
     }
 
-    /// Drops everything derived from ref tips: the tag map plus the
-    /// summaries that bake tag names in. Walks re-key on the tip OID and
-    /// per-commit stats are immutable, so both survive. The watcher calls
+    /// Drops the tag map, the only ref-dependent data in the cache. Summaries
+    /// carry no tags, so a ref change keeps the expensive per-commit diff
+    /// stats and reattaches decorations on the next read. The watcher calls
     /// this when a burst touches `.git` ref tips, covering tags, branches,
     /// and checkouts created outside the app.
     pub fn clear_ref_dependent(&mut self) {
-        self.summaries.clear();
         self.tags = None;
     }
 }
@@ -225,7 +228,7 @@ mod tests {
     }
 
     #[test]
-    fn ref_clear_drops_tags_and_summaries_but_keeps_walks_and_stats() {
+    fn ref_clear_drops_tags_but_keeps_summaries_walks_and_stats() {
         let mut cache = HistoryCache::default();
         let oid = [7u8; 20];
         cache.store_walk(
@@ -242,6 +245,7 @@ mod tests {
                 time_seconds: 0,
                 additions: 1,
                 deletions: 2,
+                files_changed: 1,
                 is_merge: false,
             },
         );
@@ -252,7 +256,10 @@ mod tests {
         cache.clear_ref_dependent();
 
         assert!(cache.tags().is_none());
-        assert!(cache.summary(&oid).is_none());
+        assert!(
+            cache.summary(&oid).is_some(),
+            "the expensive per-commit summary must survive a ref change"
+        );
         assert!(
             cache
                 .walk(&WalkKey {
