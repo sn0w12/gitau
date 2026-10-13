@@ -27,9 +27,11 @@ import { useOpenRepository } from "@/hooks/repositories/use-open-repository";
 import { useRepoAvatarByPath } from "@/hooks/repositories/use-repo-avatar";
 import { useRemoteIcon } from "@/hooks/repositories/use-repository-queries";
 import { useSettingValue } from "@/hooks/settings/use-setting";
+import { useActiveTabPathname } from "@/hooks/tabs/use-active-tab-pathname";
 import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
 import { EASE_SNAPPY } from "@/lib/motion";
 import { addExistingRepositoryFromDisk } from "@/lib/repositories/add-repository";
+import { isRepoPathname } from "@/lib/routing/active-route";
 import { toastError } from "@/lib/toast-error";
 import { appStore, selectActiveTab } from "@/stores/app-store";
 import {
@@ -65,6 +67,7 @@ import {
 } from "./ui/tooltip";
 
 const handle = TooltipCreateHandle<ComponentType>();
+const ACTIVE_NAV_ITEM_CLASS = "bg-foreground/10 hover:bg-foreground/10";
 const REPO_TRANSITION = { duration: 0.2, ease: EASE_SNAPPY } as const;
 // Built at drag time: reads live bounds so resize/scroll stay correct.
 const restrictToRepoList = (slot: string) =>
@@ -133,6 +136,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 function InboxSidebarItem() {
     const router = useActiveTabRouter();
     const { unread, exact } = useGithubUnreadCount();
+    const isActive = useActiveTabPathname() === "/inbox";
     return (
         <SidebarMenuItem>
             <TooltipTrigger
@@ -141,6 +145,8 @@ function InboxSidebarItem() {
                 render={
                     <SidebarMenuButton
                         variant="ghost"
+                        aria-current={isActive ? "page" : undefined}
+                        className={isActive ? ACTIVE_NAV_ITEM_CLASS : undefined}
                         onClick={() => void router?.navigate({ to: "/inbox" })}
                     >
                         <Inbox />
@@ -163,6 +169,7 @@ function InboxSidebarItem() {
 
 function PullRequestsSidebarItem() {
     const router = useActiveTabRouter();
+    const isActive = useActiveTabPathname() === "/pulls";
     return (
         <SidebarMenuItem>
             <TooltipTrigger
@@ -171,6 +178,8 @@ function PullRequestsSidebarItem() {
                 render={
                     <SidebarMenuButton
                         variant="ghost"
+                        aria-current={isActive ? "page" : undefined}
+                        className={isActive ? ACTIVE_NAV_ITEM_CLASS : undefined}
                         onClick={() => void router?.navigate({ to: "/pulls" })}
                     >
                         <GitPullRequestArrow />
@@ -184,6 +193,7 @@ function PullRequestsSidebarItem() {
 
 function IssuesSidebarItem() {
     const router = useActiveTabRouter();
+    const isActive = useActiveTabPathname() === "/issues";
     return (
         <SidebarMenuItem>
             <TooltipTrigger
@@ -192,6 +202,8 @@ function IssuesSidebarItem() {
                 render={
                     <SidebarMenuButton
                         variant="ghost"
+                        aria-current={isActive ? "page" : undefined}
+                        className={isActive ? ACTIVE_NAV_ITEM_CLASS : undefined}
                         onClick={() => void router?.navigate({ to: "/issues" })}
                     >
                         <CircleDot />
@@ -300,8 +312,10 @@ function RegisteredRepoButtons() {
         appStore,
         (state) => selectActiveTab(state)?.repoPath ?? null
     );
+    const pathname = useActiveTabPathname();
+    const onRepoRoute = pathname !== null && isRepoPathname(pathname);
     const isSelected = (path: string) =>
-        activeRepoPath?.toLowerCase() === path.toLowerCase();
+        onRepoRoute && activeRepoPath?.toLowerCase() === path.toLowerCase();
     const restrictPinnedToList = useMemo(
         () => restrictToRepoList("pinned-repo-list"),
         []
