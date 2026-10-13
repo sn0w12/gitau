@@ -125,8 +125,23 @@ export function ChangesPanel({
     // its staged/unstaged row id for the worktree diff.
     const selectIdFor = (entry: StatusEntry) =>
         entry.kind === "conflicted" ? `conflict:${entry.path}` : entry.id;
+    // Stage or unstage rewrites the row id's side prefix (`worktree:p` to
+    // `index:p`), so the exact id stops matching and the moved row loses its
+    // highlight. Fall back to matching the path once the selected id leaves
+    // the report, which keeps a file selected on both sides distinct.
+    const selectedPath = selectedId ? changePath(selectedId) : null;
+    const selectedIdPresent =
+        selectedId !== null &&
+        entries.some(
+            (entry) =>
+                entry.id === selectedId || selectIdFor(entry) === selectedId
+        );
     const isSelected = (entry: StatusEntry) =>
-        selectedId === entry.id || selectedId === selectIdFor(entry);
+        selectedId === entry.id ||
+        selectedId === selectIdFor(entry) ||
+        (selectedPath !== null &&
+            !selectedIdPresent &&
+            entry.path === selectedPath);
     const toggleSelect = (entry: StatusEntry) => {
         const id = selectIdFor(entry);
         onSelectedChange(selectedId === id ? null : id);

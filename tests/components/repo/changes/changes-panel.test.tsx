@@ -273,6 +273,67 @@ describe("ChangesPanel", () => {
         view.unmount();
     });
 
+    it("keeps the highlight on a row whose side prefix changed", async () => {
+        seedSettingsForTests({});
+        const services = recordingBackend(
+            report([entry({ id: "index:a.ts", side: "index", path: "a.ts" })])
+        );
+
+        const view = renderWith(
+            services,
+            <ChangesPanel
+                repoId={5}
+                branch="main"
+                selectedId="worktree:a.ts"
+                onSelectedChange={() => {}}
+                selectedStashId={null}
+                onSelectedStash={() => {}}
+            />
+        );
+        await flush();
+
+        const rows = Array.from(
+            view.container.querySelectorAll('[role="option"]')
+        );
+        expect(rows).toHaveLength(1);
+        expect(rows[0].getAttribute("aria-selected")).toBe("true");
+        view.unmount();
+    });
+
+    it("selects only the matching side when both rows exist", async () => {
+        seedSettingsForTests({});
+        const services = recordingBackend(
+            report([
+                entry({ id: "index:a.ts", side: "index", path: "a.ts" }),
+                entry({ path: "a.ts" }),
+            ])
+        );
+
+        const view = renderWith(
+            services,
+            <ChangesPanel
+                repoId={5}
+                branch="main"
+                selectedId="index:a.ts"
+                onSelectedChange={() => {}}
+                selectedStashId={null}
+                onSelectedStash={() => {}}
+            />
+        );
+        await flush();
+
+        const selectedRows = Array.from(
+            view.container.querySelectorAll(
+                '[role="option"][aria-selected="true"]'
+            )
+        );
+        expect(selectedRows).toHaveLength(1);
+        expect(
+            selectedRows[0].querySelector('[aria-label="Unstage a.ts"]')
+        ).not.toBeNull();
+        view.unmount();
+    });
+
     it("stages a single file from its row button", async () => {
         seedSettingsForTests({});
         const services = recordingBackend(
