@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/sn0w12/gitau/master/scripts/install
 
 ```bash
 npm install
-npm run tauri dev            # desktop app with hot reload
+npm run tauri dev -- --config crates/tauri/tauri.dev.conf.json   # desktop app with hot reload
 npm run tauri build          # installer bundle
 ```
 

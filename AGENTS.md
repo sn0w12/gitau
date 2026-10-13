@@ -42,10 +42,11 @@ React UI (src/)
 
 ```bash
 npm install
-npm run tauri dev        # desktop app with hot reload
+npm run tauri dev -- --config crates/tauri/tauri.dev.conf.json   # desktop app, dev icon
 npm run dev              # frontend only, port 3000 (strict)
 npm run build            # vite build (frontend)
-npm run tauri build      # installer bundle
+npm run tauri build      # installer bundle, release icon
+npm run icons            # regenerate the icon sets from images/icons/*.png
 
 # Gates. just ci (node scripts/ci.mjs) runs them scheduled: the four frontend
 # gates and rustfmt run concurrently, the cargo gates serialize on the build
@@ -156,6 +157,8 @@ Every word written in this repo follows this: comments, markdown docs, commit me
 - `crates/tauri/src/lib.rs`: plugin wiring and all command registrations. `crates/tauri/src/state.rs` defines `AppState { backend, settings, session, icons }`.
 - `crates/git-backend/src/application/backend.rs`: the `Backend` facade every command delegates to.
 - `crates/tauri/tauri.conf.json`: devUrl port 3000, `beforeBuildCommand: npm run build`.
+- `crates/tauri/tauri.dev.conf.json` / `tauri.preview.conf.json`: channel overrides merged with `tauri --config`. Dev swaps the bundle icon to `icons/dev/*`; preview swaps to `icons/preview/*` and points the updater at the rolling `preview` release. Base `tauri.conf.json` stays stable: `icons/*` plus the `releases/latest` endpoint.
+- `scripts/generate-icons.mjs`: rebuilds the icon sets from `images/icons/*.png` and rewrites each `icon.ico` largest-frame-first. Tauri embeds ICO entry 0 as the window icon, and `tauri icon` writes a 16px first frame, which Windows upscales into a blurry taskbar icon.
 - `components.json`: coss registry config; add primitives via `npx shadcn@latest add @coss/button` into `src/components/ui/`.
 
 ## Runtime and tooling preferences
@@ -165,6 +168,7 @@ Every word written in this repo follows this: comments, markdown docs, commit me
 - Lint/format: oxlint + oxfmt, not ESLint/Prettier (VS Code defaults to the oxc extension, Prettier disabled). oxlint `correctness` rules are errors; React purity/immutability/exhaustive-deps warnings exist, so don't add code that trips them.
 - Tailwind CSS v4 CSS-first (no tailwind.config): theme tokens in `src/styles.css`, dark mode is a `.dark` class on `<html>` via theme-store. Icons: lucide-react.
 - Release builds run through the GitHub Actions tag workflow (`v*.*.*`) using tauri-action; bundles nsis/msi/dmg/appimage/deb.
+- Preview builds run through `.github/workflows/preview.yml`, triggered by a manual dispatch or a prerelease tag (`v*.*.*-*`). `just bump preview` cuts the tag: it moves to `X.Y.(Z+1)-preview.1`, or bumps the counter when already on `X.Y.Z-preview.N`. Each build injects the tag version via `--config` and publishes a tagged prerelease, then mirrors its `latest.json` onto the rolling `preview` release. Only apps whose updater endpoint is the preview channel poll it; stable builds read `releases/latest`, which GitHub keeps free of prereleases.
 
 ## Testing and QA
 

@@ -14,6 +14,7 @@
         "format:check": "oxfmt --check",
         "boot-trace": "node scripts/boot-trace.mjs",
         "typecheck": "tsc --noEmit",
+        "icons": "node scripts/generate-icons.mjs",
         "tauri": "dotenv -- tauri",
         "set-version": "node scripts/version.mjs",
         "create-dev-workspace": "node scripts/create-dev-workspace.mjs"

@@ -1,0 +1,18 @@
+{
+    "bundle": {
+        "icon": [
+            "icons/preview/32x32.png",
+            "icons/preview/128x128.png",
+            "icons/preview/128x128@2x.png",
+            "icons/preview/icon.icns",
+            "icons/preview/icon.ico"
+        ]
+    },
+    "plugins": {
+        "updater": {
+            "endpoints": [
+                "https://github.com/sn0w12/gitau/releases/download/preview/latest.json"
+            ]
+        }
+    }
+}
