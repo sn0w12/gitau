@@ -221,8 +221,9 @@ describe("CommitDiffView", () => {
         view.unmount();
     });
 
-    it("shows an empty state for a commit without changes", async () => {
+    it("clears the selection when a commit has no changes", async () => {
         seedSettingsForTests({ diffViewMode: "split" });
+        const { dispatch, actions } = recordedActions();
         const view = renderWith(
             fakeBackend([
                 {
@@ -242,12 +243,10 @@ describe("CommitDiffView", () => {
                     durationMs: 0,
                 },
             ]),
-            <CommitDiffView repoId={1} commitId="empty" dispatch={() => {}} />
+            <CommitDiffView repoId={1} commitId="empty" dispatch={dispatch} />
         );
         await settle();
-        expect(view.container.textContent).toContain(
-            "No changes in this commit"
-        );
+        expect(actions).toEqual([{ type: "CLEAR_SELECTION" }]);
         view.unmount();
     });
 

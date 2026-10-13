@@ -66,8 +66,7 @@ export function CommitDiffView({
             repoId={repoId}
             request={request}
             tabId={tabId}
-            emptyTitle="No changes in this commit"
-            emptyDescription="The commit touches no files."
+            onEmpty={() => dispatch({ type: "CLEAR_SELECTION" })}
         >
             {(state, _onRetry, controller) => (
                 <CommitDiffContent

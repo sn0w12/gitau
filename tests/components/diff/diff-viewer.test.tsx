@@ -189,8 +189,9 @@ describe("DiffViewer", () => {
         view.unmount();
     });
 
-    it("shows the empty state when a completed stream has no sections", async () => {
+    it("clears the selection when a completed stream has no sections", async () => {
         seedSettingsForTests({ diffViewMode: "unified" });
+        const actions: RepoStateAction[] = [];
         const view = renderWith(
             fakeBackend([
                 {
@@ -210,10 +211,15 @@ describe("DiffViewer", () => {
                     durationMs: 0,
                 },
             ]),
-            <DiffViewer repoId={1} dispatch={() => {}} />
+            <DiffViewer
+                repoId={1}
+                dispatch={(action) => {
+                    actions.push(action);
+                }}
+            />
         );
         await settle();
-        expect(view.container.textContent).toContain("No changes");
+        expect(actions).toEqual([{ type: "CLEAR_SELECTION" }]);
         view.unmount();
     });
 

@@ -45,8 +45,7 @@ export function DiffViewer({
             generation={generation}
             tabId={tabId}
             pendingPath={pathList[0]}
-            emptyTitle="No changes"
-            emptyDescription="This view has nothing to diff right now."
+            onEmpty={() => dispatch({ type: "CLEAR_SELECTION" })}
         >
             {(state, _onRetry, controller) => (
                 <DiffContent

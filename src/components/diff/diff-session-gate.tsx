@@ -3,12 +3,6 @@ import * as React from "react";
 import { DelayedSpinner } from "@/components/diff/delayed-spinner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-    Empty,
-    EmptyDescription,
-    EmptyHeader,
-    EmptyTitle,
-} from "@/components/ui/empty";
 import { useDiffSession } from "@/hooks/changes/use-diff-session";
 import { useStreamWatchdog } from "@/hooks/changes/use-stream-watchdog";
 import type { DiffRequest } from "@/lib/backend/protocol";
@@ -16,8 +10,10 @@ import type { DiffSessionState } from "@/lib/backend/streams/diff-session";
 
 /**
  * Shared session lifecycle for streaming diff views: acquires the session,
- * arms the stuck-stream watchdog, and renders the failed / empty / loading
- * states so each view only supplies its content.
+ * arms the stuck-stream watchdog, and renders the failed and loading states
+ * so each view only supplies its content. A completed session with no
+ * sections calls `onEmpty` instead of rendering an empty pane, letting the
+ * caller drop the selection back to the main view.
  */
 export function DiffSessionGate({
     repoId,
@@ -25,8 +21,7 @@ export function DiffSessionGate({
     generation,
     tabId,
     pendingPath,
-    emptyTitle,
-    emptyDescription,
+    onEmpty,
     children,
 }: {
     repoId: number;
@@ -34,8 +29,7 @@ export function DiffSessionGate({
     generation?: number;
     tabId?: string;
     pendingPath?: string;
-    emptyTitle: string;
-    emptyDescription: string;
+    onEmpty: () => void;
     children: (
         state: DiffSessionState,
         retry: () => void,
@@ -55,8 +49,7 @@ export function DiffSessionGate({
             generation={generation}
             tabId={tabId}
             pendingPath={pendingPath}
-            emptyTitle={emptyTitle}
-            emptyDescription={emptyDescription}
+            onEmpty={onEmpty}
             onRetry={onRetry}
         >
             {children}
@@ -70,8 +63,7 @@ function GateSession({
     generation,
     tabId,
     pendingPath,
-    emptyTitle,
-    emptyDescription,
+    onEmpty,
     onRetry,
     children,
 }: {
@@ -80,8 +72,7 @@ function GateSession({
     generation?: number;
     tabId?: string;
     pendingPath?: string;
-    emptyTitle: string;
-    emptyDescription: string;
+    onEmpty: () => void;
     onRetry: () => void;
     children: (
         state: DiffSessionState,
@@ -118,6 +109,14 @@ function GateSession({
         onRestart: onRetry,
     });
 
+    const empty = state.sections.length === 0 && state.status === "completed";
+    const clearedRef = React.useRef(false);
+    React.useEffect(() => {
+        if (!empty || clearedRef.current) return;
+        clearedRef.current = true;
+        onEmpty();
+    }, [empty, onEmpty]);
+
     if (state.status === "failed") {
         return (
             <div className="flex size-full flex-col items-center justify-center gap-2 p-4">
@@ -136,16 +135,7 @@ function GateSession({
         return <>{children(lastContentRef.current!, onRetry, controller)}</>;
     }
 
-    if (state.sections.length === 0 && state.status === "completed") {
-        return (
-            <Empty className="ui-selectable size-full">
-                <EmptyHeader>
-                    <EmptyTitle>{emptyTitle}</EmptyTitle>
-                    <EmptyDescription>{emptyDescription}</EmptyDescription>
-                </EmptyHeader>
-            </Empty>
-        );
-    }
+    if (empty) return null;
 
     if (!ready) {
         return (
