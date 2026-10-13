@@ -161,15 +161,16 @@ function renderChecker(services: Services, repoId = 7) {
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
-    act(() => {
+    const draw = (id: number) => {
         root.render(
             <AppServicesContext.Provider value={services}>
                 <QueryClientProvider client={services.queryClient}>
-                    <Harness repoId={repoId} />
+                    <Harness repoId={id} />
                 </QueryClientProvider>
             </AppServicesContext.Provider>
         );
-    });
+    };
+    act(() => draw(repoId));
     return {
         container,
         /** One event off a commit's hook channel. */
@@ -177,6 +178,11 @@ function renderChecker(services: Services, repoId = 7) {
             act(() => {
                 capture.runner?.reportCommit(event);
             });
+        },
+        /** Switches the checker to another repo in the same tab, which keeps
+         * the component mounted and only changes the id. */
+        switchRepo(next: number) {
+            act(() => draw(next));
         },
         unmount() {
             act(() => root.unmount());
@@ -241,8 +247,10 @@ function output(): Element | null {
 
 /** The dot on the trigger, absent until something has run. */
 function dotClass(): string | null {
-    return document.querySelector('[data-testid="hook-checker-status-dot"]')
-        ?.className as string | null;
+    const dot = document.querySelector(
+        '[data-testid="hook-checker-status-dot"]'
+    );
+    return dot ? dot.className : null;
 }
 
 /** jsdom reports every scroll metric as zero, so the viewport's geometry is
@@ -605,6 +613,30 @@ describe("HookChecker", () => {
         // to pending while something is known to be broken.
         view.report({ type: "started", hook: "post-commit" });
         expect(dotClass()).toContain("bg-destructive");
+        view.unmount();
+    });
+
+    it("clears hook status when the repo changes in the same tab", async () => {
+        const services = backendWith([PRE_COMMIT]);
+        const view = renderChecker(services);
+        await flush();
+        await openChecker(view);
+        await waitFor(() => runButton("pre-commit") != null);
+
+        view.report({ type: "started", hook: "pre-commit" });
+        view.report({
+            type: "settled",
+            result: hookResult({ hook: "pre-commit", durationMs: 40 }),
+        });
+        expect(dotClass()).toContain("bg-success");
+
+        // Switching repos keeps the component mounted, so the previous
+        // repo's status must not carry over to the new one.
+        view.switchRepo(8);
+        await flush();
+
+        expect(capture.runner?.runs).toEqual({});
+        expect(dotClass()).toBeNull();
         view.unmount();
     });
 });

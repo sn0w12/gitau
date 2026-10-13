@@ -49,6 +49,16 @@ export type HookRunState =
 /** One entry per hook name, keyed by hook. */
 export type HookRuns = Record<string, HookRunState>;
 
+/** No runs yet, shared so a repo with none reads as a stable empty value. */
+const NO_RUNS: HookRuns = {};
+
+/** The runs a repo has produced, tagged so a switch to another repo does not
+ * surface the previous repo's hook status. */
+interface RepoRuns {
+    repoId: number;
+    runs: HookRuns;
+}
+
 /** What a run has to show: a live run its streamed lines, a settled one the
  * result the backend parsed the same way. */
 export function outputOf(state: HookRunState | undefined): HookOutput {
@@ -82,46 +92,79 @@ export interface HookRunner {
  */
 export function useCommitHookRunner(repoId: number): HookRunner {
     const { backend, queryClient } = useAppServices();
-    const [runs, setRuns] = useState<HookRuns>({});
+    const [state, setState] = useState<RepoRuns>(() => ({
+        repoId,
+        runs: {},
+    }));
+    // Runs belong to the repo that produced them; another repo sees none
+    // until it starts its own.
+    const runs = state.repoId === repoId ? state.runs : NO_RUNS;
 
-    const begin = useCallback((hook: string) => {
-        setRuns((prev) => ({
-            ...prev,
-            [hook]: { phase: "running", output: NO_OUTPUT },
-        }));
-    }, []);
+    const setRuns = useCallback(
+        (fold: (runs: HookRuns) => HookRuns) => {
+            setState((prev) => {
+                const current = prev.repoId === repoId ? prev.runs : NO_RUNS;
+                const next = fold(current);
+                if (next === current && prev.repoId === repoId) return prev;
+                return { repoId, runs: next };
+            });
+        },
+        [repoId]
+    );
+
+    const begin = useCallback(
+        (hook: string) =>
+            setRuns((prev) => ({
+                ...prev,
+                [hook]: { phase: "running", output: NO_OUTPUT },
+            })),
+        [setRuns]
+    );
 
     /** A line for a run in flight. A line that lands after the run settled
      * belongs to a run already reported, so it is dropped. */
-    const append = useCallback((hook: string, chunk: HookOutputChunk) => {
-        setRuns((prev) => {
-            const current = prev[hook];
-            if (current?.phase !== "running") return prev;
-            return {
-                ...prev,
-                [hook]: {
-                    phase: "running",
-                    output: {
-                        lines: [
-                            ...current.output.lines,
-                            {
-                                text: chunk.text,
-                                spans: chunk.spans,
-                            },
-                        ],
-                        styles: [
-                            ...current.output.styles,
-                            ...(chunk.styles ?? []),
-                        ],
+    const append = useCallback(
+        (hook: string, chunk: HookOutputChunk) =>
+            setRuns((prev) => {
+                const current = prev[hook];
+                if (current?.phase !== "running") return prev;
+                return {
+                    ...prev,
+                    [hook]: {
+                        phase: "running",
+                        output: {
+                            lines: [
+                                ...current.output.lines,
+                                {
+                                    text: chunk.text,
+                                    spans: chunk.spans,
+                                },
+                            ],
+                            styles: [
+                                ...current.output.styles,
+                                ...(chunk.styles ?? []),
+                            ],
+                        },
                     },
-                },
-            };
-        });
-    }, []);
+                };
+            }),
+        [setRuns]
+    );
 
-    const settle = useCallback((hook: string, result: HookRunResult) => {
-        setRuns((prev) => ({ ...prev, [hook]: { phase: "done", result } }));
-    }, []);
+    const settle = useCallback(
+        (hook: string, result: HookRunResult) =>
+            setRuns((prev) => ({ ...prev, [hook]: { phase: "done", result } })),
+        [setRuns]
+    );
+
+    const fail = useCallback(
+        (hook: string, message: string) =>
+            setRuns((prev) => ({
+                ...prev,
+                [hook]: { phase: "failed", message },
+            })),
+        [setRuns]
+    );
 
     /** One event off a commit's hook channel. A commit is the other producer
      * of runs, so the checker sees a pre-commit nobody started by hand. */
@@ -151,16 +194,13 @@ export function useCommitHookRunner(repoId: number): HookRunner {
                 (chunk) => append(hook, chunk)
             );
             if (!outcome.ok) {
-                setRuns((prev) => ({
-                    ...prev,
-                    [hook]: { phase: "failed", message: outcome.error.message },
-                }));
+                fail(hook, outcome.error.message);
                 return;
             }
             settle(hook, outcome.value);
             await invalidateRepository(queryClient, repoId, ["status"]);
         },
-        [append, backend, begin, queryClient, repoId, settle]
+        [append, backend, begin, fail, queryClient, repoId, settle]
     );
 
     /** Sequential in pipeline order so output reads like a real commit. */
