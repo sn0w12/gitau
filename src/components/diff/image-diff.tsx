@@ -122,7 +122,8 @@ function SwipeImage({ oldUrl, newUrl }: { oldUrl?: string; newUrl?: string }) {
             )
         );
     }, []);
-    const clip = `inset(0 ${100 - position}% 0 0)`;
+    const newClip = `inset(0 ${100 - position}% 0 0)`;
+    const oldClip = `inset(0 0 0 ${position}%)`;
     return (
         <div className="min-h-0 min-w-0 flex-1 overflow-auto bg-muted/20 p-3">
             <div
@@ -156,9 +157,10 @@ function SwipeImage({ oldUrl, newUrl }: { oldUrl?: string; newUrl?: string }) {
                         alt=""
                         draggable="false"
                         className="absolute inset-0 size-full object-contain"
+                        style={{ clipPath: oldClip }}
                     />
                 ) : (
-                    <SwipeEmpty label="Old version" />
+                    <SwipeEmpty label="Old version" clipPath={oldClip} />
                 )}
                 {newUrl ? (
                     <img
@@ -166,10 +168,10 @@ function SwipeImage({ oldUrl, newUrl }: { oldUrl?: string; newUrl?: string }) {
                         alt=""
                         draggable="false"
                         className="absolute inset-0 size-full object-contain"
-                        style={{ clipPath: clip }}
+                        style={{ clipPath: newClip }}
                     />
                 ) : (
-                    <SwipeEmpty label="New version" clipPath={clip} />
+                    <SwipeEmpty label="New version" clipPath={newClip} />
                 )}
                 <div
                     draggable="false"
