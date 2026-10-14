@@ -24,7 +24,8 @@ function usage() {
         "Set the version across package.json, package-lock.json, Cargo.toml,",
         "Cargo.lock and crates/tauri/tauri.conf.json, then commit and tag it.",
         "",
-        "  major | minor | patch   bump that part of the current version",
+        "  major | minor | patch   bump that part of the current version, dropping",
+        "                        a prerelease suffix when it already targets that part",
         "                        (default when only options are given)",
         "  preview               cut a preview: x.y.(z+1)-preview.1, or bump the",
         "                        counter when already on x.y.z-preview.n",
@@ -133,29 +134,43 @@ function nextPreviewVersion(current) {
     return `${major}.${minor}.${patch + 1}-preview.1`;
 }
 
+function bumpVersion(current, kind) {
+    const match = current.match(SEMVER);
+    if (!match) {
+        fail(
+            `Current version ${current} is not plain semver, ` +
+                `pass an explicit version instead.`
+        );
+    }
+    const major = Number(match[1]);
+    const minor = Number(match[2]);
+    const patch = Number(match[3]);
+    const prerelease = match[4] ?? "";
+    if (kind === "major") {
+        if (prerelease && minor === 0 && patch === 0) {
+            return `${major}.0.0`;
+        }
+        return `${major + 1}.0.0`;
+    }
+    if (kind === "minor") {
+        if (prerelease && patch === 0) {
+            return `${major}.${minor}.0`;
+        }
+        return `${major}.${minor + 1}.0`;
+    }
+    if (prerelease) {
+        return `${major}.${minor}.${patch}`;
+    }
+    return `${major}.${minor}.${patch + 1}`;
+}
+
 function resolveTarget(raw, current) {
     const kind = raw.toLowerCase();
     if (kind === "preview") {
         return nextPreviewVersion(current);
     }
     if (BUMPS.has(kind)) {
-        const match = current.match(SEMVER);
-        if (!match) {
-            fail(
-                `Current version ${current} is not plain semver, ` +
-                    `pass an explicit version instead.`
-            );
-        }
-        const major = Number(match[1]);
-        const minor = Number(match[2]);
-        const patch = Number(match[3]);
-        if (kind === "major") {
-            return `${major + 1}.0.0`;
-        }
-        if (kind === "minor") {
-            return `${major}.${minor + 1}.0`;
-        }
-        return `${major}.${minor}.${patch + 1}`;
+        return bumpVersion(current, kind);
     }
     const explicit = raw.replace(/^v/, "");
     if (!SEMVER.test(explicit)) {
