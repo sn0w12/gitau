@@ -76,6 +76,9 @@ export function DiffSectionBar({
                                 <MenuRadioItem value="swipe">
                                     Swipe
                                 </MenuRadioItem>
+                                <MenuRadioItem value="difference">
+                                    Difference
+                                </MenuRadioItem>
                             </MenuRadioGroup>
                         ) : (
                             <MenuRadioGroup

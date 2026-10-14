@@ -157,7 +157,11 @@ pub fn builtin() -> SettingsSchema {
                             select(
                                 "imageDiffViewMode",
                                 "Image diff view",
-                                &[("sideBySide", "Side by side"), ("swipe", "Swipe")],
+                                &[
+                                    ("sideBySide", "Side by side"),
+                                    ("swipe", "Swipe"),
+                                    ("difference", "Difference"),
+                                ],
                             )
                             .description("Layout used by image diffs.")
                             .default_value(SettingValue::Str("sideBySide".to_owned())),

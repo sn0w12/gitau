@@ -30,6 +30,9 @@ export function ImageDiffView({
     if (mode === "swipe") {
         return <SwipeImage oldUrl={oldUrl} newUrl={newUrl} />;
     }
+    if (mode === "difference") {
+        return <DifferenceImage oldUrl={oldUrl} newUrl={newUrl} />;
+    }
     return (
         <div className="flex min-h-0 flex-1 gap-2 overflow-auto p-3">
             <ImagePane label="Old" url={oldUrl} className={OLD_IMAGE_CLASS} />
@@ -49,18 +52,22 @@ function ImagePane({
 }) {
     return (
         <div className="flex min-w-0 flex-1 flex-col items-center gap-2">
-            <span className="text-xs text-muted-foreground">{label}</span>
-            {url ? (
-                <ImageWithFallback
-                    src={url}
-                    alt={`${label} version`}
-                    className={className}
-                />
-            ) : (
-                <span className="m-auto text-xs text-muted-foreground">
-                    No image
-                </span>
-            )}
+            <span className="shrink-0 text-xs text-muted-foreground">
+                {label}
+            </span>
+            <div className="flex min-h-0 w-full flex-1 items-center justify-center">
+                {url ? (
+                    <ImageWithFallback
+                        src={url}
+                        alt={`${label} version`}
+                        className={className}
+                    />
+                ) : (
+                    <span className="text-xs text-muted-foreground">
+                        No image
+                    </span>
+                )}
+            </div>
         </div>
     );
 }
@@ -77,7 +84,7 @@ function ImageWithFallback({
     const [failed, setFailed] = React.useState(false);
     if (failed) {
         return (
-            <span className="m-auto text-xs text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
                 Image could not be displayed
             </span>
         );
@@ -125,10 +132,10 @@ function SwipeImage({ oldUrl, newUrl }: { oldUrl?: string; newUrl?: string }) {
     const newClip = `inset(0 ${100 - position}% 0 0)`;
     const oldClip = `inset(0 0 0 ${position}%)`;
     return (
-        <div className="min-h-0 min-w-0 flex-1 overflow-auto bg-muted/20 p-3">
+        <div className="flex min-h-0 min-w-0 flex-1 overflow-auto bg-muted/20 p-3">
             <div
                 ref={ref}
-                className="relative mx-auto aspect-video w-full max-w-5xl touch-none select-none"
+                className="relative m-auto aspect-video w-full max-w-5xl touch-none select-none"
                 onPointerMove={(event) =>
                     event.buttons > 0 && update(event.clientX)
                 }
@@ -177,6 +184,51 @@ function SwipeImage({ oldUrl, newUrl }: { oldUrl?: string; newUrl?: string }) {
                     draggable="false"
                     className="absolute inset-y-0 w-0.5 -translate-x-1/2 bg-primary"
                     style={{ left: `${position}%` }}
+                />
+            </div>
+        </div>
+    );
+}
+
+function DifferenceImage({
+    oldUrl,
+    newUrl,
+}: {
+    oldUrl?: string;
+    newUrl?: string;
+}) {
+    if (!oldUrl || !newUrl) {
+        const url = newUrl ?? oldUrl;
+        return (
+            <div className="flex min-h-0 flex-1 items-center justify-center p-3">
+                {url ? (
+                    <ImageWithFallback
+                        src={url}
+                        alt="Image"
+                        className={newUrl ? NEW_IMAGE_CLASS : OLD_IMAGE_CLASS}
+                    />
+                ) : (
+                    <span className="text-xs text-muted-foreground">
+                        No image
+                    </span>
+                )}
+            </div>
+        );
+    }
+    return (
+        <div className="flex min-h-0 min-w-0 flex-1 p-3 invert dark:invert-0">
+            <div className="relative min-h-0 min-w-0 flex-1">
+                <img
+                    src={oldUrl}
+                    alt=""
+                    draggable="false"
+                    className="absolute top-1/2 left-1/2 max-h-full max-w-full -translate-x-1/2 -translate-y-1/2 bg-black object-contain dark:bg-background"
+                />
+                <img
+                    src={newUrl}
+                    alt=""
+                    draggable="false"
+                    className="absolute top-1/2 left-1/2 max-h-full max-w-full -translate-x-1/2 -translate-y-1/2 object-contain mix-blend-difference"
                 />
             </div>
         </div>
