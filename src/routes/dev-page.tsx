@@ -9,7 +9,7 @@ import {
     PlayCircle,
     RotateCcw,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import { CustomMarkdown } from "@/components/github/markdown";
 import { CloneRepoDialog } from "@/components/repo/dialogs/clone-dialog";
@@ -25,6 +25,7 @@ import {
     gitignoreTemplatesQuery,
     licensesQuery,
 } from "@/lib/backend/queries/template-queries";
+import { cn } from "@/lib/utils";
 import { operationStore } from "@/stores/operation-store";
 import { repositoryStore } from "@/stores/repository-store";
 
@@ -52,6 +53,9 @@ export function DevPage() {
                 <ProgressSimulatorCard />
                 <BackendProbesCard />
                 <StoresCard />
+                <div className="xl:col-span-2">
+                    <ColorTokensCard />
+                </div>
                 <div className="xl:col-span-2">
                     <MarkdownCard />
                 </div>
@@ -314,6 +318,149 @@ function StoresCard() {
                     <p className="text-xs text-muted-foreground">none</p>
                 ) : null}
             </section>
+        </Card>
+    );
+}
+
+const COLOR_TOKEN_GROUPS: Array<{ title: string; tokens: string[] }> = [
+    {
+        title: "Surfaces",
+        tokens: [
+            "background",
+            "foreground",
+            "card",
+            "card-foreground",
+            "popover",
+            "popover-foreground",
+        ],
+    },
+    {
+        title: "Accents",
+        tokens: [
+            "primary",
+            "primary-foreground",
+            "secondary",
+            "secondary-foreground",
+            "muted",
+            "muted-foreground",
+            "accent",
+            "accent-foreground",
+        ],
+    },
+    { title: "Lines", tokens: ["border", "input", "ring"] },
+    {
+        title: "Sidebar",
+        tokens: [
+            "sidebar",
+            "sidebar-foreground",
+            "sidebar-primary",
+            "sidebar-primary-foreground",
+            "sidebar-accent",
+            "sidebar-accent-foreground",
+            "sidebar-border",
+            "sidebar-ring",
+        ],
+    },
+    {
+        title: "Charts",
+        tokens: ["chart-1", "chart-2", "chart-3", "chart-4", "chart-5"],
+    },
+    {
+        title: "Status",
+        tokens: [
+            "info",
+            "info-foreground",
+            "success",
+            "success-foreground",
+            "warning",
+            "warning-foreground",
+            "destructive",
+            "destructive-foreground",
+        ],
+    },
+    {
+        title: "Code",
+        tokens: ["code", "code-foreground", "code-highlight"],
+    },
+    {
+        title: "Graph lanes",
+        tokens: [
+            "graph-lane-0",
+            "graph-lane-1",
+            "graph-lane-2",
+            "graph-lane-3",
+            "graph-lane-4",
+            "graph-lane-5",
+            "graph-lane-6",
+            "graph-lane-7",
+        ],
+    },
+];
+
+function ColorTokenRow({ token }: { token: string }) {
+    const swatch = useRef<HTMLSpanElement>(null);
+    const [value, setValue] = useState("");
+
+    useLayoutEffect(() => {
+        if (swatch.current) {
+            setValue(getComputedStyle(swatch.current).backgroundColor);
+        }
+    }, [token]);
+
+    return (
+        <div className="flex items-center gap-2">
+            <span
+                ref={swatch}
+                className="size-6 shrink-0 rounded border border-foreground/15"
+                style={{ backgroundColor: `var(--${token})` }}
+            />
+            <span className="font-mono text-xs">--{token}</span>
+            <span className="ml-auto truncate font-mono text-xs text-muted-foreground">
+                {value}
+            </span>
+        </div>
+    );
+}
+
+/**
+ * Each panel carries its own theme class, so both modes render side by side
+ * regardless of the app's active theme. The computed value is the swatch's
+ * resolved background color.
+ */
+function ColorTokenPanel({ mode }: { mode: "light" | "dark" }) {
+    return (
+        <div
+            className={cn(
+                mode,
+                "flex flex-col gap-4 rounded-lg bg-background p-4 text-foreground ring-1 ring-foreground/10"
+            )}
+        >
+            {COLOR_TOKEN_GROUPS.map((group) => (
+                <section key={group.title} className="space-y-1.5">
+                    <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                        {group.title}
+                    </h3>
+                    {group.tokens.map((token) => (
+                        <ColorTokenRow key={token} token={token} />
+                    ))}
+                </section>
+            ))}
+        </div>
+    );
+}
+
+function ColorTokensCard() {
+    return (
+        <Card title="Color tokens">
+            <p className="text-xs text-muted-foreground">
+                Every semantic token resolved in both themes. Each panel
+                declares its own mode, so the comparison holds whatever theme
+                the app is in.
+            </p>
+            <div className="grid gap-4 lg:grid-cols-2">
+                <ColorTokenPanel mode="light" />
+                <ColorTokenPanel mode="dark" />
+            </div>
         </Card>
     );
 }
