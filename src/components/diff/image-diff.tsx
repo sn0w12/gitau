@@ -51,23 +51,19 @@ function ImagePane({
     className?: string;
 }) {
     return (
-        <div className="flex min-w-0 flex-1 flex-col items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2">
             <span className="shrink-0 text-xs text-muted-foreground">
                 {label}
             </span>
-            <div className="flex min-h-0 w-full flex-1 items-center justify-center">
-                {url ? (
-                    <ImageWithFallback
-                        src={url}
-                        alt={`${label} version`}
-                        className={className}
-                    />
-                ) : (
-                    <span className="text-xs text-muted-foreground">
-                        No image
-                    </span>
-                )}
-            </div>
+            {url ? (
+                <ImageWithFallback
+                    src={url}
+                    alt={`${label} version`}
+                    className={className}
+                />
+            ) : (
+                <span className="text-xs text-muted-foreground">No image</span>
+            )}
         </div>
     );
 }
@@ -97,7 +93,7 @@ function ImageWithFallback({
             aria-label={alt}
             onError={() => setFailed(true)}
             className={cn(
-                "max-h-full max-w-full border-1 object-contain",
+                "max-h-full min-h-0 max-w-full border-1 object-contain",
                 className
             )}
         />
