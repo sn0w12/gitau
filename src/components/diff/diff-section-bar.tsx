@@ -4,6 +4,7 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import type { DiffViewMode } from "@/hooks/changes/use-diff-view-mode";
 import type { ImageDiffViewMode } from "@/hooks/changes/use-image-diff-view-mode";
+import { useSettingOptions } from "@/hooks/settings/use-setting";
 import type { SectionKind } from "@/lib/backend/protocol";
 import type { RepoStateAction } from "@/lib/routing/repo-search";
 
@@ -38,6 +39,8 @@ export function DiffSectionBar({
     onImageModeChange?: (mode: ImageDiffViewMode) => void;
     dispatch: React.ActionDispatch<[action: RepoStateAction]>;
 }) {
+    const diffOptions = useSettingOptions("diffViewMode");
+    const imageOptions = useSettingOptions("imageDiffViewMode");
     return (
         <div className="flex h-8 shrink-0 items-center gap-1 border-b px-1">
             <div className="mx-1 flex min-w-0 flex-1 items-baseline gap-1 font-mono text-xs">
@@ -53,7 +56,11 @@ export function DiffSectionBar({
             <Menu>
                 <MenuTrigger
                     render={
-                        <Button size="icon-xs" variant="outline">
+                        <Button
+                            size="icon-xs"
+                            variant="outline"
+                            aria-label="Diff view settings"
+                        >
                             <Settings />
                         </Button>
                     }
@@ -70,15 +77,14 @@ export function DiffSectionBar({
                                     );
                                 }}
                             >
-                                <MenuRadioItem value="sideBySide">
-                                    Side by side
-                                </MenuRadioItem>
-                                <MenuRadioItem value="swipe">
-                                    Swipe
-                                </MenuRadioItem>
-                                <MenuRadioItem value="difference">
-                                    Difference
-                                </MenuRadioItem>
+                                {imageOptions.map((option) => (
+                                    <MenuRadioItem
+                                        key={option.value}
+                                        value={option.value}
+                                    >
+                                        {option.label}
+                                    </MenuRadioItem>
+                                ))}
                             </MenuRadioGroup>
                         ) : (
                             <MenuRadioGroup
@@ -87,12 +93,14 @@ export function DiffSectionBar({
                                     onModeChange(value as DiffViewMode);
                                 }}
                             >
-                                <MenuRadioItem value="unified">
-                                    Unified
-                                </MenuRadioItem>
-                                <MenuRadioItem value="split">
-                                    Split
-                                </MenuRadioItem>
+                                {diffOptions.map((option) => (
+                                    <MenuRadioItem
+                                        key={option.value}
+                                        value={option.value}
+                                    >
+                                        {option.label}
+                                    </MenuRadioItem>
+                                ))}
                             </MenuRadioGroup>
                         )}
                     </MenuGroup>

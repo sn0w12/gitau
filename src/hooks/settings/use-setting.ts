@@ -2,10 +2,15 @@ import { useSelector } from "@tanstack/react-store";
 import { useCallback } from "react";
 
 import type {
+    SelectOption,
     SettingDefinition,
     SettingsSchema,
     SettingsSection,
 } from "@/lib/backend/protocol";
+import {
+    findSettingDefinition,
+    getSettingOptions,
+} from "@/lib/settings/schema";
 import type {
     SettingKey,
     SettingsValues,
@@ -47,6 +52,24 @@ export function useSettingValue<TKey extends SettingKey>(
 
 export function useSettingsSchema(): SettingsSchema {
     return useSelector(settingsStore, (state) => state.schema);
+}
+
+/** The schema entry for one setting, or undefined before/without it. */
+export function useSettingDefinition<TKey extends SettingKey>(
+    key: TKey
+): SettingDefinition | undefined {
+    return useSelector(settingsStore, (state) =>
+        findSettingDefinition(state.schema, key)
+    );
+}
+
+/** A select setting's options, straight from the schema. */
+export function useSettingOptions<TKey extends SettingKey>(
+    key: TKey
+): SelectOption[] {
+    return useSelector(settingsStore, (state) =>
+        getSettingOptions(state.schema, key)
+    );
 }
 
 export type VisibleSettingDefinition = Extract<

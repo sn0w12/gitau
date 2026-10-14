@@ -24,7 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTab } from "@/components/ui/tabs";
 import type { AppCommandActions } from "@/contexts/app-command-context";
 import { useAppCommands } from "@/contexts/app-command-context";
-import { useSetting } from "@/hooks/settings/use-setting";
+import { useSetting, useSettingOptions } from "@/hooks/settings/use-setting";
 import { EASE_SNAPPY } from "@/lib/motion";
 import type { ThemeMode } from "@/lib/settings/settings.generated";
 import { cn } from "@/lib/utils";
@@ -249,25 +249,21 @@ export function OnboardingDialog() {
     );
 }
 
-const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
-    { value: "system", label: "System" },
-    { value: "light", label: "Light" },
-    { value: "dark", label: "Dark" },
-];
-
 function ThemeStep() {
     const { value: theme, setValue: setTheme } = useSetting("theme");
+    const options = useSettingOptions("theme");
 
     return (
         <div className="grid grid-cols-3 gap-3">
-            {THEME_OPTIONS.map((option) => {
-                const selected = theme === option.value;
+            {options.map((option) => {
+                const mode = option.value as ThemeMode;
+                const selected = theme === mode;
                 return (
                     <button
                         key={option.value}
                         type="button"
                         aria-pressed={selected}
-                        onClick={() => setTheme(option.value)}
+                        onClick={() => setTheme(mode)}
                         className={cn(
                             "flex cursor-pointer flex-col gap-2 rounded-xl border p-1.5 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
                             selected
@@ -276,7 +272,7 @@ function ThemeStep() {
                         )}
                     >
                         <div className="overflow-hidden rounded-lg">
-                            <AppPreview mode={option.value} />
+                            <AppPreview mode={mode} />
                         </div>
                         <span className="flex items-center px-1 pb-1 text-sm font-medium">
                             {option.label}
