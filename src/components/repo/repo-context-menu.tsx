@@ -1,7 +1,9 @@
 import {
+    CornerUpRight,
     FolderOpen,
     Pin,
     PinOff,
+    SquareArrowOutUpRight,
     SquarePen,
     Terminal,
     Trash,
@@ -10,9 +12,12 @@ import type * as React from "react";
 
 import { useOpenInEditor } from "@/hooks/repositories/use-open-in-editor";
 import { useOpenInTerminal } from "@/hooks/repositories/use-open-in-terminal";
+import { useOpenRepository } from "@/hooks/repositories/use-open-repository";
 import { useRemoveRepository } from "@/hooks/repositories/use-remove-repository";
+import { repoDisplayName } from "@/hooks/repositories/use-repo-identity";
 import { useRevealInFileManager } from "@/hooks/repositories/use-reveal-in-file-manager";
 import { useSettingValue } from "@/hooks/settings/use-setting";
+import { useOpenInNewTab } from "@/hooks/tabs/use-open-in-new-tab";
 import { toastError } from "@/lib/toast-error";
 import { setSetting } from "@/stores/settings-store";
 
@@ -41,6 +46,8 @@ export function RepoContextMenu({
     side = "right",
 }: RepoContextMenuProps): React.ReactElement {
     const removeRepo = useRemoveRepository();
+    const openRepo = useOpenRepository();
+    const openInNewTab = useOpenInNewTab();
     const { enabled, openInEditor } = useOpenInEditor();
     const openInTerminal = useOpenInTerminal();
     const revealInFileManager = useRevealInFileManager();
@@ -73,6 +80,26 @@ export function RepoContextMenu({
         <ContextMenu>
             <ContextMenuTrigger render={children} />
             <ContextMenuPopup side={side}>
+                <ContextMenuItem
+                    onClick={() => void openRepo(repoPath)}
+                    data-testid="repo-menu-open"
+                >
+                    <CornerUpRight />
+                    Open
+                </ContextMenuItem>
+                <ContextMenuItem
+                    onClick={() =>
+                        void openInNewTab({
+                            title: repoDisplayName(repoPath),
+                            repoPath,
+                        })
+                    }
+                    data-testid="repo-menu-open-in-new-tab"
+                >
+                    <SquareArrowOutUpRight />
+                    Open in new tab
+                </ContextMenuItem>
+                <ContextMenuSeparator />
                 <ContextMenuItem
                     disabled={!enabled}
                     onClick={() => void openInEditor(repoPath)}

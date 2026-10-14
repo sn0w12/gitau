@@ -11,6 +11,9 @@ import { ConfirmProvider } from "@/contexts/confirm-context";
 import { AppServicesContext } from "@/contexts/services-context";
 import type { BackendClient } from "@/lib/backend/transport/client";
 import type { Result } from "@/lib/backend/transport/result";
+import { resetAppRuntime } from "@/lib/bootstrap/app-runtime";
+import { appStore, selectActiveTab } from "@/stores/app-store";
+import { repositoryStore } from "@/stores/repository-store";
 import { seedSettingsForTests } from "@/stores/settings-store";
 
 (
@@ -23,7 +26,14 @@ function fakeServices() {
     const editorCalls: Array<{ path: string; relativePath?: string }> = [];
     const revealCalls: Array<{ path: string; relativePath?: string }> = [];
     const terminalCalls: string[] = [];
+    const openCalls: string[] = [];
     const backend = {
+        repositories: {
+            open: (path: string): Promise<Result<{ id: number }>> => {
+                openCalls.push(path);
+                return Promise.resolve({ ok: true, value: { id: 7 } });
+            },
+        },
         editor: {
             openInEditor: (
                 path: string,
@@ -57,6 +67,7 @@ function fakeServices() {
         editorCalls,
         revealCalls,
         terminalCalls,
+        openCalls,
     };
 }
 
@@ -64,6 +75,7 @@ function renderWith(
     services: ReturnType<typeof fakeServices>,
     ui: ReactElement
 ) {
+    resetAppRuntime(services);
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -126,6 +138,9 @@ function menuItem(testId: string): Element {
 describe("RepoContextMenu", () => {
     afterEach(() => {
         document.body.innerHTML = "";
+        resetAppRuntime(null);
+        appStore.setState(() => ({ tabs: [], activeTabId: null }));
+        repositoryStore.setState(() => ({ entries: new Map() }));
     });
 
     it("opens the repo folder in the configured editor", async () => {
@@ -239,6 +254,59 @@ describe("RepoContextMenu", () => {
                 item.hasAttribute("data-disabled")
         ).toBe(true);
         expect(services.editorCalls).toHaveLength(0);
+        view.unmount();
+    });
+
+    it("opens the repository in the active tab", async () => {
+        seedSettingsForTests({ editorCommand: "code" });
+        const services = fakeServices();
+        const view = renderWith(
+            services,
+            <RepoContextMenu repoPath={REPO_PATH}>
+                <button data-testid="repo-row">alpha</button>
+            </RepoContextMenu>
+        );
+
+        await rightClick(
+            view.container.querySelector('[data-testid="repo-row"]')!
+        );
+        const opened = await waitFor(() =>
+            Boolean(document.querySelector('[data-slot="context-menu-popup"]'))
+        );
+        expect(opened).toBe(true);
+
+        await click(menuItem("repo-menu-open"));
+        const settled = await waitFor(() => services.openCalls.length > 0);
+        expect(settled).toBe(true);
+        expect(services.openCalls[0]).toBe(REPO_PATH);
+        view.unmount();
+    });
+
+    it("opens the repository in a new tab bound to this session's id", async () => {
+        seedSettingsForTests({ editorCommand: "code" });
+        const services = fakeServices();
+        const view = renderWith(
+            services,
+            <RepoContextMenu repoPath={REPO_PATH}>
+                <button data-testid="repo-row">alpha</button>
+            </RepoContextMenu>
+        );
+
+        await rightClick(
+            view.container.querySelector('[data-testid="repo-row"]')!
+        );
+        const opened = await waitFor(() =>
+            Boolean(document.querySelector('[data-slot="context-menu-popup"]'))
+        );
+        expect(opened).toBe(true);
+
+        await click(menuItem("repo-menu-open-in-new-tab"));
+        const settled = await waitFor(() => appStore.state.tabs.length === 1);
+        expect(settled).toBe(true);
+
+        const tab = selectActiveTab();
+        expect(tab?.repoPath).toBe(REPO_PATH);
+        expect(tab?.lastResolvedHref).toBe("/repo/7");
         view.unmount();
     });
 });

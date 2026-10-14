@@ -4,6 +4,7 @@ import { isSortable, useSortable } from "@dnd-kit/react/sortable";
 import { useSelector } from "@tanstack/react-store";
 import {
     CircleDot,
+    CornerUpRight,
     Download,
     FlaskConical,
     Folder,
@@ -11,6 +12,7 @@ import {
     Inbox,
     Plus,
     Settings,
+    SquareArrowOutUpRight,
     User,
 } from "lucide-react";
 import { LayoutGroup, motion } from "motion/react";
@@ -29,6 +31,7 @@ import { useRemoteIcon } from "@/hooks/repositories/use-repository-queries";
 import { useSettingValue } from "@/hooks/settings/use-setting";
 import { useActiveTabPathname } from "@/hooks/tabs/use-active-tab-pathname";
 import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
+import { useOpenInNewTab } from "@/hooks/tabs/use-open-in-new-tab";
 import { EASE_SNAPPY } from "@/lib/motion";
 import { addExistingRepositoryFromDisk } from "@/lib/repositories/add-repository";
 import { isRepoPathname } from "@/lib/routing/active-route";
@@ -47,7 +50,13 @@ import { RestrictToList } from "./dnd/restrict-to-list";
 import { RepoLabel } from "./repo/repo-label";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Badge } from "./ui/badge";
-import { ContextMenuShortcut } from "./ui/context-menu";
+import {
+    ContextMenu,
+    ContextMenuItem,
+    ContextMenuPopup,
+    ContextMenuShortcut,
+    ContextMenuTrigger,
+} from "./ui/context-menu";
 import { Menu, MenuGroup, MenuItem, MenuPopup, MenuTrigger } from "./ui/menu";
 import { ScrollArea } from "./ui/scroll-area";
 import {
@@ -127,6 +136,37 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     );
 }
 
+function SidebarNavContextMenu({
+    title,
+    to,
+    children,
+}: {
+    title: string;
+    to: "/inbox" | "/pulls" | "/issues";
+    children: React.ReactElement;
+}) {
+    const router = useActiveTabRouter();
+    const openInNewTab = useOpenInNewTab();
+
+    return (
+        <ContextMenu>
+            <ContextMenuTrigger render={children} />
+            <ContextMenuPopup side="right">
+                <ContextMenuItem onClick={() => void router?.navigate({ to })}>
+                    <CornerUpRight />
+                    Open
+                </ContextMenuItem>
+                <ContextMenuItem
+                    onClick={() => void openInNewTab({ title, href: to })}
+                >
+                    <SquareArrowOutUpRight />
+                    Open in new tab
+                </ContextMenuItem>
+            </ContextMenuPopup>
+        </ContextMenu>
+    );
+}
+
 /**
  * Sidebar entry for the inbox: navigates to the page and overlays the
  * unread count from the shared notifications cache. The badge lives
@@ -139,21 +179,27 @@ function InboxSidebarItem() {
     const isActive = useActiveTabPathname() === "/inbox";
     return (
         <SidebarMenuItem>
-            <TooltipTrigger
-                handle={handle}
-                payload={inboxPayload}
-                render={
-                    <SidebarMenuButton
-                        variant="ghost"
-                        aria-current={isActive ? "page" : undefined}
-                        className={isActive ? ACTIVE_NAV_ITEM_CLASS : undefined}
-                        onClick={() => void router?.navigate({ to: "/inbox" })}
-                    >
-                        <Inbox />
-                        <span>Inbox</span>
-                    </SidebarMenuButton>
-                }
-            />
+            <SidebarNavContextMenu title="Inbox" to="/inbox">
+                <TooltipTrigger
+                    handle={handle}
+                    payload={inboxPayload}
+                    render={
+                        <SidebarMenuButton
+                            variant="ghost"
+                            aria-current={isActive ? "page" : undefined}
+                            className={
+                                isActive ? ACTIVE_NAV_ITEM_CLASS : undefined
+                            }
+                            onClick={() =>
+                                void router?.navigate({ to: "/inbox" })
+                            }
+                        >
+                            <Inbox />
+                            <span>Inbox</span>
+                        </SidebarMenuButton>
+                    }
+                />
+            </SidebarNavContextMenu>
             {unread > 0 ? (
                 <Badge
                     size="sm"
@@ -172,21 +218,27 @@ function PullRequestsSidebarItem() {
     const isActive = useActiveTabPathname() === "/pulls";
     return (
         <SidebarMenuItem>
-            <TooltipTrigger
-                handle={handle}
-                payload={pullRequestsPayload}
-                render={
-                    <SidebarMenuButton
-                        variant="ghost"
-                        aria-current={isActive ? "page" : undefined}
-                        className={isActive ? ACTIVE_NAV_ITEM_CLASS : undefined}
-                        onClick={() => void router?.navigate({ to: "/pulls" })}
-                    >
-                        <GitPullRequestArrow />
-                        <span>Pull Requests</span>
-                    </SidebarMenuButton>
-                }
-            />
+            <SidebarNavContextMenu title="Pull Requests" to="/pulls">
+                <TooltipTrigger
+                    handle={handle}
+                    payload={pullRequestsPayload}
+                    render={
+                        <SidebarMenuButton
+                            variant="ghost"
+                            aria-current={isActive ? "page" : undefined}
+                            className={
+                                isActive ? ACTIVE_NAV_ITEM_CLASS : undefined
+                            }
+                            onClick={() =>
+                                void router?.navigate({ to: "/pulls" })
+                            }
+                        >
+                            <GitPullRequestArrow />
+                            <span>Pull Requests</span>
+                        </SidebarMenuButton>
+                    }
+                />
+            </SidebarNavContextMenu>
         </SidebarMenuItem>
     );
 }
@@ -196,21 +248,27 @@ function IssuesSidebarItem() {
     const isActive = useActiveTabPathname() === "/issues";
     return (
         <SidebarMenuItem>
-            <TooltipTrigger
-                handle={handle}
-                payload={issuesPayload}
-                render={
-                    <SidebarMenuButton
-                        variant="ghost"
-                        aria-current={isActive ? "page" : undefined}
-                        className={isActive ? ACTIVE_NAV_ITEM_CLASS : undefined}
-                        onClick={() => void router?.navigate({ to: "/issues" })}
-                    >
-                        <CircleDot />
-                        <span>Issues</span>
-                    </SidebarMenuButton>
-                }
-            />
+            <SidebarNavContextMenu title="Issues" to="/issues">
+                <TooltipTrigger
+                    handle={handle}
+                    payload={issuesPayload}
+                    render={
+                        <SidebarMenuButton
+                            variant="ghost"
+                            aria-current={isActive ? "page" : undefined}
+                            className={
+                                isActive ? ACTIVE_NAV_ITEM_CLASS : undefined
+                            }
+                            onClick={() =>
+                                void router?.navigate({ to: "/issues" })
+                            }
+                        >
+                            <CircleDot />
+                            <span>Issues</span>
+                        </SidebarMenuButton>
+                    }
+                />
+            </SidebarNavContextMenu>
         </SidebarMenuItem>
     );
 }
