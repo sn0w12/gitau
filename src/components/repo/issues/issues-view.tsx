@@ -12,7 +12,6 @@ import {
     EmptyMedia,
     EmptyTitle,
 } from "@/components/ui/empty";
-import { Frame } from "@/components/ui/frame";
 import {
     Select,
     SelectItem,
@@ -155,7 +154,7 @@ export function IssuesView({
                         </Select>
                     </div>
                 </div>
-                <Frame className="min-h-0 w-full flex-1">
+                <div className="relative flex min-h-0 w-full flex-1 flex-col">
                     <TabsPanel
                         className="flex min-h-0 flex-1 flex-col"
                         value="open"
@@ -210,7 +209,7 @@ export function IssuesView({
                             onLoadMore={() => void issues.fetchNextPage()}
                         />
                     </TabsPanel>
-                </Frame>
+                </div>
             </Tabs>
         </div>
     );
