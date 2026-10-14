@@ -154,6 +154,16 @@ const components = {
             "data-lang" in props && typeof props["data-lang"] === "string"
                 ? props["data-lang"]
                 : undefined;
+        const title =
+            "data-code-title" in props &&
+            typeof props["data-code-title"] === "string" &&
+            props["data-code-title"].length > 0
+                ? props["data-code-title"]
+                : "data-filename" in props &&
+                    typeof props["data-filename"] === "string" &&
+                    props["data-filename"].length > 0
+                  ? props["data-filename"]
+                  : undefined;
         const text = fenceTextOf(children);
         if (text === null) {
             return (
@@ -167,8 +177,17 @@ const components = {
         return isMermaid(lang) ? (
             <MermaidDiagram text={text} />
         ) : (
-            <CodeBlock language={lang} text={text} />
+            <CodeBlock language={lang} text={text} title={title} />
         );
+    },
+    // The renderer wraps a fence with `file=`/`title=` info in a
+    // `<figure><figcaption>`; CodeBlock renders the title in its own header,
+    // so the wrapper is dropped rather than shown as loose text above it.
+    figure({ children }) {
+        return <>{children}</>;
+    },
+    figcaption() {
+        return null;
     },
     code(props) {
         return (

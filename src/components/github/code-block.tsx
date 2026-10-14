@@ -40,7 +40,13 @@ function clipSpans(spans: readonly number[], offset: number): number[] {
 
 /** Copies the block's source, revealed on hover so it never covers the first
  * line. */
-function CopyCodeButton({ text }: { text: string }) {
+function CopyCodeButton({
+    text,
+    inline = false,
+}: {
+    text: string;
+    inline?: boolean;
+}) {
     const { copyToClipboard, isCopied } = useCopyToClipboard();
     return (
         <Tooltip>
@@ -50,7 +56,11 @@ function CopyCodeButton({ text }: { text: string }) {
                         aria-label="Copy code"
                         size="icon-xs"
                         variant="ghost"
-                        className="absolute end-1 top-1 z-10 opacity-0 transition-opacity group-hover/code:opacity-100 focus-visible:opacity-100"
+                        className={cn(
+                            inline
+                                ? "ms-auto shrink-0 text-muted-foreground"
+                                : "absolute end-1 top-1 z-10 opacity-0 transition-opacity group-hover/code:opacity-100 focus-visible:opacity-100"
+                        )}
                         onClick={() => copyToClipboard(text)}
                     />
                 }
@@ -68,6 +78,9 @@ function CopyCodeButton({ text }: { text: string }) {
  * text immediately and upgrades to highlighted spans once the snippet
  * query lands; unknown languages stay plain.
  *
+ * `title` is the fence's `file=`/`title=` info, shown as a header bar with
+ * the language and copy control instead of spilling into the code as text.
+ *
  * `diff` marks the text as a unified hunk, whose leading `+`, `-`, and `@@`
  * markers are rendered unstyled, since they are diff punctuation rather than
  * code.
@@ -75,26 +88,43 @@ function CopyCodeButton({ text }: { text: string }) {
 export function CodeBlock({
     language,
     text,
+    title,
     diff = false,
 }: {
     language?: string;
     text: string;
+    title?: string;
     diff?: boolean;
 }) {
     const snippet = useHighlightedSnippet(language, text);
     const data = snippet.data;
     const highlighted = data?.highlighted === true;
     const lines = text.split("\n");
+    const hasLanguage = language !== undefined && language !== "plaintext";
 
     return (
         <Frame className="group/code relative">
-            {language && language !== "plaintext" ? (
+            {hasLanguage && title === undefined ? (
                 <div className="px-2 pt-1 font-mono text-muted-foreground">
                     {language}
                 </div>
             ) : null}
             <FramePanel className="code-hl p-0 font-mono text-xs">
-                <CopyCodeButton text={text} />
+                {title === undefined ? (
+                    <CopyCodeButton text={text} />
+                ) : (
+                    <div className="flex items-center gap-2 border-b px-2 py-1">
+                        <span className="min-w-0 truncate text-foreground">
+                            {title}
+                        </span>
+                        {hasLanguage ? (
+                            <span className="shrink-0 text-muted-foreground">
+                                {language}
+                            </span>
+                        ) : null}
+                        <CopyCodeButton text={text} inline />
+                    </div>
+                )}
                 <ScrollArea
                     scrollFade
                     overscrollContain
