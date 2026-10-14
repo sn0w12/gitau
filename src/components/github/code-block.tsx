@@ -100,7 +100,7 @@ export function CodeBlock({
                     overscrollContain
                     className="[&_[data-slot=scroll-area-viewport]]:max-h-96"
                 >
-                    <div className="ui-selectable w-max min-w-full p-2 whitespace-pre">
+                    <div className="ui-selectable w-max min-w-full p-2 pb-1 whitespace-pre">
                         {lines.map((rawLine, index) => {
                             // Spans are computed on the line without its
                             // terminator; a stray \r would render a phantom
