@@ -79,6 +79,7 @@ pub fn unstage(repo: &git2::Repository, paths: &[String]) -> Result<()> {
     if rels.is_empty() {
         return Ok(());
     }
+    let _gate = crate::engines::index_lock::gate();
     let head_object = head_commit(repo)?.map(|commit| commit.as_object().to_owned());
     let specs: Vec<String> = rels.iter().map(|r| r.as_str().to_owned()).collect();
     repo.reset_default(head_object.as_ref(), &specs)?;
@@ -86,6 +87,7 @@ pub fn unstage(repo: &git2::Repository, paths: &[String]) -> Result<()> {
 }
 
 pub fn discard(repo: &git2::Repository, paths: &[String], all: bool) -> Result<()> {
+    let _gate = crate::engines::index_lock::gate();
     let rels = if all {
         Vec::new()
     } else {
@@ -239,6 +241,7 @@ pub fn amend(repo: &git2::Repository, request: &AmendRequest) -> Result<CommitSu
 }
 
 pub fn checkout(repo: &mut git2::Repository, request: &CheckoutRequest) -> Result<()> {
+    let _gate = crate::engines::index_lock::gate();
     if !request.paths.is_empty() {
         let rels = validate_paths(&request.paths)?;
         let obj = repo.revparse_single(request.target.as_str()).map_err(|_| {
@@ -322,6 +325,7 @@ pub fn checkout(repo: &mut git2::Repository, request: &CheckoutRequest) -> Resul
 }
 
 pub fn reset(repo: &git2::Repository, request: &ResetRequest) -> Result<()> {
+    let _gate = crate::engines::index_lock::gate();
     let commit = crate::streaming::pipeline::resolve_commit(repo, &request.target)?;
     let kind = match request.kind {
         ResetKind::Soft => ResetType::Soft,
@@ -333,6 +337,7 @@ pub fn reset(repo: &git2::Repository, request: &ResetRequest) -> Result<()> {
 }
 
 pub fn create_branch(repo: &git2::Repository, request: &BranchCreateRequest) -> Result<BranchInfo> {
+    let _gate = crate::engines::index_lock::gate();
     let name = crate::domain::BranchName::parse(&request.name, "branch")?;
     let target_spec = request.start_point.clone().unwrap_or_default();
     let commit = crate::streaming::pipeline::resolve_commit(repo, &target_spec)?;
@@ -650,4 +655,71 @@ fn hook_failure_details(result: &crate::api::hooks::HookRunResult) -> String {
         }
     }
     parts.join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::RevisionSpec;
+
+    fn repo_with_uncommitted_change() -> (tempfile::TempDir, std::path::PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("repo");
+        std::fs::create_dir_all(&root).unwrap();
+        let repo = git2::Repository::init(&root).unwrap();
+        {
+            let mut config = repo.config().unwrap();
+            config.set_str("user.name", "Test").unwrap();
+            config.set_str("user.email", "test@example.com").unwrap();
+        }
+        std::fs::write(root.join("a.txt"), "v1\n").unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new("a.txt")).unwrap();
+        index.write().unwrap();
+        let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+        let sig = git2::Signature::now("Test", "test@example.com").unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, "initial", &tree, &[])
+            .unwrap();
+        std::fs::write(root.join("a.txt"), "v2\n").unwrap();
+        (dir, root)
+    }
+
+    /// The status engine holds `index.lock` while it refreshes stat data. A
+    /// checkout that reached libgit2 without the gate would fail locked.
+    #[test]
+    fn checkout_queues_behind_the_index_gate() {
+        let (_dir, root) = repo_with_uncommitted_change();
+        let mut repo = git2::Repository::open(&root).unwrap();
+        let target = repo.head().unwrap().shorthand().unwrap().to_owned();
+        let index_path = repo.path().join("index");
+
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+        let holder = std::thread::spawn(move || {
+            let _gate = crate::engines::index_lock::gate();
+            let _lock = gix::lock::File::acquire_to_update_resource(
+                index_path,
+                gix::lock::acquire::Fail::Immediately,
+                None,
+            )
+            .unwrap();
+            ready_tx.send(()).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        });
+        ready_rx.recv().unwrap();
+
+        let result = checkout(
+            &mut repo,
+            &CheckoutRequest {
+                target: RevisionSpec::parse(&target).unwrap(),
+                force: false,
+                mode: CheckoutMode::KeepChanges,
+                paths: vec![],
+            },
+        );
+        assert!(
+            result.is_ok(),
+            "checkout must wait for the gate: {result:?}"
+        );
+        holder.join().unwrap();
+    }
 }

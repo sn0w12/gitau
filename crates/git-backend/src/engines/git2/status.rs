@@ -10,6 +10,7 @@ use crate::error::{GitError, Result};
 
 pub fn status(session: &Git2Session, opts: &ApiStatusOptions) -> Result<StatusReport> {
     session.with_repository(|repo| {
+        let _gate = crate::engines::index_lock::gate();
         let mut options = StatusOptions::new();
         options
             .include_untracked(opts.include_untracked)
