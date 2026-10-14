@@ -14,7 +14,7 @@ import {
     X,
 } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { WindowTitlebar } from "@/components/window-controls";
 import { useAppServices } from "@/contexts/services-context";
@@ -196,6 +196,14 @@ export function TitlebarTabList() {
     const activeTabId = useSelector(appStore, (state) => state.activeTabId);
     const restrictToList = useMemo(() => restrictToStripBounds(), []);
     const viewportRef = useRef<HTMLDivElement | null>(null);
+    const [hoveredTabId, setHoveredTabId] = useState<string | null>(null);
+    const [newTabHovered, setNewTabHovered] = useState(false);
+
+    const lastTabId = tabs.at(-1)?.tabId ?? null;
+    const hideDivider =
+        newTabHovered ||
+        (lastTabId !== null &&
+            (activeTabId === lastTabId || hoveredTabId === lastTabId));
 
     // Standard mouse wheels only scroll vertically; translate that into
     // horizontal tab scrolling, since the viewport is a plain overflow box.
@@ -253,13 +261,27 @@ export function TitlebarTabList() {
                                     tab={tab}
                                     index={index}
                                     modifiers={[restrictToList]}
+                                    onHoverChange={
+                                        index === tabs.length - 1
+                                            ? (hovered) =>
+                                                  setHoveredTabId(
+                                                      hovered ? tab.tabId : null
+                                                  )
+                                            : undefined
+                                    }
                                 >
                                     <TitlebarTab tab={tab} />
                                 </TitlebarTabContextMenu>
                             ))}
                         </div>
                     </ScrollArea>
-                    <TitlebarNewTab />
+                    <div
+                        className={cn(
+                            "mr-0.5 -ml-3.75 h-3 w-px bg-muted transition-opacity",
+                            hideDivider && "opacity-0"
+                        )}
+                    />
+                    <TitlebarNewTab onHoverChange={setNewTabHovered} />
                 </TabsPrimitive.List>
             </TabsPrimitive.Root>
         </DragDropProvider>
@@ -397,7 +419,11 @@ function TitlebarTab({ tab }: { tab: TabRecord }) {
     );
 }
 
-function TitlebarNewTab() {
+function TitlebarNewTab({
+    onHoverChange,
+}: {
+    onHoverChange?: (hovered: boolean) => void;
+}) {
     const NewTabContent = () => {
         return (
             <span>
@@ -415,10 +441,16 @@ function TitlebarNewTab() {
                     size="icon-xs"
                     variant="ghost"
                     aria-label="New tab"
-                    className="-ml-3"
+                    className="rounded-lg not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-3 sm:not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-3"
                     onClick={() => {
                         openTab(createTabRecord({ title: DEFAULT_TAB_NAME }));
                     }}
+                    onMouseEnter={
+                        onHoverChange ? () => onHoverChange(true) : undefined
+                    }
+                    onMouseLeave={
+                        onHoverChange ? () => onHoverChange(false) : undefined
+                    }
                     render={
                         <span role="button">
                             <Plus />
@@ -434,11 +466,13 @@ function TitlebarTabContextMenu({
     tab,
     index,
     modifiers,
+    onHoverChange,
     children,
 }: {
     tab: TabRecord;
     index: number;
     modifiers: Modifiers;
+    onHoverChange?: (hovered: boolean) => void;
     children: ReactNode;
 }) {
     const { backend } = useAppServices();
@@ -457,7 +491,17 @@ function TitlebarTabContextMenu({
 
     return (
         <ContextMenu>
-            <ContextMenuTrigger ref={ref}>{children}</ContextMenuTrigger>
+            <ContextMenuTrigger
+                ref={ref}
+                onMouseEnter={
+                    onHoverChange ? () => onHoverChange(true) : undefined
+                }
+                onMouseLeave={
+                    onHoverChange ? () => onHoverChange(false) : undefined
+                }
+            >
+                {children}
+            </ContextMenuTrigger>
             <ContextMenuPopup>
                 <ContextMenuItem
                     onClick={() => void closeTabFully(tab.tabId, backend)}
