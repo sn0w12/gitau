@@ -51,6 +51,28 @@ async function waitFor(predicate: () => boolean): Promise<boolean> {
     return predicate();
 }
 
+async function openMenu(
+    ownerDocument: Document,
+    trigger: Element
+): Promise<HTMLElement> {
+    await click(trigger);
+    const opened = await waitFor(
+        () => ownerDocument.querySelector('[data-slot="menu-popup"]') !== null
+    );
+    expect(opened).toBe(true);
+    return ownerDocument.querySelector(
+        '[data-slot="menu-popup"]'
+    ) as HTMLElement;
+}
+
+function menuItems(popup: HTMLElement): HTMLElement[] {
+    return [
+        ...popup.querySelectorAll(
+            '[data-slot="menu-item"], [data-slot="menu-radio-item"]'
+        ),
+    ] as HTMLElement[];
+}
+
 describe("RepoViewSwitcher", () => {
     beforeEach(() => {
         seedSettingsForTests({
@@ -75,32 +97,17 @@ describe("RepoViewSwitcher", () => {
         expect(view.container.textContent).toContain("Current View");
         expect(view.container.textContent).toContain("Overview");
 
+        const ownerDocument = view.container.ownerDocument;
         const trigger = view.container.querySelector(
             '[data-slot="menu-trigger"]'
         ) as HTMLElement;
-        await click(trigger);
-        const opened = await waitFor(
-            () =>
-                view.container.ownerDocument.querySelector(
-                    '[data-slot="menu-popup"]'
-                ) !== null
-        );
-        expect(opened).toBe(true);
 
-        const popup = view.container.ownerDocument.querySelector(
-            '[data-slot="menu-popup"]'
-        ) as HTMLElement;
+        const popup = await openMenu(ownerDocument, trigger);
         expect(popup.textContent).toContain("Commit Graph");
         expect(popup.textContent).toContain("Issues");
         expect(popup.textContent).toContain("Pull requests");
 
-        const items = [
-            ...popup.querySelectorAll(
-                '[data-slot="menu-item"], [data-slot="menu-radio-item"]'
-            ),
-        ] as HTMLElement[];
-
-        const graphItem = items.find((item) =>
+        const graphItem = menuItems(popup).find((item) =>
             item.textContent?.includes("Commit Graph")
         );
         expect(graphItem).toBeDefined();
@@ -108,7 +115,8 @@ describe("RepoViewSwitcher", () => {
         await flush();
         expect(picked).toEqual(["graph"]);
 
-        const issueItem = items.find((item) =>
+        const issuePopup = await openMenu(ownerDocument, trigger);
+        const issueItem = menuItems(issuePopup).find((item) =>
             item.textContent?.includes("Issues")
         );
         expect(issueItem?.getAttribute("aria-disabled")).toBe(null);
@@ -116,7 +124,8 @@ describe("RepoViewSwitcher", () => {
         await flush();
         expect(picked).toEqual(["graph", "issues"]);
 
-        const prItem = items.find((item) =>
+        const prPopup = await openMenu(ownerDocument, trigger);
+        const prItem = menuItems(prPopup).find((item) =>
             item.textContent?.includes("Pull requests")
         );
         expect(prItem?.getAttribute("aria-disabled")).toBe(null);

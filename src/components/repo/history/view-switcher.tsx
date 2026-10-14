@@ -1,4 +1,5 @@
 import { ChevronDown, LayoutGrid } from "lucide-react";
+import { useState } from "react";
 
 import { ToolbarTriggerFrame } from "@/components/repo/toolbar-trigger";
 import {
@@ -29,8 +30,10 @@ export function RepoViewSwitcher({
     view: RepoView;
     onView: (view: RepoView) => void;
 }) {
+    const [open, setOpen] = useState(false);
+
     return (
-        <Menu>
+        <Menu open={open} onOpenChange={setOpen}>
             <ToolbarTriggerFrame>
                 <MenuTrigger
                     className={REPO_TOOLBAR_TRIGGER_CLASS}
@@ -59,7 +62,10 @@ export function RepoViewSwitcher({
                             <MenuRadioItem
                                 key={repoView}
                                 value={repoView}
-                                onClick={() => onView(repoView)}
+                                onClick={() => {
+                                    onView(repoView);
+                                    setOpen(false);
+                                }}
                                 aria-selected={view === repoView || undefined}
                             >
                                 {label}
