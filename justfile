@@ -29,6 +29,9 @@ dev-workspace:
 build:
     npm run tauri build
 
+build-scan:
+    npm run tauri build -- --config crates/tauri/tauri.scan.conf.json
+
 bench *args="":
     cargo bench -p git-backend{{ if args == "" { "" } else { " " + args } }}
 

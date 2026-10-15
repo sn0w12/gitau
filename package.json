@@ -5,6 +5,7 @@
     "scripts": {
         "dev": "vite dev --port 3000",
         "build": "vite build",
+        "build:scan": "vite build --mode react-scan",
         "preview": "vite preview",
         "test": "vitest run",
         "ci": "node scripts/ci.mjs",
@@ -16,6 +17,7 @@
         "typecheck": "tsc --noEmit",
         "icons": "node scripts/generate-icons.mjs",
         "tauri": "dotenv -- tauri",
+        "tauri:scan": "dotenv -- tauri build --config crates/tauri/tauri.scan.conf.json",
         "set-version": "node scripts/version.mjs",
         "create-dev-workspace": "node scripts/create-dev-workspace.mjs"
     },
