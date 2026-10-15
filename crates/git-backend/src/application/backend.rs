@@ -2405,7 +2405,6 @@ fn commit_detail_blocking(
     let repo = git2::Repository::discover(&path)
         .map_err(|e| crate::streaming::pipeline::map_open_error(&path, e))?;
     let commit = crate::streaming::pipeline::resolve_commit(&repo, &query.revision)?;
-    let summary = mutations::summarize_commit(&repo, commit.id())?;
 
     let mut opts = crate::streaming::pipeline::build_options(&DiffRequest {
         comparison: crate::streaming::model::DiffComparison::WorkingTree,
@@ -2426,30 +2425,26 @@ fn commit_detail_blocking(
     use crate::domain::FileChangeStat;
     use crate::streaming::model::SectionKind;
     let sections = crate::streaming::pipeline::enumerate_sections(&diff)?;
+
+    // Per-file line counts come from blob contents rather than a built patch,
+    // so the deltas of a wide commit run on every core instead of one.
+    let pairs: Vec<(git2::Oid, git2::Oid)> = diff
+        .deltas()
+        .map(|delta| (delta.old_file().id(), delta.new_file().id()))
+        .collect();
+    let counts = crate::engines::git2::history::per_delta_numstat(&repo, &pairs)?;
+
     let mut files = Vec::with_capacity(sections.len());
     let mut total_additions = 0u64;
     let mut total_deletions = 0u64;
 
     for section in &sections {
-        let mut additions = 0u32;
-        let mut deletions = 0u32;
-        let mut binary = section.binary;
-        if let Some(patch) = git2::Patch::from_diff(&diff, section.section_id as usize)? {
-            for hunk in 0..patch.num_hunks() {
-                for line in 0..patch.num_lines_in_hunk(hunk)? {
-                    let diff_line = patch.line_in_hunk(hunk, line)?;
-                    match diff_line.origin() {
-                        '+' => additions += 1,
-                        '-' => deletions += 1,
-                        _ => {}
-                    }
-                }
-            }
-        } else {
-            binary = true;
-        }
-        total_additions += additions as u64;
-        total_deletions += deletions as u64;
+        let (additions, deletions, binary) = counts
+            .get(section.section_id as usize)
+            .copied()
+            .unwrap_or((0, 0, section.binary));
+        total_additions += additions;
+        total_deletions += deletions;
         files.push(FileChangeStat {
             path: section.path.clone(),
             old_path: section.old_path.clone(),
@@ -2462,15 +2457,23 @@ fn commit_detail_blocking(
                 SectionKind::TypeChanged => ChangeKind::TypeChanged,
                 SectionKind::Conflicted => ChangeKind::Conflicted,
             },
-            additions,
-            deletions,
-            binary,
+            additions: additions as u32,
+            deletions: deletions as u32,
+            binary: section.binary || binary,
             old_mode: None,
             new_mode: None,
             old_id: None,
             new_id: None,
         });
     }
+
+    let summary = mutations::summarize_with_stats(
+        &commit,
+        crate::engines::git2::history::commit_tags(&repo, commit.id())?,
+        pairs.len() as u32,
+        total_additions,
+        total_deletions,
+    )?;
 
     Ok(crate::domain::CommitDetail {
         summary,

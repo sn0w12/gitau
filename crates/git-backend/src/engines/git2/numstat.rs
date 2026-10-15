@@ -506,13 +506,21 @@ pub fn delta_numstat(repo: &Repository, delta: &DiffDelta<'_>) -> (u64, u64) {
     let new_blob = side(repo, delta.new_file());
     let old = old_blob.as_ref().map_or(&[][..], |blob| blob.content());
     let new = new_blob.as_ref().map_or(&[][..], |blob| blob.content());
+    let (insertions, deletions, _) = numstat_bytes(old, new);
+    (insertions, deletions)
+}
 
+/// `(insertions, deletions, binary)` from the two sides' contents, matching
+/// libgit2's `Diff::stats` line counts without building a patch. An absent side
+/// is empty, which makes an added file all insertions and a deleted one all
+/// deletions.
+pub fn numstat_bytes(old: &[u8], new: &[u8]) -> (u64, u64, bool) {
     // A mode-only change keeps both blobs identical.
     if old == new {
-        return (0, 0);
+        return (0, 0, false);
     }
     if is_binary(old) || is_binary(new) {
-        return (0, 0);
+        return (0, 0, true);
     }
 
     let old_records = split_records(old);
@@ -557,7 +565,7 @@ pub fn delta_numstat(repo: &Repository, delta: &DiffDelta<'_>) -> (u64, u64) {
 
     let insertions = new_changed.iter().filter(|c| **c).count() as u64;
     let deletions = old_changed.iter().filter(|c| **c).count() as u64;
-    (insertions, deletions)
+    (insertions, deletions, false)
 }
 
 /// xdiff's `xdl_trim_ends`: matching records at both ends are never changed,

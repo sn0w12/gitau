@@ -52,6 +52,10 @@ name = "numstat"
 harness = false
 
 [[bench]]
+name = "huge"
+harness = false
+
+[[bench]]
 name = "highlight"
 harness = false
 

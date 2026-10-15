@@ -277,16 +277,68 @@ pub(crate) fn commit_diff_stats(
         Some(&mut DiffOptions::new()),
     )?;
 
-    let mut files_changed = 0u32;
+    let files_changed = diff.deltas().len() as u32;
+    let pairs: Vec<(git2::Oid, git2::Oid)> = diff
+        .deltas()
+        .map(|delta| (delta.old_file().id(), delta.new_file().id()))
+        .collect();
+    let (additions, deletions) = sum_numstat(repo, &pairs)?;
+    Ok((files_changed, additions, deletions))
+}
+
+/// Deltas below this count run on the calling thread: a commit's file count
+/// rarely reaches it, and the page/chart walk already parallelizes across
+/// commits, so spawning a nested rayon tree for a handful of small files costs
+/// more than it saves.
+const PARALLEL_DELTA_THRESHOLD: usize = 16;
+
+/// Per-delta `(insertions, deletions, binary)` in input order, fanning a wide
+/// commit across the rayon pool. A single commit touching hundreds of files is
+/// otherwise one indivisible task inside the commit-level parallel walk, so its
+/// blob reads and Myers runs pin one core while the rest idle.
+pub(crate) fn per_delta_numstat(
+    repo: &git2::Repository,
+    pairs: &[(git2::Oid, git2::Oid)],
+) -> Result<Vec<(u64, u64, bool)>> {
+    if pairs.len() < PARALLEL_DELTA_THRESHOLD {
+        return Ok(pairs
+            .iter()
+            .map(|(old, new)| pair_numstat(repo, *old, *new))
+            .collect());
+    }
+
+    let git_dir: PathBuf = repo.path().to_path_buf();
+    pairs
+        .par_iter()
+        .map(|(old, new)| {
+            local::with_repository(&git_dir, |wrepo| Ok(pair_numstat(wrepo, *old, *new)))
+        })
+        .collect()
+}
+
+fn sum_numstat(repo: &git2::Repository, pairs: &[(git2::Oid, git2::Oid)]) -> Result<(u64, u64)> {
     let mut additions = 0u64;
     let mut deletions = 0u64;
-    for delta in diff.deltas() {
-        files_changed += 1;
-        let (added, deleted) = crate::engines::git2::numstat::delta_numstat(repo, &delta);
+    for (added, deleted, _) in per_delta_numstat(repo, pairs)? {
         additions += added;
         deletions += deleted;
     }
-    Ok((files_changed, additions, deletions))
+    Ok((additions, deletions))
+}
+
+fn pair_numstat(repo: &git2::Repository, old: git2::Oid, new: git2::Oid) -> (u64, u64, bool) {
+    let old_blob = load_side(repo, old);
+    let new_blob = load_side(repo, new);
+    let old = old_blob.as_ref().map_or(&[][..], |blob| blob.content());
+    let new = new_blob.as_ref().map_or(&[][..], |blob| blob.content());
+    crate::engines::git2::numstat::numstat_bytes(old, new)
+}
+
+fn load_side(repo: &git2::Repository, oid: git2::Oid) -> Option<git2::Blob<'_>> {
+    if oid == git2::Oid::ZERO_SHA1 {
+        return None;
+    }
+    repo.find_blob(oid).ok()
 }
 
 /// Tag names whose target (peeled for annotated tags) resolves to `oid`.
