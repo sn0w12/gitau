@@ -34,8 +34,7 @@ import {
     useGithubSearchIssues,
     useLocalRepoMap,
 } from "@/hooks/github/use-github-issues";
-import { useOpenThread } from "@/hooks/github/use-open-thread";
-import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
+import { useInternalLink } from "@/hooks/tabs/use-internal-link";
 import type { SearchIssueItem } from "@/lib/backend/protocol";
 import { GitBackendError } from "@/lib/backend/transport/invoke";
 import { parseIssueUrl } from "@/lib/github/repo-coords";
@@ -47,7 +46,7 @@ import { formatRelativeDate } from "@/lib/utils";
  * at a time. Styled like the inbox page.
  */
 export function IssuesPage() {
-    const router = useActiveTabRouter();
+    const link = useInternalLink();
     const account = useGithubAccount();
     const search = useGithubSearchIssues();
     const localRepos = useLocalRepoMap();
@@ -126,11 +125,10 @@ export function IssuesPage() {
                                 </EmptyHeader>
                                 <EmptyContent>
                                     <Button
-                                        onClick={() =>
-                                            void router?.navigate({
-                                                to: "/account",
-                                            })
-                                        }
+                                        {...link({
+                                            title: "Account",
+                                            href: "/account",
+                                        })}
                                     >
                                         Go to Account
                                     </Button>
@@ -175,11 +173,10 @@ export function IssuesPage() {
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() =>
-                                                void router?.navigate({
-                                                    to: "/account",
-                                                })
-                                            }
+                                            {...link({
+                                                title: "Account",
+                                                href: "/account",
+                                            })}
                                         >
                                             Go to Account
                                         </Button>
@@ -241,7 +238,7 @@ function IssuesRow({
     issue: SearchIssueItem;
     localRepos: Map<string, string>;
 }) {
-    const openThread = useOpenThread();
+    const link = useInternalLink();
 
     const issueTarget = parseIssueUrl(issue.htmlUrl);
     const repoPath = issueTarget
@@ -254,9 +251,11 @@ function IssuesRow({
         repoPath !== undefined && issueTarget ? (
             <button
                 type="button"
-                onClick={() =>
-                    void openThread(repoPath, "issue", issueTarget.number)
-                }
+                {...link({
+                    title: issue.title || "(no title)",
+                    repoPath,
+                    thread: { kind: "issue", number: issueTarget.number },
+                })}
                 className="flex min-w-0 cursor-pointer items-center gap-1 text-left font-medium hover:underline"
             >
                 <span className="min-w-0 truncate">

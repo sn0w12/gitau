@@ -32,8 +32,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useGithubAccount } from "@/hooks/github/use-github-account";
 import { useLocalRepoMap } from "@/hooks/github/use-github-issues";
 import { useGithubSearchPullRequests } from "@/hooks/github/use-github-pull-requests";
-import { useOpenThread } from "@/hooks/github/use-open-thread";
-import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
+import { useInternalLink } from "@/hooks/tabs/use-internal-link";
 import type { GithubPullRequestListItem } from "@/lib/backend/protocol";
 import { GitBackendError } from "@/lib/backend/transport/invoke";
 import { parsePullUrl } from "@/lib/github/repo-coords";
@@ -45,7 +44,7 @@ import { formatRelativeDate } from "@/lib/utils";
  * time. Styled like the inbox and issues pages.
  */
 export function PullsPage() {
-    const router = useActiveTabRouter();
+    const link = useInternalLink();
     const account = useGithubAccount();
     const search = useGithubSearchPullRequests();
     const localRepos = useLocalRepoMap();
@@ -125,11 +124,10 @@ export function PullsPage() {
                                 </EmptyHeader>
                                 <EmptyContent>
                                     <Button
-                                        onClick={() =>
-                                            void router?.navigate({
-                                                to: "/account",
-                                            })
-                                        }
+                                        {...link({
+                                            title: "Account",
+                                            href: "/account",
+                                        })}
                                     >
                                         Go to Account
                                     </Button>
@@ -174,11 +172,10 @@ export function PullsPage() {
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() =>
-                                                void router?.navigate({
-                                                    to: "/account",
-                                                })
-                                            }
+                                            {...link({
+                                                title: "Account",
+                                                href: "/account",
+                                            })}
                                         >
                                             Go to Account
                                         </Button>
@@ -242,7 +239,7 @@ function PullsRow({
     pull: GithubPullRequestListItem;
     localRepos: Map<string, string>;
 }) {
-    const openThread = useOpenThread();
+    const link = useInternalLink();
 
     const target = parsePullUrl(pull.htmlUrl);
     const repoPath = target
@@ -255,7 +252,11 @@ function PullsRow({
         repoPath !== undefined ? (
             <button
                 type="button"
-                onClick={() => void openThread(repoPath, "pull", pull.number)}
+                {...link({
+                    title: pull.title || "(no title)",
+                    repoPath,
+                    thread: { kind: "pull", number: pull.number },
+                })}
                 className="flex min-w-0 cursor-pointer items-center gap-1 text-left font-medium hover:underline"
             >
                 <span className="min-w-0 truncate">

@@ -36,7 +36,7 @@ import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
 import { useGithubAccount } from "@/hooks/github/use-github-account";
 import { useGithubCoords } from "@/hooks/github/use-github-issues";
 import { useRepoPullRequests } from "@/hooks/github/use-github-pull-requests";
-import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
+import { useInternalLink } from "@/hooks/tabs/use-internal-link";
 import type {
     GithubLabel,
     GithubPullRequestListItem,
@@ -225,7 +225,7 @@ function PullsTable({
         return () => observer.disconnect();
     }, [hasNextPage, isFetchingNextPage, onLoadMore]);
 
-    const router = useActiveTabRouter();
+    const link = useInternalLink();
 
     if (isLoading) {
         return <PullsTableSkeleton />;
@@ -304,11 +304,10 @@ function PullsTable({
                         <TableRow
                             key={pull.number}
                             className="cursor-pointer"
-                            onClick={() => {
-                                router?.navigate({
-                                    to: `/repo/${repoId}/pull/${pull.number}`,
-                                });
-                            }}
+                            {...link({
+                                title: pull.title,
+                                href: `/repo/${repoId}/pull/${pull.number}`,
+                            })}
                         >
                             <TableCell className="font-medium">
                                 {pull.title}

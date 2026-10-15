@@ -35,7 +35,7 @@ import {
     useGithubCoords,
     useRepoIssues,
 } from "@/hooks/github/use-github-issues";
-import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
+import { useInternalLink } from "@/hooks/tabs/use-internal-link";
 import type { GithubIssueListItem, GithubLabel } from "@/lib/backend/protocol";
 import type { ListTab } from "@/lib/routing/repo-search";
 
@@ -271,7 +271,7 @@ function IssuesTable({
         observer.observe(sentinel);
         return () => observer.disconnect();
     }, [hasNextPage, isFetchingNextPage, onLoadMore]);
-    const router = useActiveTabRouter();
+    const link = useInternalLink();
 
     if (isLoading) {
         return <IssuesTableSkeleton />;
@@ -350,11 +350,10 @@ function IssuesTable({
                         <TableRow
                             key={issue.number}
                             className="cursor-pointer"
-                            onClick={() => {
-                                router?.navigate({
-                                    to: `/repo/${repoId}/issue/${issue.number}`,
-                                });
-                            }}
+                            {...link({
+                                title: issue.title,
+                                href: `/repo/${repoId}/issue/${issue.number}`,
+                            })}
                         >
                             <TableCell className="font-medium">
                                 {issue.title}

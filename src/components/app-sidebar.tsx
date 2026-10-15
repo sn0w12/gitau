@@ -31,6 +31,7 @@ import { useRemoteIcon } from "@/hooks/repositories/use-repository-queries";
 import { useSettingValue } from "@/hooks/settings/use-setting";
 import { useActiveTabPathname } from "@/hooks/tabs/use-active-tab-pathname";
 import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
+import { useInternalLink } from "@/hooks/tabs/use-internal-link";
 import { useOpenInNewTab } from "@/hooks/tabs/use-open-in-new-tab";
 import { EASE_SNAPPY } from "@/lib/motion";
 import { addExistingRepositoryFromDisk } from "@/lib/repositories/add-repository";
@@ -174,7 +175,7 @@ function SidebarNavContextMenu({
  * label children; it stays hidden while signed out or fully read.
  */
 function InboxSidebarItem() {
-    const router = useActiveTabRouter();
+    const link = useInternalLink();
     const { unread, exact } = useGithubUnreadCount();
     const isActive = useActiveTabPathname() === "/inbox";
     return (
@@ -190,9 +191,7 @@ function InboxSidebarItem() {
                             className={
                                 isActive ? ACTIVE_NAV_ITEM_CLASS : undefined
                             }
-                            onClick={() =>
-                                void router?.navigate({ to: "/inbox" })
-                            }
+                            {...link({ title: "Inbox", href: "/inbox" })}
                         >
                             <Inbox />
                             <span>Inbox</span>
@@ -214,7 +213,7 @@ function InboxSidebarItem() {
 }
 
 function PullRequestsSidebarItem() {
-    const router = useActiveTabRouter();
+    const link = useInternalLink();
     const isActive = useActiveTabPathname() === "/pulls";
     return (
         <SidebarMenuItem>
@@ -229,9 +228,10 @@ function PullRequestsSidebarItem() {
                             className={
                                 isActive ? ACTIVE_NAV_ITEM_CLASS : undefined
                             }
-                            onClick={() =>
-                                void router?.navigate({ to: "/pulls" })
-                            }
+                            {...link({
+                                title: "Pull Requests",
+                                href: "/pulls",
+                            })}
                         >
                             <GitPullRequestArrow />
                             <span>Pull Requests</span>
@@ -244,7 +244,7 @@ function PullRequestsSidebarItem() {
 }
 
 function IssuesSidebarItem() {
-    const router = useActiveTabRouter();
+    const link = useInternalLink();
     const isActive = useActiveTabPathname() === "/issues";
     return (
         <SidebarMenuItem>
@@ -259,9 +259,7 @@ function IssuesSidebarItem() {
                             className={
                                 isActive ? ACTIVE_NAV_ITEM_CLASS : undefined
                             }
-                            onClick={() =>
-                                void router?.navigate({ to: "/issues" })
-                            }
+                            {...link({ title: "Issues", href: "/issues" })}
                         >
                             <CircleDot />
                             <span>Issues</span>
@@ -287,7 +285,7 @@ function RepoButton({
     isSelected: boolean;
 }) {
     const avatar = useRepoAvatarByPath(repoPath);
-    const openRepo = useOpenRepository();
+    const link = useInternalLink();
     const { ref } = useSortable({ id: repoPath, index, modifiers });
     const [hovered, setHovered] = useState(false);
     const repoNamePayload = () => {
@@ -334,7 +332,10 @@ function RepoButton({
                                 aria-label={avatar.name}
                                 onPointerEnter={() => setHovered(true)}
                                 onPointerLeave={() => setHovered(false)}
-                                onClick={() => void openRepo(repoPath)}
+                                {...link({
+                                    title: avatar.name,
+                                    repoPath,
+                                })}
                                 render={
                                     <Avatar>
                                         <AvatarImage

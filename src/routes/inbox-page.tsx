@@ -49,8 +49,7 @@ import {
     useResolveSubjectUrl,
 } from "@/hooks/github/use-github-inbox";
 import { useLocalRepoMap } from "@/hooks/github/use-github-issues";
-import { useOpenThread } from "@/hooks/github/use-open-thread";
-import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
+import { useInternalLink } from "@/hooks/tabs/use-internal-link";
 import type { GithubNotification } from "@/lib/backend/protocol";
 import { GitBackendError } from "@/lib/backend/transport/invoke";
 import { parseIssueUrl, parsePullUrl } from "@/lib/github/repo-coords";
@@ -117,7 +116,7 @@ function formatSubjectType(type: string): string {
  * stays pinned.
  */
 export function InboxPage() {
-    const router = useActiveTabRouter();
+    const link = useInternalLink();
     const account = useGithubAccount();
     const [filter, setFilter] = useState<InboxFilter>("all");
     const inbox = useGithubNotifications();
@@ -273,11 +272,10 @@ export function InboxPage() {
                                 </EmptyHeader>
                                 <EmptyContent>
                                     <Button
-                                        onClick={() =>
-                                            void router?.navigate({
-                                                to: "/account",
-                                            })
-                                        }
+                                        {...link({
+                                            title: "Account",
+                                            href: "/account",
+                                        })}
                                     >
                                         Go to Account
                                     </Button>
@@ -322,11 +320,10 @@ export function InboxPage() {
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() =>
-                                                void router?.navigate({
-                                                    to: "/account",
-                                                })
-                                            }
+                                            {...link({
+                                                title: "Account",
+                                                href: "/account",
+                                            })}
                                         >
                                             Go to Account
                                         </Button>
@@ -388,6 +385,70 @@ export function InboxPage() {
     );
 }
 
+function InboxSubjectTitle({
+    thread,
+    repoPath,
+    threadTarget,
+    resolving,
+    onMarkRead,
+    onOpenResolved,
+}: {
+    thread: GithubNotification;
+    repoPath?: string;
+    threadTarget: { number: number } | null;
+    resolving: boolean;
+    onMarkRead: () => void;
+    onOpenResolved: () => void;
+}) {
+    const link = useInternalLink();
+    const label = (
+        <span className="min-w-0 truncate">
+            {thread.subjectTitle || "(no title)"}
+        </span>
+    );
+
+    if (repoPath !== undefined && threadTarget) {
+        const props = link({
+            title: thread.subjectTitle || "(no title)",
+            repoPath,
+            thread: {
+                kind: thread.subjectType === "PullRequest" ? "pull" : "issue",
+                number: threadTarget.number,
+            },
+        });
+        return (
+            <button
+                type="button"
+                {...props}
+                onClick={(event) => {
+                    if (thread.unread) onMarkRead();
+                    props.onClick(event);
+                }}
+                className="flex min-w-0 cursor-pointer items-center gap-1 text-left font-medium hover:underline"
+            >
+                {label}
+            </button>
+        );
+    }
+    if (thread.htmlUrl) {
+        return (
+            <ExternalLink href={thread.htmlUrl} className="min-w-0 font-medium">
+                {label}
+            </ExternalLink>
+        );
+    }
+    return (
+        <button
+            type="button"
+            disabled={resolving || !thread.subjectUrl}
+            onClick={onOpenResolved}
+            className="flex min-w-0 cursor-pointer items-center gap-1 text-left font-medium hover:underline disabled:pointer-events-none disabled:opacity-100"
+        >
+            {label}
+        </button>
+    );
+}
+
 function InboxRow({
     thread,
     marking,
@@ -400,7 +461,6 @@ function InboxRow({
     localRepos: Map<string, string>;
 }) {
     const resolve = useResolveSubjectUrl();
-    const openThread = useOpenThread();
     const [resolving, setResolving] = useState(false);
 
     // Issue and pull request threads whose repo is in the app resolve to the
@@ -436,42 +496,6 @@ function InboxRow({
         }
     };
 
-    const title =
-        repoPath !== undefined && threadTarget ? (
-            <button
-                type="button"
-                onClick={() => {
-                    if (thread.unread) onMarkRead();
-                    void openThread(
-                        repoPath,
-                        thread.subjectType === "PullRequest" ? "pull" : "issue",
-                        threadTarget.number
-                    );
-                }}
-                className="flex min-w-0 cursor-pointer items-center gap-1 text-left font-medium hover:underline"
-            >
-                <span className="min-w-0 truncate">
-                    {thread.subjectTitle || "(no title)"}
-                </span>
-            </button>
-        ) : thread.htmlUrl ? (
-            <ExternalLink href={thread.htmlUrl} className="min-w-0 font-medium">
-                <span className="min-w-0 truncate">
-                    {thread.subjectTitle || "(no title)"}
-                </span>
-            </ExternalLink>
-        ) : (
-            <button
-                type="button"
-                disabled={resolving || !thread.subjectUrl}
-                onClick={() => void openResolved()}
-                className="flex min-w-0 cursor-pointer items-center gap-1 text-left font-medium hover:underline disabled:pointer-events-none disabled:opacity-100"
-            >
-                <span className="min-w-0 truncate">
-                    {thread.subjectTitle || "(no title)"}
-                </span>
-            </button>
-        );
     return (
         <div className="flex items-center gap-2 px-2 py-2">
             <span
@@ -483,7 +507,16 @@ function InboxRow({
                 <SubjectIcon type={thread.subjectType} />
             </span>
             <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 text-sm">{title}</div>
+                <div className="flex min-w-0 text-sm">
+                    <InboxSubjectTitle
+                        thread={thread}
+                        repoPath={repoPath}
+                        threadTarget={threadTarget}
+                        resolving={resolving}
+                        onMarkRead={onMarkRead}
+                        onOpenResolved={() => void openResolved()}
+                    />
+                </div>
                 <p className="truncate text-xs text-muted-foreground">
                     {formatSubjectType(thread.subjectType)}
                     {thread.updatedAt

@@ -4,10 +4,11 @@ import { openRepositoryByPath } from "@/lib/repositories/open-repository";
 import { toastError } from "@/lib/toast-error";
 import { createTabRecord, openTab } from "@/stores/app-store";
 
-interface OpenInNewTabTarget {
+export interface OpenInNewTabTarget {
     title: string;
     href?: string;
     repoPath?: string;
+    thread?: { kind: "issue" | "pull"; number: number };
 }
 
 /**
@@ -24,7 +25,9 @@ export function useOpenInNewTab() {
                 toastError("Could not open repository", opened.error);
                 return;
             }
-            href = `/repo/${opened.repoId}`;
+            href = target.thread
+                ? `/repo/${opened.repoId}/${target.thread.kind}/${target.thread.number}`
+                : `/repo/${opened.repoId}`;
         }
 
         openTab(
