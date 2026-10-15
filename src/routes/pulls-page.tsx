@@ -1,5 +1,3 @@
-"use no memo";
-
 import { GitPullRequestArrow, RotateCw } from "lucide-react";
 import { useMemo } from "react";
 

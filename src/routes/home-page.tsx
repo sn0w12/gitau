@@ -1,5 +1,3 @@
-"use no memo";
-
 import { DragDropProvider } from "@dnd-kit/react";
 import { isSortable, useSortable } from "@dnd-kit/react/sortable";
 import { useSelector } from "@tanstack/react-store";

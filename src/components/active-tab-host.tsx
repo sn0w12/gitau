@@ -1,5 +1,3 @@
-"use no memo";
-
 import { RouterProvider } from "@tanstack/react-router";
 import { useSelector } from "@tanstack/react-store";
 import { Activity, useEffect, useLayoutEffect } from "react";

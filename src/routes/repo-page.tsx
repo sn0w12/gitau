@@ -1,5 +1,3 @@
-"use no memo";
-
 import { useParams } from "@tanstack/react-router";
 import { useSelector } from "@tanstack/react-store";
 import { useEffect, useRef } from "react";

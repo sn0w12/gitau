@@ -1,5 +1,3 @@
-"use no memo";
-
 import { useQuery } from "@tanstack/react-query";
 import { useSelector } from "@tanstack/react-store";
 import {

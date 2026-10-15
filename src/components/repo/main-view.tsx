@@ -82,8 +82,6 @@ export function MainRepoView({
     selectedStashId: string | null;
     dispatch: React.ActionDispatch<[action: RepoStateAction]>;
 }) {
-    "use no memo";
-
     const tabId = useTabId();
     const nothingSelected =
         !selectedChangeId && !selectedCommitId && !selectedStashId;

@@ -1,5 +1,3 @@
-"use no memo";
-
 import { ExternalLinkIcon } from "lucide-react";
 import { useState } from "react";
 

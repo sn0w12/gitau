@@ -1,5 +1,3 @@
-"use no memo";
-
 import { motion } from "motion/react";
 import { useLayoutEffect, useRef, useState } from "react";
 

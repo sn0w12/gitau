@@ -1,5 +1,3 @@
-"use no memo";
-
 import { CircleDot, Inbox, RotateCw } from "lucide-react";
 import { useMemo } from "react";
 
