@@ -1,14 +1,26 @@
 import * as React from "react";
+import type { ComponentType } from "react";
 
+import {
+    TooltipCreateHandle,
+    TooltipPayloadHost,
+    TooltipProvider,
+} from "@/components/ui/tooltip";
 import { useFixedHeightWindow } from "@/hooks/diff/use-fixed-height-window";
 import { useViewportWidth } from "@/hooks/diff/use-viewport-width";
 import type { DiffRow, SyntaxStyle } from "@/lib/backend/protocol";
+import type {
+    DiffDisplayItem,
+    ExpandWindow,
+    GapControls,
+} from "@/lib/diff/context-gaps";
 import { deriveSplitSegments, type SplitSegment } from "@/lib/diff/split-rows";
 import { wrapContent, type WrappedLine } from "@/lib/diff/wrap";
 import { cn } from "@/lib/utils";
 
 import { DiffScroll } from "./diff-scroll";
 import { HighlightedLine } from "./highlight-line";
+import { HunkHeaderControls, type DiffTooltipHandle } from "./hunk-header";
 import { DIFF_ROW_HEIGHT, KIND_ROW_CLASS, Lineno } from "./rows";
 
 type SegmentLayout =
@@ -47,15 +59,38 @@ function layoutSegment(segment: SplitSegment, cpl: number): SegmentLayout {
     };
 }
 
-function FullRowView({ row }: { row: DiffRow }) {
+function FullRowView({
+    row,
+    controls,
+    tooltipHandle,
+    onExpand,
+}: {
+    row: DiffRow;
+    controls: GapControls | null;
+    tooltipHandle: DiffTooltipHandle;
+    onExpand: (
+        gapKey: number,
+        direction: "up" | "down",
+        window: ExpandWindow
+    ) => void;
+}) {
     return (
         <div
             style={{ height: DIFF_ROW_HEIGHT }}
             className={cn(
-                "flex items-center px-2 text-xs whitespace-pre",
+                "flex items-center text-xs whitespace-pre",
                 KIND_ROW_CLASS[row.kind]
             )}
         >
+            {controls ? (
+                <HunkHeaderControls
+                    controls={controls}
+                    tooltipHandle={tooltipHandle}
+                    onExpand={onExpand}
+                />
+            ) : (
+                <span className="w-24 shrink-0" />
+            )}
             <span className="truncate">
                 {row.content === "" ? "\u00a0" : row.content}
             </span>
@@ -173,26 +208,65 @@ function PairView({
 function SegmentView({
     layout,
     styles,
+    controls,
+    tooltipHandle,
+    onExpand,
 }: {
     layout: SegmentLayout;
     styles?: readonly SyntaxStyle[];
+    controls: GapControls | null;
+    tooltipHandle: DiffTooltipHandle;
+    onExpand: (
+        gapKey: number,
+        direction: "up" | "down",
+        window: ExpandWindow
+    ) => void;
 }) {
     if (layout.type === "pending") return <PendingRowView />;
-    if (layout.type === "full") return <FullRowView row={layout.row} />;
+    if (layout.type === "full") {
+        return (
+            <FullRowView
+                row={layout.row}
+                controls={controls}
+                tooltipHandle={tooltipHandle}
+                onExpand={onExpand}
+            />
+        );
+    }
     return <PairView layout={layout} styles={styles} />;
 }
 
 export function SplitRows({
-    rows,
+    items,
     charWidth,
     styles,
+    onExpand,
 }: {
-    rows: (DiffRow | undefined)[];
+    items: DiffDisplayItem[];
     charWidth: number;
     styles?: readonly SyntaxStyle[];
+    onExpand: (
+        gapKey: number,
+        direction: "up" | "down",
+        window: ExpandWindow
+    ) => void;
 }) {
-    const segments = React.useMemo(() => deriveSplitSegments(rows), [rows]);
+    const segments = React.useMemo(
+        () => deriveSplitSegments(items.map((item) => item.row)),
+        [items]
+    );
+    const controlsByIndex = React.useMemo(() => {
+        const map = new Map<number, GapControls>();
+        items.forEach((item, index) => {
+            if (item.controls) map.set(index, item.controls);
+        });
+        return map;
+    }, [items]);
     const parentRef = React.useRef<HTMLDivElement>(null);
+    const tooltipHandle = React.useMemo(
+        () => TooltipCreateHandle<ComponentType>(),
+        []
+    );
     const viewportWidth = useViewportWidth(parentRef);
 
     const cpl = React.useMemo(() => {
@@ -232,7 +306,7 @@ export function SplitRows({
         containerRef: parentRef,
     });
 
-    const items = [];
+    const nodes = [];
     if (layouts.length > 0) {
         // First segment whose visual span intersects the window; segments
         // are contiguous, so the largest lineStart below `start` contains it.
@@ -245,27 +319,41 @@ export function SplitRows({
         }
         for (let i = lo; i < layouts.length && lineStarts[i] < end; i += 1) {
             const layout = layouts[i];
-            items.push(
+            const segment = segments[i];
+            const controls =
+                segment.type === "full"
+                    ? (controlsByIndex.get(segment.index) ?? null)
+                    : null;
+            nodes.push(
                 <div
                     key={i}
                     className="absolute right-0 left-0"
                     style={{ top: lineStarts[i] * DIFF_ROW_HEIGHT }}
                 >
-                    <SegmentView layout={layout} styles={styles} />
+                    <SegmentView
+                        layout={layout}
+                        styles={styles}
+                        controls={controls}
+                        tooltipHandle={tooltipHandle}
+                        onExpand={onExpand}
+                    />
                 </div>
             );
         }
     }
 
     return (
-        <div className="relative min-h-0 min-w-0 flex-1">
-            <DiffScroll
-                viewportRef={parentRef}
-                totalHeight={totalHeight}
-                paddingTop={0}
-            >
-                {items}
-            </DiffScroll>
-        </div>
+        <TooltipProvider>
+            <div className="relative min-h-0 min-w-0 flex-1">
+                <DiffScroll
+                    viewportRef={parentRef}
+                    totalHeight={totalHeight}
+                    paddingTop={0}
+                >
+                    {nodes}
+                </DiffScroll>
+            </div>
+            <TooltipPayloadHost handle={tooltipHandle} />
+        </TooltipProvider>
     );
 }

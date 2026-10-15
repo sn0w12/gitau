@@ -183,6 +183,68 @@ pub struct MaterializedSection {
     pub rows: Vec<DiffRow>,
     pub image: Option<crate::streaming::store::DiffImage>,
     pub highlighter: Option<crate::engines::gix::highlight::SectionHighlighter>,
+    /// Retrieved lazily during context expansion.
+    pub source: crate::streaming::store::SectionSource,
+    pub old_line_count: u32,
+    pub new_line_count: u32,
+}
+
+/// A context window revealed on demand between diff hunks.
+pub struct ContextExpansion {
+    pub rows: Vec<DiffRow>,
+    pub styles: Vec<crate::streaming::model::WireStyle>,
+    pub more_below: bool,
+}
+
+/// Reads `count` lines of unchanged context starting at 1-based `old_start`
+/// from the section's old side. Within a gap both sides are byte-identical,
+/// so every row also carries `new_start + offset`. Span ids index into the
+/// returned `styles`; the caller rebases them onto its own style table.
+pub fn expand_context(
+    session: &GixSession,
+    path: &str,
+    old_id: Option<crate::domain::ObjectId>,
+    old_start: u32,
+    new_start: u32,
+    count: u32,
+) -> Result<ContextExpansion> {
+    let repo = session.handle();
+    let bytes: Arc<[u8]> = match old_id {
+        Some(id) => {
+            let gix_id = gix::ObjectId::try_from(id).map_err(internal)?;
+            let blob = repo.find_blob(gix_id).map_err(internal)?;
+            Arc::from(blob.data.as_bytes())
+        }
+        None => Arc::from(Vec::new()),
+    };
+    let lines = split_lines(&bytes);
+    let start_index = (old_start.saturating_sub(1) as usize).min(lines.len());
+    let take = (count as usize).min(lines.len() - start_index);
+    let mut rows = Vec::with_capacity(take);
+    for i in 0..take {
+        let old = old_start + i as u32;
+        let new = new_start + i as u32;
+        rows.push(text_row(
+            DiffRowKind::Context,
+            lines[start_index + i],
+            Some(old),
+            Some(new),
+        ));
+    }
+    let mut styles = Vec::new();
+    if !rows.is_empty() {
+        if let Some(mut highlighter) =
+            crate::engines::gix::highlight::SectionHighlighter::new(path, &bytes, &[])
+        {
+            highlighter.highlight_rows(&mut rows);
+            styles = highlighter.take_new_styles();
+        }
+    }
+    Ok(ContextExpansion {
+        more_below: start_index + take < lines.len(),
+        rows,
+        styles,
+    })
 }
 
 /// Materializes one planned section's rows. Binary files produce a bare file
@@ -194,6 +256,10 @@ pub fn materialize(
     blobs: &BlobCache,
 ) -> Result<MaterializedSection> {
     let repo = session.handle();
+    let source = crate::streaming::store::SectionSource {
+        path: plan.meta.path.as_str().to_owned(),
+        old_id: plan.old_id.map(crate::domain::ObjectId::from),
+    };
     let old_arc = match plan.old_id {
         Some(id) => Some(cached_blob(&repo, blobs, id)?),
         None => None,
@@ -254,9 +320,14 @@ pub fn materialize(
             rows,
             image,
             highlighter: None,
+            source,
+            old_line_count: 0,
+            new_line_count: 0,
         });
     }
 
+    let old_line_count = split_lines(old_bytes).len() as u32;
+    let new_line_count = split_lines(new_bytes).len() as u32;
     let rows = patch_rows(
         &plan.meta,
         old_bytes,
@@ -274,6 +345,9 @@ pub fn materialize(
         rows,
         image: None,
         highlighter,
+        source,
+        old_line_count,
+        new_line_count,
     })
 }
 

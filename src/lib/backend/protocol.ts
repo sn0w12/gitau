@@ -528,6 +528,8 @@ export type DiffEvent =
           sectionId: number;
           startRow: number;
           rowCount: number;
+          oldLineCount: number;
+          newLineCount: number;
       }
     | {
           event: "chunk";
@@ -574,6 +576,14 @@ export interface RangeResult {
     hasMore: boolean;
     knownTotalRows: number;
     complete: boolean;
+}
+
+/** Hidden context lines revealed on demand between diff hunks. Span ids in
+ * `rows` index into `styles`; the receiver rebases them onto its own table. */
+export interface DiffContextResult {
+    rows: DiffRow[];
+    styles: SyntaxStyle[];
+    moreBelow: boolean;
 }
 
 export interface GraphQuery {

@@ -154,6 +154,27 @@ pub fn git_read_diff_range(
 }
 
 #[tauri::command]
+pub fn git_read_diff_context(
+    state: SharedState<'_>,
+    operation_id: u64,
+    section_id: u32,
+    old_start: u32,
+    new_start: u32,
+    count: u32,
+) -> CommandResult<git_backend::api::queries::DiffContextResult> {
+    state
+        .backend
+        .read_diff_context(
+            git_backend::domain::OperationId(operation_id),
+            section_id,
+            old_start,
+            new_start,
+            count,
+        )
+        .map_err(to_serialized)
+}
+
+#[tauri::command]
 pub async fn git_open_graph(
     state: SharedState<'_>,
     repo_id: u64,

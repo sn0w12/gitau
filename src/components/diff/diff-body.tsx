@@ -2,7 +2,15 @@ import * as React from "react";
 
 import type { ImageDiffViewMode } from "@/hooks/changes/use-image-diff-view-mode";
 import type { SectionMeta, SyntaxStyle } from "@/lib/backend/protocol";
-import type { SectionRows } from "@/lib/backend/streams/diff-session";
+import type {
+    SectionGapExpansions,
+    SectionRows,
+} from "@/lib/backend/streams/diff-session";
+import {
+    buildDisplayItems,
+    computeDiffGaps,
+    type ExpandWindow,
+} from "@/lib/diff/context-gaps";
 import {
     diffCharWidth,
     subscribeDiffCharWidth,
@@ -36,6 +44,10 @@ export function DiffBody({
     imageMode,
     image,
     onLoadImage,
+    expansions,
+    oldLineCount,
+    canExpand,
+    onExpand,
 }: {
     rowsBySection: SectionRows | undefined;
     sectionId: number;
@@ -46,6 +58,14 @@ export function DiffBody({
     imageMode?: ImageDiffViewMode;
     image?: import("@/lib/backend/protocol").DiffImage;
     onLoadImage?: (sectionId: number) => void;
+    expansions?: SectionGapExpansions;
+    oldLineCount?: number;
+    canExpand: boolean;
+    onExpand: (
+        gapKey: number,
+        direction: "up" | "down",
+        window: ExpandWindow
+    ) => void;
 }) {
     // The section bar already shows path/kind/oldPath, so the wire-format
     // file-header rows carry nothing new here - drop them from the body.
@@ -75,6 +95,17 @@ export function DiffBody({
         }
         return Math.ceil(maxChars * charWidth);
     }, [mode, rows, charWidth]);
+
+    const displayItems = React.useMemo(
+        () =>
+            buildDisplayItems(
+                rows,
+                computeDiffGaps(rows, oldLineCount),
+                expansions,
+                canExpand
+            ),
+        [rows, oldLineCount, expansions, canExpand]
+    );
 
     /* oxlint-disable react/refs */
     // Keep the last painted body until an image section's bytes arrive, so
@@ -111,16 +142,18 @@ export function DiffBody({
         body =
             mode === "split" ? (
                 <SplitRows
-                    rows={rows}
+                    items={displayItems}
                     charWidth={charWidth}
                     styles={styles}
+                    onExpand={onExpand}
                     key={`split-${sectionId}`}
                 />
             ) : (
                 <UnifiedRows
-                    rows={rows}
+                    items={displayItems}
                     contentMinWidthPx={contentMinWidthPx}
                     styles={styles}
+                    onExpand={onExpand}
                     key={`unified-${sectionId}`}
                 />
             );

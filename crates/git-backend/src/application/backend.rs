@@ -30,7 +30,7 @@ use crate::api::mutations::{
     ResetRequest, ResolveConflictRequest, RevertRequest, StashPopRequest, StashPushRequest,
     TagCreateRequest,
 };
-use crate::api::queries::DiffRequest;
+use crate::api::queries::{DiffContextResult, DiffRequest};
 use crate::api::remote_info::RemoteRepoInfo;
 use crate::api::remotes::{
     CloneEvent, CloneProgress, CloneRequest, FetchRequest, PullRequest, PushOutcome, PushRequest,
@@ -556,6 +556,40 @@ impl Backend {
     ) -> Result<RangeResult> {
         let operation = self.operations.get(operation_id)?;
         operation.read_range(start, max_rows)
+    }
+
+    /// Reveals hidden context lines for one section. `old_start`/`new_start`
+    /// are 1-based line numbers on each side; the frontend derives them from
+    /// the surrounding hunk headers.
+    pub fn read_diff_context(
+        &self,
+        operation_id: OperationId,
+        section_id: u32,
+        old_start: u32,
+        new_start: u32,
+        count: u32,
+    ) -> Result<DiffContextResult> {
+        if count == 0 || count > 500 {
+            return Err(GitError::invalid_input("count must be in 1..=500"));
+        }
+        let operation = self.operations.get(operation_id)?;
+        let entry = self.registry.get(operation.repo_id)?;
+        let source = operation.section_source(section_id)?.ok_or_else(|| {
+            GitError::invalid_input(format!("section {section_id} has no expandable source"))
+        })?;
+        let expansion = crate::engines::gix::diff::expand_context(
+            &entry.gix,
+            &source.path,
+            source.old_id,
+            old_start,
+            new_start,
+            count,
+        )?;
+        Ok(DiffContextResult {
+            rows: expansion.rows,
+            styles: expansion.styles,
+            more_below: expansion.more_below,
+        })
     }
 
     pub async fn open_graph(

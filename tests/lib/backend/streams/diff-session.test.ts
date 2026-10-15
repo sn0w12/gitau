@@ -66,6 +66,8 @@ function fakeBackend(ranges: RangeResult[] = []) {
                 sectionId: 0,
                 startRow: 0,
                 rowCount: 1,
+                oldLineCount: 0,
+                newLineCount: 0,
             });
             listener({
                 event: "chunk",
@@ -128,6 +130,8 @@ describe("diff session controller", () => {
             sectionId: 0,
             startRow: 0,
             rowCount: 2,
+            oldLineCount: 0,
+            newLineCount: 0,
         });
         session.applyChunk(0, 0, [
             { kind: "context", content: "one" },
@@ -141,6 +145,8 @@ describe("diff session controller", () => {
         expect(state.layoutBySection.get(0)).toEqual({
             startRow: 0,
             rowCount: 2,
+            oldLineCount: 0,
+            newLineCount: 0,
         });
         const bucket = state.rowsBySection.get(0)?.get(0);
         expect(bucket?.[0]?.content).toBe("one");
@@ -231,6 +237,8 @@ describe("diff session controller", () => {
             sectionId: 0,
             startRow: 10,
             rowCount: 2,
+            oldLineCount: 0,
+            newLineCount: 0,
         });
         (
             session as unknown as {
@@ -258,6 +266,8 @@ describe("diff session controller", () => {
             sectionId: 0,
             startRow: 0,
             rowCount: 2,
+            oldLineCount: 0,
+            newLineCount: 0,
         });
         session.handleEvent({
             event: "sectionLayout",
@@ -265,6 +275,8 @@ describe("diff session controller", () => {
             sectionId: 1,
             startRow: 2,
             rowCount: 2,
+            oldLineCount: 0,
+            newLineCount: 0,
         });
         // Producer streams absolute offsets across sections.
         session.handleEvent({
@@ -319,6 +331,8 @@ describe("diff session controller", () => {
             sectionId: 0,
             startRow: 0,
             rowCount: 2,
+            oldLineCount: 0,
+            newLineCount: 0,
         });
         const bucket = session.store.state.rowsBySection.get(0)?.get(0);
         expect(bucket?.[0]?.content).toBe("early-1");

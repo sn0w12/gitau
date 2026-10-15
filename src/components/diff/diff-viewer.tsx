@@ -102,6 +102,19 @@ function DiffContent({
                     onLoadImage={(sectionId) => {
                         void controller.ensureImage(sectionId);
                     }}
+                    expansions={state.expansionsBySection.get(
+                        section.sectionId
+                    )}
+                    oldLineCount={layout.oldLineCount}
+                    canExpand={state.status === "completed"}
+                    onExpand={(gapKey, direction, window) => {
+                        void controller.expandContext(
+                            section.sectionId,
+                            gapKey,
+                            direction,
+                            window
+                        );
+                    }}
                     styles={styles}
                 />
             ) : (

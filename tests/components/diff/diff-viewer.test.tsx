@@ -78,6 +78,8 @@ const streamedEvents: DiffEvent[] = [
         sectionId: 0,
         startRow: 0,
         rowCount: 4,
+        oldLineCount: 0,
+        newLineCount: 0,
     },
     {
         event: "chunk",

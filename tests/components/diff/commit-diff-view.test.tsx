@@ -95,6 +95,8 @@ function eventsForTwoFiles(): DiffEvent[] {
             sectionId: 0,
             startRow: 0,
             rowCount: 2,
+            oldLineCount: 0,
+            newLineCount: 0,
         },
         {
             event: "chunk",
@@ -112,6 +114,8 @@ function eventsForTwoFiles(): DiffEvent[] {
             sectionId: 1,
             startRow: 2,
             rowCount: 3,
+            oldLineCount: 0,
+            newLineCount: 0,
         },
         {
             event: "chunk",

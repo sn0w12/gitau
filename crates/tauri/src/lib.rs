@@ -262,6 +262,7 @@ pub fn run() {
             commands::queries::git_list_branches_and_tags,
             commands::queries::git_read_diff_image,
             commands::queries::git_read_diff_range,
+            commands::queries::git_read_diff_context,
             commands::queries::git_cancel_operation,
             commands::changes::git_status,
             commands::changes::git_stage_paths,

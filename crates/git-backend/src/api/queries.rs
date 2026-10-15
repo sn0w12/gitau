@@ -36,3 +36,13 @@ impl Default for DiffRequest {
 pub struct DiffHandle {
     pub operation_id: u64,
 }
+
+/// A window of hidden context lines revealed between diff hunks.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffContextResult {
+    pub rows: Vec<crate::streaming::model::DiffRow>,
+    /// Style entries the rows' span ids index into, relative to this delta.
+    pub styles: Vec<crate::streaming::model::WireStyle>,
+    pub more_below: bool,
+}

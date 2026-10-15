@@ -34,6 +34,8 @@ describe("DiffBody", () => {
                     imageMode="sideBySide"
                     section={imageSection}
                     onLoadImage={() => {}}
+                    canExpand={false}
+                    onExpand={() => {}}
                 />
             );
         });
@@ -61,6 +63,8 @@ describe("DiffBody", () => {
                         section={section}
                         image={next}
                         onLoadImage={() => {}}
+                        canExpand={false}
+                        onExpand={() => {}}
                     />
                 );
             });

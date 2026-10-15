@@ -176,6 +176,8 @@ pub enum DiffEvent {
         section_id: u32,
         start_row: u64,
         row_count: u64,
+        old_line_count: u32,
+        new_line_count: u32,
     },
     Chunk {
         operation_id: OperationId,

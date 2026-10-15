@@ -188,7 +188,15 @@ fn compute(job: &DiffJob, op: &Arc<DiffOperation>, tx: &Sender<DiffEvent>) -> Re
             {
                 let entry = pending.entry(idx).or_default();
                 match msg {
-                    ProducerMsg::Meta { row_count } => entry.row_count = Some(row_count),
+                    ProducerMsg::Meta {
+                        row_count,
+                        old_line_count,
+                        new_line_count,
+                    } => {
+                        entry.row_count = Some(row_count);
+                        entry.old_line_count = old_line_count;
+                        entry.new_line_count = new_line_count;
+                    }
                     ProducerMsg::Chunk(chunk) => {
                         entry.total_chunks = Some(chunk.total);
                         entry.chunks.insert(chunk.index, chunk);
@@ -225,6 +233,8 @@ fn compute(job: &DiffJob, op: &Arc<DiffOperation>, tx: &Sender<DiffEvent>) -> Re
                         section_id: meta.section_id,
                         start_row: section_start,
                         row_count,
+                        old_line_count: entry.old_line_count,
+                        new_line_count: entry.new_line_count,
                     });
                     entry.start_row = section_start;
                 }
@@ -268,7 +278,11 @@ fn compute(job: &DiffJob, op: &Arc<DiffOperation>, tx: &Sender<DiffEvent>) -> Re
 }
 
 enum ProducerMsg {
-    Meta { row_count: u64 },
+    Meta {
+        row_count: u64,
+        old_line_count: u32,
+        new_line_count: u32,
+    },
     Chunk(PreparedChunk),
 }
 
@@ -285,6 +299,8 @@ struct PreparedChunk {
 #[derive(Default)]
 struct PendingSection {
     row_count: Option<u64>,
+    old_line_count: u32,
+    new_line_count: u32,
     total_chunks: Option<u32>,
     chunks: BTreeMap<u32, PreparedChunk>,
     /// Index of the next chunk to emit (chunk numbering, not rows).
@@ -309,10 +325,13 @@ fn produce_section(
     if let Some(image) = section.image.clone() {
         op.set_section_image(plan.meta.section_id, image)?;
     }
+    op.set_section_source(plan.meta.section_id, section.source.clone())?;
     let _ = tx.send((
         idx,
         ProducerMsg::Meta {
             row_count: section.rows.len() as u64,
+            old_line_count: section.old_line_count,
+            new_line_count: section.new_line_count,
         },
     ));
     if section.rows.is_empty() {

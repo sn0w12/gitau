@@ -15,6 +15,7 @@ import type {
     CheckoutMode,
     CredentialRequest,
     DeviceFlowStart,
+    DiffContextResult,
     DiffEvent,
     DiffImage,
     DiffRequest,
@@ -216,6 +217,22 @@ function createRawBackendClient() {
             ) =>
                 invokeCommand<RangeResult>("git_read_diff_range", {
                     args: { operationId, startRow, maxRows },
+                }),
+            readContext: (
+                operationId: number,
+                sectionId: number,
+                oldStart: number,
+                newStart: number,
+                count: number
+            ) =>
+                invokeCommand<DiffContextResult>("git_read_diff_context", {
+                    args: {
+                        operationId,
+                        sectionId,
+                        oldStart,
+                        newStart,
+                        count,
+                    },
                 }),
             cancel: (operationId: number) =>
                 invokeCommand<boolean>("git_cancel_operation", {
