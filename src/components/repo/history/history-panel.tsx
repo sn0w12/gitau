@@ -1,5 +1,5 @@
 import { File, Tag } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { CommitContextMenu } from "@/components/repo/history/commit-context-menu";
@@ -219,7 +219,7 @@ export function HistoryPanel({
  * (context changes, selection, an unrelated state update), letting React skip
  * the row and its context menu. `top` positions the absolutely placed row.
  */
-function HistoryRow({
+const HistoryRow = memo(function HistoryRow({
     repoId,
     commit,
     unpushed,
@@ -337,7 +337,7 @@ function HistoryRow({
             }
         />
     );
-}
+});
 
 function HighlightedText({
     text,

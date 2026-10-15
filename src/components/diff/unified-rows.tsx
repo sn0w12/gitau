@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 
 import { DiffScroll } from "./diff-scroll";
 import { HighlightedLine } from "./highlight-line";
-import { HunkHeaderControls } from "./hunk-header";
+import { HunkHeaderControls, type DiffTooltipHandle } from "./hunk-header";
 import {
     DIFF_ROW_HEIGHT,
     KIND_ROW_BORDER_CLASS,
@@ -50,6 +50,51 @@ type RowsInput = {
     ) => void;
 };
 
+const UnifiedRow = React.memo(function UnifiedRow({
+    item,
+    styles,
+    onExpand,
+    tooltipHandle,
+}: {
+    item: DiffDisplayItem;
+    styles?: readonly SyntaxStyle[];
+    onExpand: RowsInput["onExpand"];
+    tooltipHandle: DiffTooltipHandle;
+}) {
+    const row = item.row;
+    return (
+        <div
+            style={{ height: DIFF_ROW_HEIGHT }}
+            className={cn(
+                "flex items-center whitespace-pre",
+                row ? KIND_ROW_CLASS[row.kind] : "animate-pulse bg-muted/40",
+                row ? `border-l-3 ${KIND_ROW_BORDER_CLASS[row.kind]}` : ""
+            )}
+        >
+            {item.controls ? (
+                <HunkHeaderControls
+                    controls={item.controls}
+                    tooltipHandle={tooltipHandle}
+                    onExpand={onExpand}
+                />
+            ) : (
+                <>
+                    <Lineno value={row?.oldLineno} />
+                    <Lineno value={row?.newLineno} />
+                    <span className="w-4 shrink-0 text-center opacity-60 select-none">
+                        {row?.kind === "addition"
+                            ? "+"
+                            : row?.kind === "deletion"
+                              ? "\u2212"
+                              : ""}
+                    </span>
+                </>
+            )}
+            <LineContent row={row} styles={styles} />
+        </div>
+    );
+});
+
 export function UnifiedRows({
     items,
     contentMinWidthPx,
@@ -69,41 +114,14 @@ export function UnifiedRows({
 
     const nodes = [];
     for (let i = start; i < end; i += 1) {
-        const item = items[i];
-        const row = item.row;
         nodes.push(
-            <div
+            <UnifiedRow
                 key={i}
-                style={{ height: DIFF_ROW_HEIGHT }}
-                className={cn(
-                    "flex items-center whitespace-pre",
-                    row
-                        ? KIND_ROW_CLASS[row.kind]
-                        : "animate-pulse bg-muted/40",
-                    row ? `border-l-3 ${KIND_ROW_BORDER_CLASS[row.kind]}` : ""
-                )}
-            >
-                {item.controls ? (
-                    <HunkHeaderControls
-                        controls={item.controls}
-                        tooltipHandle={tooltipHandle}
-                        onExpand={onExpand}
-                    />
-                ) : (
-                    <>
-                        <Lineno value={row?.oldLineno} />
-                        <Lineno value={row?.newLineno} />
-                        <span className="w-4 shrink-0 text-center opacity-60 select-none">
-                            {row?.kind === "addition"
-                                ? "+"
-                                : row?.kind === "deletion"
-                                  ? "\u2212"
-                                  : ""}
-                        </span>
-                    </>
-                )}
-                <LineContent row={row} styles={styles} />
-            </div>
+                item={items[i]}
+                styles={styles}
+                onExpand={onExpand}
+                tooltipHandle={tooltipHandle}
+            />
         );
     }
 

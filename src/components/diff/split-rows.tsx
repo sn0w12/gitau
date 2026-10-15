@@ -236,6 +236,38 @@ function SegmentView({
     return <PairView layout={layout} styles={styles} />;
 }
 
+const SplitSegmentRow = React.memo(function SplitSegmentRow({
+    layout,
+    styles,
+    controls,
+    tooltipHandle,
+    onExpand,
+    top,
+}: {
+    layout: SegmentLayout;
+    styles?: readonly SyntaxStyle[];
+    controls: GapControls | null;
+    tooltipHandle: DiffTooltipHandle;
+    onExpand: (
+        gapKey: number,
+        direction: "up" | "down",
+        window: ExpandWindow
+    ) => void;
+    top: number;
+}) {
+    return (
+        <div className="absolute right-0 left-0" style={{ top }}>
+            <SegmentView
+                layout={layout}
+                styles={styles}
+                controls={controls}
+                tooltipHandle={tooltipHandle}
+                onExpand={onExpand}
+            />
+        </div>
+    );
+});
+
 export function SplitRows({
     items,
     charWidth,
@@ -325,19 +357,15 @@ export function SplitRows({
                     ? (controlsByIndex.get(segment.index) ?? null)
                     : null;
             nodes.push(
-                <div
+                <SplitSegmentRow
                     key={i}
-                    className="absolute right-0 left-0"
-                    style={{ top: lineStarts[i] * DIFF_ROW_HEIGHT }}
-                >
-                    <SegmentView
-                        layout={layout}
-                        styles={styles}
-                        controls={controls}
-                        tooltipHandle={tooltipHandle}
-                        onExpand={onExpand}
-                    />
-                </div>
+                    layout={layout}
+                    styles={styles}
+                    controls={controls}
+                    tooltipHandle={tooltipHandle}
+                    onExpand={onExpand}
+                    top={lineStarts[i] * DIFF_ROW_HEIGHT}
+                />
             );
         }
     }
