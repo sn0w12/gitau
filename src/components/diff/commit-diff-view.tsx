@@ -12,10 +12,12 @@ import { DiffStatusBar } from "@/components/diff/diff-viewer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useDiffViewMode } from "@/hooks/changes/use-diff-view-mode";
 import { useImageDiffViewMode } from "@/hooks/changes/use-image-diff-view-mode";
+import { useFixedHeightWindow } from "@/hooks/diff/use-fixed-height-window";
 import { useOpenInEditor } from "@/hooks/repositories/use-open-in-editor";
 import { useRepoPath } from "@/hooks/repositories/use-repo-path";
 import { useRevealInFileManager } from "@/hooks/repositories/use-reveal-in-file-manager";
 import { useSetting } from "@/hooks/settings/use-setting";
+import type { SectionMeta } from "@/lib/backend/protocol";
 import type { DiffSessionState } from "@/lib/backend/streams/diff-session";
 import type { RepoStateAction } from "@/lib/routing/repo-search";
 import { pluralize } from "@/lib/utils";
@@ -82,6 +84,8 @@ export function CommitDiffView({
 
 const handle = TooltipCreateHandle<ComponentType>();
 
+const FILE_ROW_HEIGHT_PX = 30;
+
 function CommitDiffContent({
     state,
     controller,
@@ -95,9 +99,6 @@ function CommitDiffContent({
 }) {
     const { mode, setMode } = useDiffViewMode();
     const { mode: imageMode, setMode: setImageMode } = useImageDiffViewMode();
-    const { value: open, setValue: setOpen } = useSetting("commitFileListOpen");
-    const { enabled, openInEditor } = useOpenInEditor();
-    const revealInFileManager = useRevealInFileManager();
     const sections = state.sections;
     const resetKey = `${state.sessionId}:${sections.length}`;
     const [index, setIndex] = useClampedIndex(sections.length, resetKey);
@@ -107,10 +108,13 @@ function CommitDiffContent({
     const rowsBySection = state.rowsBySection.get(section.sectionId);
     const styles = state.stylesBySection.get(section.sectionId);
 
-    const selectPath = (sectionId: number) => {
-        const idx = sections.findIndex((s) => s.sectionId === sectionId);
-        if (idx >= 0) setIndex(idx);
-    };
+    const selectPath = React.useCallback(
+        (sectionId: number) => {
+            const idx = sections.findIndex((s) => s.sectionId === sectionId);
+            if (idx >= 0) setIndex(idx);
+        },
+        [sections, setIndex]
+    );
 
     return (
         <div
@@ -120,117 +124,12 @@ function CommitDiffContent({
             data-paths={state.sections.map((s) => s.path).join("|")}
             data-active-idx={activeIdx}
         >
-            <Collapsible
-                className="group flex min-h-0 flex-col border-r"
-                open={open}
-                onOpenChange={setOpen}
-            >
-                <CollapsibleTrigger className="flex size-8 w-full shrink-0 touch-manipulation items-center justify-start gap-1 border-b px-2 text-sm group-data-closed:justify-center">
-                    <ChevronDown className="size-4.5 group-data-closed:-rotate-90" />
-                    <span className="text-xs group-data-closed:hidden">
-                        {sections.length}{" "}
-                        {pluralize("Changed File", sections.length)}
-                    </span>
-                </CollapsibleTrigger>
-                <CollapsiblePanel
-                    hidden={false}
-                    keepMounted
-                    className="min-h-0 w-[calc(var(--spacing)*64-1px)] flex-1 transition-none data-closed:w-8.5"
-                >
-                    <ScrollArea scrollFade scrollX={false} scrollBar={open}>
-                        <TooltipProvider delay={open ? 300 : 50}>
-                            <ul
-                                data-slot="commit-file-list"
-                                className="min-w-full"
-                            >
-                                {sections.map((s) => (
-                                    <TooltipTrigger
-                                        handle={handle}
-                                        payload={() => (
-                                            <SplitPath path={s.path} />
-                                        )}
-                                        key={s.sectionId}
-                                        render={
-                                            <li className="max-w-64">
-                                                <ContextMenu>
-                                                    <ContextMenuTrigger
-                                                        render={
-                                                            <button
-                                                                type="button"
-                                                                aria-selected={
-                                                                    s.sectionId ===
-                                                                    section.sectionId
-                                                                }
-                                                                data-selected={
-                                                                    s.sectionId ===
-                                                                        section.sectionId ||
-                                                                    undefined
-                                                                }
-                                                                onClick={() =>
-                                                                    selectPath(
-                                                                        s.sectionId
-                                                                    )
-                                                                }
-                                                                className={
-                                                                    "flex w-full items-center gap-1.5 px-2 py-1.5 text-left hover:bg-accent data-selected:bg-accent/64"
-                                                                }
-                                                            >
-                                                                <ChangeIcon
-                                                                    change={
-                                                                        s.kind
-                                                                    }
-                                                                    className="size-4.5 min-w-4.5"
-                                                                />
-                                                                <SplitPath
-                                                                    path={
-                                                                        s.path
-                                                                    }
-                                                                    className="text-xs group-data-closed:hidden"
-                                                                />
-                                                            </button>
-                                                        }
-                                                    />
-                                                    {repoPath && (
-                                                        <ContextMenuPopup>
-                                                            <ContextMenuItem
-                                                                disabled={
-                                                                    !enabled
-                                                                }
-                                                                onClick={() =>
-                                                                    void openInEditor(
-                                                                        repoPath,
-                                                                        s.path
-                                                                    )
-                                                                }
-                                                            >
-                                                                <SquarePen />
-                                                                Open in editor
-                                                            </ContextMenuItem>
-                                                            <ContextMenuItem
-                                                                onClick={() =>
-                                                                    void revealInFileManager(
-                                                                        repoPath,
-                                                                        s.path
-                                                                    )
-                                                                }
-                                                            >
-                                                                <FolderOpen />
-                                                                Reveal in file
-                                                                manager
-                                                            </ContextMenuItem>
-                                                        </ContextMenuPopup>
-                                                    )}
-                                                </ContextMenu>
-                                            </li>
-                                        }
-                                    />
-                                ))}
-                            </ul>
-                            <TooltipPayloadHost handle={handle} side="right" />
-                        </TooltipProvider>
-                    </ScrollArea>
-                </CollapsiblePanel>
-            </Collapsible>
+            <CommitFileList
+                sections={sections}
+                activeSectionId={section.sectionId}
+                repoPath={repoPath}
+                onSelect={selectPath}
+            />
 
             <div className="ui-selectable flex min-w-0 flex-1 flex-col">
                 <DiffSectionBar
@@ -281,3 +180,160 @@ function CommitDiffContent({
         </div>
     );
 }
+
+function CommitFileList({
+    sections,
+    activeSectionId,
+    repoPath,
+    onSelect,
+}: {
+    sections: SectionMeta[];
+    activeSectionId: number;
+    repoPath: string;
+    onSelect: (sectionId: number) => void;
+}) {
+    const { value: open, setValue: setOpen } = useSetting("commitFileListOpen");
+    const { enabled, openInEditor } = useOpenInEditor();
+    const revealInFileManager = useRevealInFileManager();
+
+    const listRef = React.useRef<HTMLDivElement>(null);
+    const { start, end, totalHeight, offsetTop } = useFixedHeightWindow({
+        count: sections.length,
+        rowHeight: FILE_ROW_HEIGHT_PX,
+        containerRef: listRef,
+    });
+
+    return (
+        <Collapsible
+            className="group flex min-h-0 flex-col border-r"
+            open={open}
+            onOpenChange={setOpen}
+        >
+            <CollapsibleTrigger className="flex size-8 w-full shrink-0 touch-manipulation items-center justify-start gap-1 border-b px-2 text-sm group-data-closed:justify-center">
+                <ChevronDown className="size-4.5 group-data-closed:-rotate-90" />
+                <span className="text-xs group-data-closed:hidden">
+                    {sections.length}{" "}
+                    {pluralize("Changed File", sections.length)}
+                </span>
+            </CollapsibleTrigger>
+            <CollapsiblePanel
+                hidden={false}
+                keepMounted
+                className="min-h-0 w-[calc(var(--spacing)*64-1px)] flex-1 transition-none data-closed:w-8.5"
+            >
+                <ScrollArea
+                    scrollFade
+                    scrollX={false}
+                    scrollBar={open}
+                    viewportRef={listRef}
+                >
+                    <TooltipProvider delay={open ? 300 : 50}>
+                        <ul
+                            data-slot="commit-file-list"
+                            className="relative min-w-full"
+                            style={{
+                                height: totalHeight,
+                                paddingTop: offsetTop,
+                            }}
+                        >
+                            {sections.slice(start, end).map((s) => (
+                                <CommitFileRow
+                                    key={s.sectionId}
+                                    section={s}
+                                    selected={s.sectionId === activeSectionId}
+                                    repoPath={repoPath}
+                                    enabled={enabled}
+                                    onSelect={onSelect}
+                                    onOpenInEditor={openInEditor}
+                                    onRevealInFileManager={revealInFileManager}
+                                />
+                            ))}
+                        </ul>
+                        <TooltipPayloadHost handle={handle} side="right" />
+                    </TooltipProvider>
+                </ScrollArea>
+            </CollapsiblePanel>
+        </Collapsible>
+    );
+}
+
+const CommitFileRow = React.memo(function CommitFileRow({
+    section,
+    selected,
+    repoPath,
+    enabled,
+    onSelect,
+    onOpenInEditor,
+    onRevealInFileManager,
+}: {
+    section: SectionMeta;
+    selected: boolean;
+    repoPath: string;
+    enabled: boolean;
+    onSelect: (sectionId: number) => void;
+    onOpenInEditor: (path: string, relativePath?: string) => Promise<void>;
+    onRevealInFileManager: (
+        path: string,
+        relativePath?: string
+    ) => Promise<void>;
+}) {
+    return (
+        <TooltipTrigger
+            handle={handle}
+            payload={() => <SplitPath path={section.path} />}
+            render={
+                <li className="max-w-64" style={{ height: FILE_ROW_HEIGHT_PX }}>
+                    <ContextMenu>
+                        <ContextMenuTrigger
+                            render={
+                                <button
+                                    type="button"
+                                    aria-selected={selected}
+                                    data-selected={selected || undefined}
+                                    onClick={() => onSelect(section.sectionId)}
+                                    className="flex h-full w-full items-center gap-1.5 px-2 py-1.5 text-left hover:bg-accent data-selected:bg-accent/64"
+                                >
+                                    <ChangeIcon
+                                        change={section.kind}
+                                        className="size-4.5 min-w-4.5"
+                                    />
+                                    <SplitPath
+                                        path={section.path}
+                                        className="text-xs group-data-closed:hidden"
+                                    />
+                                </button>
+                            }
+                        />
+                        {repoPath && (
+                            <ContextMenuPopup>
+                                <ContextMenuItem
+                                    disabled={!enabled}
+                                    onClick={() =>
+                                        void onOpenInEditor(
+                                            repoPath,
+                                            section.path
+                                        )
+                                    }
+                                >
+                                    <SquarePen />
+                                    Open in editor
+                                </ContextMenuItem>
+                                <ContextMenuItem
+                                    onClick={() =>
+                                        void onRevealInFileManager(
+                                            repoPath,
+                                            section.path
+                                        )
+                                    }
+                                >
+                                    <FolderOpen />
+                                    Reveal in file manager
+                                </ContextMenuItem>
+                            </ContextMenuPopup>
+                        )}
+                    </ContextMenu>
+                </li>
+            }
+        />
+    );
+});
