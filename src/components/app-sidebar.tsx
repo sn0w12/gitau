@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { LayoutGroup, motion } from "motion/react";
 import type { ComponentType } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 
 import { CloneRepoDialog } from "@/components/repo/dialogs/clone-dialog";
 import { NewRepoDialog } from "@/components/repo/dialogs/new-repo-dialog";
@@ -271,7 +271,7 @@ function IssuesSidebarItem() {
     );
 }
 
-function RepoButton({
+const RepoButton = memo(function RepoButton({
     repoPath,
     repoId: _repoId,
     index,
@@ -357,7 +357,7 @@ function RepoButton({
             </SidebarMenuItem>
         </motion.div>
     );
-}
+});
 
 function RegisteredRepoButtons() {
     const pinnedRepos = useSettingValue("pinnedRepos");
@@ -380,6 +380,11 @@ function RegisteredRepoButtons() {
         []
     );
     const restrictToList = useMemo(() => restrictToRepoList("repo-list"), []);
+    const pinnedModifiers = useMemo(
+        () => [restrictPinnedToList],
+        [restrictPinnedToList]
+    );
+    const listModifiers = useMemo(() => [restrictToList], [restrictToList]);
 
     return (
         <LayoutGroup id="sidebar-repos">
@@ -414,7 +419,7 @@ function RegisteredRepoButtons() {
                                 repoId={entry.repoId}
                                 repoPath={entry.path}
                                 index={index}
-                                modifiers={[restrictPinnedToList]}
+                                modifiers={pinnedModifiers}
                                 isSelected={isSelected(entry.path)}
                             />
                         ))}
@@ -451,7 +456,7 @@ function RegisteredRepoButtons() {
                                 repoId={entry.repoId}
                                 repoPath={entry.path}
                                 index={index}
-                                modifiers={[restrictToList]}
+                                modifiers={listModifiers}
                                 isSelected={isSelected(entry.path)}
                             />
                         ))}

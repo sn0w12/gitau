@@ -13,8 +13,8 @@ import {
     Plus,
     X,
 } from "lucide-react";
-import type { ComponentType, ReactNode } from "react";
-import { useMemo, useRef, useState } from "react";
+import type { ComponentType } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 
 import { WindowTitlebar } from "@/components/window-controls";
 import { useAppServices } from "@/contexts/services-context";
@@ -195,11 +195,16 @@ export function TitlebarTabList() {
     const tabs = useSelector(appStore, selectTabs);
     const activeTabId = useSelector(appStore, (state) => state.activeTabId);
     const restrictToList = useMemo(() => restrictToStripBounds(), []);
+    const modifiers = useMemo(() => [restrictToList], [restrictToList]);
     const viewportRef = useRef<HTMLDivElement | null>(null);
     const [hoveredTabId, setHoveredTabId] = useState<string | null>(null);
     const [newTabHovered, setNewTabHovered] = useState(false);
 
     const lastTabId = tabs.at(-1)?.tabId ?? null;
+    const handleLastHover = useCallback(
+        (hovered: boolean) => setHoveredTabId(hovered ? lastTabId : null),
+        [lastTabId]
+    );
     const hideDivider =
         newTabHovered ||
         (lastTabId !== null &&
@@ -260,18 +265,13 @@ export function TitlebarTabList() {
                                     key={tab.tabId}
                                     tab={tab}
                                     index={index}
-                                    modifiers={[restrictToList]}
+                                    modifiers={modifiers}
                                     onHoverChange={
                                         index === tabs.length - 1
-                                            ? (hovered) =>
-                                                  setHoveredTabId(
-                                                      hovered ? tab.tabId : null
-                                                  )
+                                            ? handleLastHover
                                             : undefined
                                     }
-                                >
-                                    <TitlebarTab tab={tab} />
-                                </TitlebarTabContextMenu>
+                                />
                             ))}
                         </div>
                     </ScrollArea>
@@ -462,18 +462,16 @@ function TitlebarNewTab({
     );
 }
 
-function TitlebarTabContextMenu({
+const TitlebarTabContextMenu = memo(function TitlebarTabContextMenu({
     tab,
     index,
     modifiers,
     onHoverChange,
-    children,
 }: {
     tab: TabRecord;
     index: number;
     modifiers: Modifiers;
     onHoverChange?: (hovered: boolean) => void;
-    children: ReactNode;
 }) {
     const { backend } = useAppServices();
     const hasMoreTabs = useSelector(appStore, (state) => state.tabs.length > 1);
@@ -500,7 +498,7 @@ function TitlebarTabContextMenu({
                     onHoverChange ? () => onHoverChange(false) : undefined
                 }
             >
-                {children}
+                <TitlebarTab tab={tab} />
             </ContextMenuTrigger>
             <ContextMenuPopup>
                 <ContextMenuItem
@@ -535,4 +533,4 @@ function TitlebarTabContextMenu({
             </ContextMenuPopup>
         </ContextMenu>
     );
-}
+});

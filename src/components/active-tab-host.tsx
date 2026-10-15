@@ -1,10 +1,13 @@
 import { RouterProvider } from "@tanstack/react-router";
 import { useSelector } from "@tanstack/react-store";
-import { Activity, useEffect, useLayoutEffect } from "react";
+import { Activity, memo, useEffect, useLayoutEffect } from "react";
 
 import { useAppServices } from "@/contexts/services-context";
 import { bootMark } from "@/lib/bootstrap/boot-timing";
-import { createTabRouter } from "@/lib/routing/tab-router-factory";
+import {
+    createTabRouter,
+    type TabRouter,
+} from "@/lib/routing/tab-router-factory";
 import {
     appStore,
     createTabRecord,
@@ -13,7 +16,6 @@ import {
     selectActiveTab,
     selectTabs,
 } from "@/stores/app-store";
-import type { TabRecord } from "@/stores/app-store";
 import {
     getOrCreateRuntime,
     getRuntime,
@@ -75,7 +77,7 @@ export function ActiveTabHost() {
             {tabs.map((tab) => (
                 <KeptAliveTab
                     key={tab.tabId}
-                    tab={tab}
+                    router={getRuntime(tab.tabId)?.router ?? null}
                     isActive={tab.tabId === activeTab.tabId}
                 />
             ))}
@@ -83,16 +85,15 @@ export function ActiveTabHost() {
     );
 }
 
-function KeptAliveTab({
-    tab,
+const KeptAliveTab = memo(function KeptAliveTab({
+    router,
     isActive,
 }: {
-    tab: TabRecord;
+    router: TabRouter | null;
     isActive: boolean;
 }) {
     // The router may not exist yet right after a tab opens; the layout
     // effect above creates it and re-renders us. Skip until then.
-    const router = getRuntime(tab.tabId)?.router;
     if (!router) return null;
 
     return (
@@ -100,4 +101,4 @@ function KeptAliveTab({
             <RouterProvider router={router} />
         </Activity>
     );
-}
+});

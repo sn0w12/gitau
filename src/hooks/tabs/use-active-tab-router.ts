@@ -20,8 +20,10 @@ function historyLength(router: TabRouter | null): number {
 /** Read-only view of the active tab's router; runtime creation belongs to
  * ActiveTabHost (a store update during render here would break React). */
 export function useActiveTabRouter(): TabRouter | null {
-    const activeTab = useSelector(appStore, selectActiveTab);
-    const tabId = activeTab?.tabId;
+    const tabId = useSelector(
+        appStore,
+        (state) => selectActiveTab(state)?.tabId
+    );
 
     const subscribe = useCallback(
         (onStoreChange: () => void) =>
