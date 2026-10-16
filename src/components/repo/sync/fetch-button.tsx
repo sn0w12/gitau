@@ -16,7 +16,7 @@ import {
 } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { PublishToGitHubDialog } from "@/components/repo/dialogs/publish-dialog";
+import { PublishRepositoryDialog } from "@/components/repo/dialogs/publish-dialog";
 import { ForcePushDialog } from "@/components/repo/sync/force-push-dialog";
 import {
     ToolbarTrigger,
@@ -119,7 +119,7 @@ export function RepoFetchButton({
                 <ButtonContent
                     icon={<Upload className="size-7" strokeWidth="1.5px" />}
                     label="Publish repository"
-                    subtitle="Publish this repository to GitHub"
+                    subtitle="Create a remote and push this branch"
                 />
             </ToolbarTrigger>
         );
@@ -167,7 +167,7 @@ export function RepoFetchButton({
                         />
                     }
                     label="Publish branch"
-                    subtitle="Publish this branch to GitHub"
+                    subtitle="Push this branch and set its upstream"
                 />
             </ToolbarTrigger>
         );
@@ -236,7 +236,7 @@ export function RepoFetchButton({
     return (
         <>
             {body}
-            <PublishToGitHubDialog
+            <PublishRepositoryDialog
                 open={publishOpen}
                 repoId={repoId}
                 repoPath={repoPath}

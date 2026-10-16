@@ -1,8 +1,8 @@
 import { CircleDot } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 
-import { LabelBadge } from "@/components/github/label-badge";
-import { issueStatusOf, StatusBadge } from "@/components/github/status-badge";
+import { LabelBadge } from "@/components/forge/label-badge";
+import { issueStatusOf, StatusBadge } from "@/components/forge/status-badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,19 +30,16 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
-import { useGithubAccount } from "@/hooks/github/use-github-account";
-import {
-    useGithubCoords,
-    useRepoIssues,
-} from "@/hooks/github/use-github-issues";
+import { useForgeAccount } from "@/hooks/forge/use-forge-account";
+import { useRepoCoords, useRepoIssues } from "@/hooks/forge/use-forge-issues";
 import { useInternalLink } from "@/hooks/tabs/use-internal-link";
-import type { GithubIssueListItem, GithubLabel } from "@/lib/backend/protocol";
+import type { IssueListItem, Label } from "@/lib/backend/protocol";
 import type { ListTab } from "@/lib/routing/repo-search";
 
 function AssigneeStack({
     assignees,
 }: {
-    assignees: GithubIssueListItem["assignees"];
+    assignees: IssueListItem["assignees"];
 }) {
     if (assignees.length === 0) return null;
     return (
@@ -75,12 +72,12 @@ export function IssuesView({
     label: string;
     onLabelChange: (label: string) => void;
 }) {
-    const account = useGithubAccount();
-    const { coords, isLoading: coordsLoading } = useGithubCoords(repoId);
+    const { coords, isLoading: coordsLoading } = useRepoCoords(repoId);
+    const account = useForgeAccount(coords?.provider ?? null);
     const issues = useRepoIssues(repoId, tab);
 
     const labels = useMemo(() => {
-        const seen = new Map<string, GithubLabel>();
+        const seen = new Map<string, Label>();
         for (const issue of issues.issues) {
             for (const item of issue.labels) {
                 if (!seen.has(item.name)) seen.set(item.name, item);
@@ -245,7 +242,7 @@ function IssuesTable({
 }: {
     repoId: number;
     state: ListTab;
-    rows: GithubIssueListItem[];
+    rows: IssueListItem[];
     isLoading: boolean;
     isError: boolean;
     errorMessage: string;
@@ -277,22 +274,6 @@ function IssuesTable({
         return <IssuesTableSkeleton />;
     }
 
-    if (!signedIn) {
-        return (
-            <Empty>
-                <EmptyMedia variant="icon">
-                    <CircleDot />
-                </EmptyMedia>
-                <EmptyHeader>
-                    <EmptyTitle>Connect GitHub</EmptyTitle>
-                    <EmptyDescription>
-                        Sign in on the Account page to read issues.
-                    </EmptyDescription>
-                </EmptyHeader>
-            </Empty>
-        );
-    }
-
     if (!hasCoords) {
         return (
             <Empty>
@@ -300,10 +281,26 @@ function IssuesTable({
                     <CircleDot />
                 </EmptyMedia>
                 <EmptyHeader>
-                    <EmptyTitle>No GitHub remote</EmptyTitle>
+                    <EmptyTitle>No provider remote</EmptyTitle>
                     <EmptyDescription>
-                        This repository has no github.com remote, so there are
-                        no issues to show.
+                        No remote of this repository points at a provider this
+                        build knows, so there are no issues to show.
+                    </EmptyDescription>
+                </EmptyHeader>
+            </Empty>
+        );
+    }
+
+    if (!signedIn) {
+        return (
+            <Empty>
+                <EmptyMedia variant="icon">
+                    <CircleDot />
+                </EmptyMedia>
+                <EmptyHeader>
+                    <EmptyTitle>Connect an account</EmptyTitle>
+                    <EmptyDescription>
+                        Sign in on the Account page to read issues.
                     </EmptyDescription>
                 </EmptyHeader>
             </Empty>

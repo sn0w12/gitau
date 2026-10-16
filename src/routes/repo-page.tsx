@@ -205,6 +205,7 @@ export function RepoPage() {
                                 repoPath={repoPath}
                             />
                             <RepoViewSwitcher
+                                repoId={repoId}
                                 view={view}
                                 onView={(next) =>
                                     dispatch({ type: "SET_VIEW", data: next })

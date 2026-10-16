@@ -6,7 +6,7 @@ use git2::{Cred, CredentialType, FetchOptions, PushOptions, RemoteCallbacks, Rep
 
 use crate::api::remotes::{
     ClonePhase, CloneProgress, CloneRequest, CredentialKind, CredentialRequest, FetchRequest,
-    PullRequest, PushOutcome, PushRequest, RemoteAddRequest, RemoteInfo,
+    GitPullRequest, PushOutcome, PushRequest, RemoteAddRequest, RemoteInfo,
 };
 use crate::error::{GitError, Result};
 
@@ -307,7 +307,7 @@ pub struct PullPlan {
     pub upstream_spec: crate::domain::RevisionSpec,
 }
 
-pub fn resolve_pull_upstream(repo: &Repository, request: &PullRequest) -> Result<PullPlan> {
+pub fn resolve_pull_upstream(repo: &Repository, request: &GitPullRequest) -> Result<PullPlan> {
     let branch_name = match &request.branch {
         Some(branch) => branch.clone(),
         None => {

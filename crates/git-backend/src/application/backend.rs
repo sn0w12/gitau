@@ -4,19 +4,16 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use forge_core::{
+    AuthChallenge, ConnectionProfile, CreateRepositoryBody, ForgeAccounts, ForgeProvider,
+    ForgeRegistry, ProviderDescriptor, ProviderError, RemoteCoords,
+};
+use forge_github::GithubProvider;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::api::changes::{DiscardRequest, StageRequest, StatusOptions};
-use crate::api::github::{
-    AccountProfile, DeviceFlowStart, GithubCheckRun, GithubCheckRunDetail, GithubCheckRunLog,
-    GithubCommitStatus, GithubIssueComment, GithubIssueDetail, GithubIssueEvent, GithubOrg,
-    GithubPullRequestCommit, GithubPullRequestDetail, GithubPullRequestReview,
-    GithubPullRequestReviewComment, GithubRepoPermissions, GithubWorkflowRun, MergePullRequestBody,
-    MergePullRequestResult, NotificationPage, PublishRepositoryRequest, PublishResult,
-    SearchIssuePage, SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody,
-};
 use crate::api::graph::GraphQuery;
 use crate::api::highlight::HighlightedSnippet;
 use crate::api::history::{
@@ -33,13 +30,20 @@ use crate::api::mutations::{
 use crate::api::queries::{DiffContextResult, DiffRequest};
 use crate::api::remote_info::RemoteRepoInfo;
 use crate::api::remotes::{
-    CloneEvent, CloneProgress, CloneRequest, FetchRequest, PullRequest, PushOutcome, PushRequest,
-    RemoteAddRequest,
+    CloneEvent, CloneProgress, CloneRequest, CredentialKind, CredentialRequest, FetchRequest,
+    GitPullRequest, PushOutcome, PushRequest, RemoteAddRequest,
 };
 use crate::api::repository::{CreateRepositoryRequest, GitignoreTemplateInfo, LicenseTemplateInfo};
 use crate::api::submodules::{SubmoduleAddRequest, SubmoduleInfo, SubmoduleUpdateRequest};
 use crate::api::worktrees::{
     WorktreeCreateRequest, WorktreeInfo, WorktreeLockRequest, WorktreeRemoveRequest,
+};
+use crate::api::{
+    AccountProfile, CheckRun, CheckRunDetail, CheckRunLog, CommitStatus, IssueComment, IssueDetail,
+    IssueEvent, MergePullRequestBody, MergePullRequestResult, NotificationPage, Org,
+    PublishRepositoryRequest, PublishResult, PullRequestCommit, PullRequestDetail,
+    PullRequestReview, PullRequestReviewComment, RepoPermissions, SearchIssuePage,
+    SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody, WorkflowRun,
 };
 use crate::domain::history::{
     BlameResult, CommitWithDetail, FileContent, HistoryChart, HistoryPage, RepoListing,
@@ -52,7 +56,6 @@ use crate::domain::{
 use crate::engines::git2::{hooks as git2_hooks, mutations};
 use crate::engines::gix::objects as gix_objects;
 use crate::error::{GitError, Result};
-use crate::github::{CreateRepoBody, GitHubAuth};
 use crate::runtime::cancellation::CancellationToken;
 use crate::runtime::clone_ops::{CloneOperation, CloneOperationRegistry};
 use crate::runtime::registry::{CachedValue, Registry};
@@ -130,7 +133,7 @@ pub struct Backend {
     clone_operations: CloneOperationRegistry,
     next_operation_id: AtomicU64,
     config: BackendConfig,
-    github: Arc<GitHubAuth>,
+    accounts: Arc<ForgeAccounts>,
     remote_info_cache: Arc<Mutex<RemoteInfoCacheState>>,
     language_stats_cache: LanguageStatsCache,
     /// Root for the history chart's per-commit stat files. Absent means the
@@ -149,6 +152,33 @@ struct RemoteInfoCacheState {
     refreshing: HashSet<String>,
 }
 
+fn default_accounts() -> ForgeAccounts {
+    let registry = Arc::new(ForgeRegistry::new(vec![Arc::new(GithubProvider::new(
+        Duration::from_secs(30),
+    ))]));
+    ForgeAccounts::new(registry, Box::new(forge_core::KeyringTokenStore))
+}
+
+fn resolve_credential(
+    accounts: &ForgeAccounts,
+    repo: &git2::Repository,
+    remote_name: &str,
+) -> Option<CredentialRequest> {
+    let remote = repo.find_remote(remote_name).ok()?;
+    let url = remote.url().ok()?.to_owned();
+    resolve_credential_for_url(accounts, &url)
+}
+
+fn resolve_credential_for_url(accounts: &ForgeAccounts, url: &str) -> Option<CredentialRequest> {
+    let secret = accounts.credential_for_url(url)?;
+    Some(CredentialRequest {
+        kind: CredentialKind::UsernamePassword {
+            username: secret.username,
+            password: secret.password,
+        },
+    })
+}
+
 impl Default for Backend {
     fn default() -> Self {
         Self::new(BackendConfig::default())
@@ -157,17 +187,11 @@ impl Default for Backend {
 
 impl Backend {
     pub fn new(config: BackendConfig) -> Self {
-        Self::with_github(
-            config,
-            Arc::new(GitHubAuth::new(
-                Arc::new(crate::github::HttpGithubApi::default()),
-                Box::new(crate::github::KeyringTokenStore),
-            )),
-        )
+        Self::with_accounts(config, Arc::new(default_accounts()))
     }
 
-    /// Test seam: swap in a fake GitHub auth/api stack.
-    pub fn with_github(config: BackendConfig, github: Arc<GitHubAuth>) -> Self {
+    /// Test seam: swap in a fake provider/account stack.
+    pub fn with_accounts(config: BackendConfig, accounts: Arc<ForgeAccounts>) -> Self {
         let hub = Arc::new(crate::runtime::invalidation::InvalidationHub::new());
         Self {
             scheduler: Scheduler::new(config.max_blocking_operations),
@@ -177,7 +201,7 @@ impl Backend {
             clone_operations: CloneOperationRegistry::default(),
             next_operation_id: AtomicU64::new(1),
             config,
-            github,
+            accounts,
             remote_info_cache: Arc::default(),
             language_stats_cache: Arc::default(),
             history_stats_dir: Arc::default(),
@@ -248,8 +272,26 @@ impl Backend {
         self.registry.bump_all_generations("syntaxTheme");
     }
 
-    pub fn github(&self) -> &Arc<GitHubAuth> {
-        &self.github
+    pub fn forge_accounts(&self) -> &Arc<ForgeAccounts> {
+        &self.accounts
+    }
+
+    /// Resolves a provider id to its trait object plus the token to call it
+    /// with, so every `forge_*` method stays a thin delegation.
+    fn forge(&self, provider_id: &str) -> Result<(Arc<dyn ForgeProvider>, String)> {
+        let provider = self.accounts.registry().by_id(provider_id).cloned().ok_or(
+            ProviderError::UnknownProvider {
+                provider: provider_id.to_owned(),
+            },
+        )?;
+        let token = self.accounts.require_token(provider_id)?;
+        Ok((provider, token))
+    }
+
+    /// Token credentials for an https remote whose host matches a connected
+    /// provider. Everything else keeps whatever the request already carries.
+    pub fn credential_for_url(&self, url: &str) -> Option<crate::api::remotes::CredentialRequest> {
+        resolve_credential_for_url(&self.accounts, url)
     }
 
     /// Stream of repository invalidations (watcher bumps and successful mutations).
@@ -1449,13 +1491,13 @@ impl Backend {
         let entry = self.registry.get(id)?;
         let path = entry.canonical_path.clone();
         let token_for_job = token.clone();
-        let github = Arc::clone(&self.github);
+        let accounts = Arc::clone(&self.accounts);
         self.scheduler
             .run(&token, move || {
                 let mut repo = git2::Repository::discover(&path)
                     .map_err(|e| crate::streaming::pipeline::map_open_error(&path, e))?;
                 if request.credential.is_none() {
-                    request.credential = github.credential_for_remote(&repo, &request.remote);
+                    request.credential = resolve_credential(&accounts, &repo, &request.remote);
                 }
                 crate::engines::git2::remotes::fetch(&mut repo, &request, &token_for_job)
             })
@@ -1474,14 +1516,14 @@ impl Backend {
         let entry = self.registry.get(id)?;
         let path = entry.canonical_path.clone();
         let token_for_job = token.clone();
-        let github = Arc::clone(&self.github);
+        let accounts = Arc::clone(&self.accounts);
         let outcomes = self
             .scheduler
             .run(&token, move || {
                 let mut repo = git2::Repository::discover(&path)
                     .map_err(|e| crate::streaming::pipeline::map_open_error(&path, e))?;
                 if request.credential.is_none() {
-                    request.credential = github.credential_for_remote(&repo, &request.remote);
+                    request.credential = resolve_credential(&accounts, &repo, &request.remote);
                 }
                 crate::engines::git2::remotes::push(&mut repo, &request, &token_for_job)
             })
@@ -1494,11 +1536,11 @@ impl Backend {
     pub async fn pull(
         &self,
         id: RepoId,
-        request: PullRequest,
+        request: GitPullRequest,
         expected_generation: Option<Generation>,
         token: CancellationToken,
     ) -> Result<crate::engines::git2::workflows::WorkflowOutcome> {
-        let github = Arc::clone(&self.github);
+        let accounts = Arc::clone(&self.accounts);
         self.run_write_with_token(id, expected_generation, token.clone(), move |repo| {
             let mut fetch_request = FetchRequest {
                 remote: request.remote.clone(),
@@ -1507,7 +1549,7 @@ impl Backend {
             };
             if fetch_request.credential.is_none() {
                 fetch_request.credential =
-                    github.credential_for_remote(repo, &fetch_request.remote);
+                    resolve_credential(&accounts, repo, &fetch_request.remote);
             }
             crate::engines::git2::remotes::fetch(repo, &fetch_request, &token)?;
             let plan = crate::engines::git2::remotes::resolve_pull_upstream(repo, &request)?;
@@ -1626,8 +1668,8 @@ impl Backend {
         path: &Path,
         remote_url: Option<String>,
     ) -> crate::api::remote_info::RemoteRepoInfo {
-        let mut result = match remote_url.as_deref().and_then(remote_repo_coords) {
-            Some(coords) => self.cached_remote_info(coords).await,
+        let mut result = match remote_url.as_deref() {
+            Some(url) => self.cached_remote_info(url).await,
             None => crate::api::remote_info::RemoteRepoInfo::default(),
         };
         // Fallback / override with local README if no description from remote.
@@ -1693,14 +1735,16 @@ impl Backend {
     /// served directly, stale entries immediately while a background task
     /// revalidates, misses fetch synchronously. Only successful remote
     /// payloads are cached, so README-derived descriptions stay local.
-    async fn cached_remote_info(
-        &self,
-        coords: RemoteRepoCoords,
-    ) -> crate::api::remote_info::RemoteRepoInfo {
-        let key = coords.cache_key();
+    async fn cached_remote_info(&self, url: &str) -> crate::api::remote_info::RemoteRepoInfo {
+        let Some(coords) = self.accounts.registry().resolve_remote(url) else {
+            return crate::api::remote_info::RemoteRepoInfo::default();
+        };
+        let key = remote_info_cache_key(&coords);
         let dir = self.remote_info_cache.lock().unwrap().dir.clone();
         let Some(dir) = dir else {
-            return fetch_remote_info(&coords).await.unwrap_or_default();
+            return fetch_remote_info(&self.accounts, &coords)
+                .await
+                .unwrap_or_default();
         };
 
         match read_cached_remote_info(&dir, &key) {
@@ -1713,7 +1757,7 @@ impl Backend {
                 self.spawn_remote_info_refresh(dir, &key, coords);
                 info
             }
-            None => match fetch_remote_info(&coords).await {
+            None => match fetch_remote_info(&self.accounts, &coords).await {
                 Some(info) => {
                     store_remote_info(&dir, &key, &info);
                     info
@@ -1725,7 +1769,7 @@ impl Backend {
 
     /// Serves stale bytes while one background task revalidates; concurrent
     /// refreshes of the same key are deduped until it finishes.
-    fn spawn_remote_info_refresh(&self, dir: PathBuf, key: &str, coords: RemoteRepoCoords) {
+    fn spawn_remote_info_refresh(&self, dir: PathBuf, key: &str, coords: RemoteCoords) {
         let key = key.to_owned();
         {
             let mut state = self.remote_info_cache.lock().unwrap();
@@ -1734,8 +1778,9 @@ impl Backend {
             }
         }
         let state = Arc::clone(&self.remote_info_cache);
+        let accounts = Arc::clone(&self.accounts);
         tokio::spawn(async move {
-            if let Some(info) = fetch_remote_info(&coords).await {
+            if let Some(info) = fetch_remote_info(&accounts, &coords).await {
                 store_remote_info(&dir, &key, &info);
             }
             state.lock().unwrap().refreshing.remove(&key);
@@ -1757,7 +1802,7 @@ impl Backend {
         self.clone_operations.insert(operation.clone());
 
         if request.credential.is_none() {
-            request.credential = self.github.credential_for_url(&request.url);
+            request.credential = self.credential_for_url(&request.url);
         }
         let (tx, rx) = mpsc::channel::<CloneEvent>(256);
 
@@ -1904,322 +1949,432 @@ impl Backend {
             .collect()
     }
 
-    /// The connected GitHub account, `None` while signed out.
-    pub fn github_account(&self) -> Option<AccountProfile> {
-        self.github.account()
+    /// The connected account for a provider's primary connection, `None`
+    /// while signed out.
+    pub fn forge_account(&self, provider: String) -> Option<AccountProfile> {
+        let key = self.accounts.connected_key(&provider)?;
+        self.accounts.account(&key.provider, &key.host)
+    }
+
+    /// Every connection that currently holds a token.
+    pub fn forge_connections(&self) -> Vec<ConnectionProfile> {
+        self.accounts.list_connections()
+    }
+
+    /// Advertised providers and their capabilities, for the UI to gate
+    /// views and build the provider picker.
+    pub fn forge_providers(&self) -> Vec<ProviderDescriptor> {
+        self.accounts.registry().descriptors()
     }
 
     /// Starts a device-flow sign-in: returns the short code the user types
-    /// into the browser. The flow then waits in [`Backend::github_complete_sign_in`].
-    pub async fn github_begin_sign_in(&self) -> Result<DeviceFlowStart> {
-        self.github.begin_sign_in().await
+    /// into the browser. The flow then waits in [`Backend::forge_complete_sign_in`].
+    pub async fn forge_begin_sign_in(
+        &self,
+        provider: String,
+        host: String,
+    ) -> Result<AuthChallenge> {
+        Ok(self.accounts.begin_sign_in(&provider, &host).await?)
     }
 
     /// Polls until the user finishes authorization (or the flow is
-    /// cancelled/expired) and resolves with the fresh profile.
-    pub async fn github_complete_sign_in(&self) -> Result<AccountProfile> {
-        self.github.complete_sign_in().await
+    /// cancelled/expired) and resolves with the fresh connection.
+    pub async fn forge_complete_sign_in(&self) -> Result<ConnectionProfile> {
+        Ok(self.accounts.complete_sign_in().await?)
     }
 
     /// Aborts an in-flight sign-in; the pending complete call resolves with
     /// a cancellation error.
-    pub fn github_cancel_sign_in(&self) {
-        self.github.cancel_sign_in();
+    pub fn forge_cancel_sign_in(&self) {
+        self.accounts.cancel_sign_in();
     }
 
-    pub async fn github_sign_out(&self) -> Result<()> {
-        self.github.sign_out().await
+    pub fn forge_sign_out(&self, provider: String, host: String) -> Result<()> {
+        Ok(self.accounts.sign_out(&provider, &host)?)
     }
 
     /// Organizations of the signed-in user, for publish-target selection.
-    pub async fn github_list_orgs(&self) -> Result<Vec<GithubOrg>> {
-        self.github.list_orgs().await
+    pub async fn forge_list_orgs(&self, provider: String) -> Result<Vec<Org>> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider.list_orgs(&token).await?)
     }
 
-    /// One page of all GitHub notification threads (read + unread),
-    /// newest first. Pages are 1-based.
-    pub async fn github_list_notifications(&self, page: u32) -> Result<NotificationPage> {
-        self.github.list_notifications(page).await
+    /// One page of notification threads (read + unread), newest first.
+    /// Pages are 1-based.
+    pub async fn forge_list_notifications(
+        &self,
+        provider: String,
+        page: u32,
+    ) -> Result<NotificationPage> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider.list_notifications(&token, page).await?)
     }
 
-    pub async fn github_mark_notification_read(&self, thread_id: String) -> Result<()> {
-        self.github.mark_notification_read(&thread_id).await
+    pub async fn forge_mark_notification_read(
+        &self,
+        provider: String,
+        thread_id: String,
+    ) -> Result<()> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider.mark_notification_read(&token, &thread_id).await?)
     }
 
-    pub async fn github_mark_all_notifications_read(&self) -> Result<()> {
-        self.github.mark_all_notifications_read().await
+    pub async fn forge_mark_all_notifications_read(&self, provider: String) -> Result<()> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider.mark_all_notifications_read(&token).await?)
     }
 
     /// Resolves a notification subject API URL to its web URL. Returns
     /// `None` when the subject is gone; the UI falls back to the repo.
-    pub async fn github_resolve_subject_url(&self, subject_url: String) -> Result<Option<String>> {
-        self.github.resolve_subject_url(&subject_url).await
+    pub async fn forge_resolve_subject_url(
+        &self,
+        provider: String,
+        subject_url: String,
+    ) -> Result<Option<String>> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider
+            .fetch_subject_html_url(&token, &subject_url)
+            .await?)
     }
 
-    /// Issues of a GitHub repository, `state` is open/closed/all.
-    /// Paginated, 1-based pages.
-    pub async fn github_list_issues(
+    /// Issues of a repository, `state` is open/closed/all. Paginated,
+    /// 1-based pages.
+    pub async fn forge_list_issues(
         &self,
+        provider: String,
         owner: String,
         repo: String,
         state: String,
         labels: Vec<String>,
         page: u32,
     ) -> Result<SearchIssuePage> {
-        self.github
-            .list_issues(&owner, &repo, &state, &labels, page)
-            .await
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider
+            .list_issues(&token, &owner, &repo, &state, &labels, page)
+            .await?)
     }
 
-    /// Pull requests of a GitHub repository, `state` is open/closed/all.
+    /// Pull requests of a repository, `state` is open/closed/all.
     /// Paginated, 1-based pages.
-    pub async fn github_list_pull_requests(
+    pub async fn forge_list_pull_requests(
         &self,
+        provider: String,
         owner: String,
         repo: String,
         state: String,
         labels: Vec<String>,
         page: u32,
     ) -> Result<SearchPullRequestPage> {
-        self.github
-            .list_pull_requests(&owner, &repo, &state, &labels, page)
-            .await
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider
+            .list_pull_requests(&token, &owner, &repo, &state, &labels, page)
+            .await?)
     }
 
-    /// Search issues across all of GitHub matching
-    /// `is:issue involves:@me sort:updated-desc`.
-    pub async fn github_search_issues(&self, page: u32) -> Result<SearchIssuePage> {
-        self.github.search_issues(page).await
+    /// Search issues across every repository the user is involved in.
+    pub async fn forge_search_issues(
+        &self,
+        provider: String,
+        page: u32,
+    ) -> Result<SearchIssuePage> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider.search_issues(&token, page).await?)
     }
 
     /// Full pull request detail, including draft, mergeability, refs, and
     /// diff stats.
-    pub async fn github_get_pull(
+    pub async fn forge_get_pull(
         &self,
+        provider: String,
         owner: String,
         repo: String,
         number: u64,
-    ) -> Result<GithubPullRequestDetail> {
-        self.github.get_pull(&owner, &repo, number).await
+    ) -> Result<PullRequestDetail> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider.get_pull(&token, &owner, &repo, number).await?)
     }
 
-    pub async fn github_list_pull_reviews(
+    pub async fn forge_list_pull_reviews(
         &self,
+        provider: String,
         owner: String,
         repo: String,
         number: u64,
-    ) -> Result<Vec<GithubPullRequestReview>> {
-        self.github.list_pull_reviews(&owner, &repo, number).await
+    ) -> Result<Vec<PullRequestReview>> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider
+            .list_pull_reviews(&token, &owner, &repo, number)
+            .await?)
     }
 
     /// Commits on the pull request's head branch, oldest first.
-    pub async fn github_list_pull_commits(
+    pub async fn forge_list_pull_commits(
         &self,
+        provider: String,
         owner: String,
         repo: String,
         number: u64,
-    ) -> Result<Vec<GithubPullRequestCommit>> {
-        self.github.list_pull_commits(&owner, &repo, number).await
+    ) -> Result<Vec<PullRequestCommit>> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider
+            .list_pull_commits(&token, &owner, &repo, number)
+            .await?)
     }
 
-    pub async fn github_list_pull_review_comments(
+    pub async fn forge_list_pull_review_comments(
         &self,
+        provider: String,
         owner: String,
         repo: String,
         number: u64,
-    ) -> Result<Vec<GithubPullRequestReviewComment>> {
-        self.github
-            .list_pull_review_comments(&owner, &repo, number)
-            .await
+    ) -> Result<Vec<PullRequestReviewComment>> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider
+            .list_pull_review_comments(&token, &owner, &repo, number)
+            .await?)
     }
 
     /// Partial update to a pull request: state, base branch, or draft flag.
     /// Every field left `None` is untouched.
-    pub async fn github_update_pull(
+    pub async fn forge_update_pull(
         &self,
+        provider: String,
         owner: String,
         repo: String,
         number: u64,
         body: UpdatePullRequestBody,
-    ) -> Result<GithubPullRequestDetail> {
-        self.github.update_pull(&owner, &repo, number, &body).await
+    ) -> Result<PullRequestDetail> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider
+            .update_pull(&token, &owner, &repo, number, &body)
+            .await?)
     }
 
-    /// Merges a pull request into its base. Returns `merged: false` when
-    /// GitHub accepted the call but declined, for instance because a
+    /// Merges a pull request into its base. Returns `merged: false` when the
+    /// provider accepted the call but declined, for instance because a
     /// branch protection rule blocks it.
-    pub async fn github_merge_pull(
+    pub async fn forge_merge_pull(
         &self,
+        provider: String,
         owner: String,
         repo: String,
         number: u64,
         body: MergePullRequestBody,
     ) -> Result<MergePullRequestResult> {
-        self.github.merge_pull(&owner, &repo, number, &body).await
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider
+            .merge_pull(&token, &owner, &repo, number, &body)
+            .await?)
     }
 
     /// CI check runs for a commit, which is a pull request's head sha.
-    pub async fn github_list_check_runs(
+    pub async fn forge_list_check_runs(
         &self,
+        provider: String,
         owner: String,
         repo: String,
         sha: String,
-    ) -> Result<Vec<GithubCheckRun>> {
-        self.github.list_check_runs(&owner, &repo, &sha).await
+    ) -> Result<Vec<CheckRun>> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider
+            .list_check_runs(&token, &owner, &repo, &sha)
+            .await?)
     }
 
     /// One check run with its output, for the results dialog.
-    pub async fn github_get_check_run(
+    pub async fn forge_get_check_run(
         &self,
+        provider: String,
         owner: String,
         repo: String,
         check_run_id: u64,
-    ) -> Result<GithubCheckRunDetail> {
-        self.github.get_check_run(&owner, &repo, check_run_id).await
+    ) -> Result<CheckRunDetail> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider
+            .get_check_run(&token, &owner, &repo, check_run_id)
+            .await?)
     }
 
-    /// A run's job log, split per step, mirroring GitHub's job view.
-    pub async fn github_get_check_run_log(
+    /// A run's job log, split per step, mirroring the provider's job view.
+    pub async fn forge_get_check_run_log(
         &self,
+        provider: String,
         owner: String,
         repo: String,
         check_run_id: u64,
-    ) -> Result<GithubCheckRunLog> {
-        self.github
-            .get_check_run_log(&owner, &repo, check_run_id)
-            .await
+    ) -> Result<CheckRunLog> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider
+            .get_check_run_log(&token, &owner, &repo, check_run_id)
+            .await?)
     }
 
     /// Workflow runs for a commit, newest first.
-    pub async fn github_list_workflow_runs(
+    pub async fn forge_list_workflow_runs(
         &self,
+        provider: String,
         owner: String,
         repo: String,
         sha: String,
-    ) -> Result<Vec<GithubWorkflowRun>> {
-        self.github.list_workflow_runs(&owner, &repo, &sha).await
+    ) -> Result<Vec<WorkflowRun>> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider
+            .list_workflow_runs(&token, &owner, &repo, &sha)
+            .await?)
     }
 
-    /// Search pull requests across all of GitHub matching
-    /// `is:pr involves:@me sort:updated-desc`.
-    pub async fn github_search_pull_requests(&self, page: u32) -> Result<SearchPullRequestPage> {
-        self.github.search_pull_requests(page).await
+    /// Search pull requests across every repository the user is involved in.
+    pub async fn forge_search_pull_requests(
+        &self,
+        provider: String,
+        page: u32,
+    ) -> Result<SearchPullRequestPage> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider.search_pull_requests(&token, page).await?)
     }
 
     /// Commit statuses for a commit, one per reporter. Reporters that have
     /// not moved to the checks API report only here.
-    pub async fn github_list_commit_statuses(
+    pub async fn forge_list_commit_statuses(
         &self,
+        provider: String,
         owner: String,
         repo: String,
         sha: String,
-    ) -> Result<Vec<GithubCommitStatus>> {
-        self.github.list_commit_statuses(&owner, &repo, &sha).await
+    ) -> Result<Vec<CommitStatus>> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider
+            .list_commit_statuses(&token, &owner, &repo, &sha)
+            .await?)
     }
 
-    pub async fn github_get_issue(
+    pub async fn forge_get_issue(
         &self,
+        provider: String,
         owner: String,
         repo: String,
         number: u64,
-    ) -> Result<GithubIssueDetail> {
-        self.github.get_issue(&owner, &repo, number).await
+    ) -> Result<IssueDetail> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider.get_issue(&token, &owner, &repo, number).await?)
     }
 
-    pub async fn github_list_issue_comments(
+    pub async fn forge_list_issue_comments(
         &self,
+        provider: String,
         owner: String,
         repo: String,
         number: u64,
-    ) -> Result<Vec<GithubIssueComment>> {
-        self.github.list_issue_comments(&owner, &repo, number).await
+    ) -> Result<Vec<IssueComment>> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider
+            .list_issue_comments(&token, &owner, &repo, number)
+            .await?)
     }
 
-    pub async fn github_list_issue_events(
+    pub async fn forge_list_issue_events(
         &self,
+        provider: String,
         owner: String,
         repo: String,
         number: u64,
-    ) -> Result<Vec<GithubIssueEvent>> {
-        self.github.list_issue_events(&owner, &repo, number).await
+    ) -> Result<Vec<IssueEvent>> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider
+            .list_issue_events(&token, &owner, &repo, number)
+            .await?)
     }
 
-    pub async fn github_create_issue_comment(
+    pub async fn forge_create_issue_comment(
         &self,
+        provider: String,
         owner: String,
         repo: String,
         number: u64,
         body: String,
-    ) -> Result<GithubIssueComment> {
+    ) -> Result<IssueComment> {
         if body.trim().is_empty() {
             return Err(GitError::invalid_input("comment body must not be empty"));
         }
-        self.github
-            .create_issue_comment(&owner, &repo, number, &body)
-            .await
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider
+            .create_issue_comment(&token, &owner, &repo, number, &body)
+            .await?)
     }
 
     /// Partial issue update: state (open/closed), labels, assignees.
-    pub async fn github_update_issue(
+    pub async fn forge_update_issue(
         &self,
+        provider: String,
         owner: String,
         repo: String,
         number: u64,
         body: UpdateIssueBody,
-    ) -> Result<GithubIssueDetail> {
-        self.github.update_issue(&owner, &repo, number, &body).await
+    ) -> Result<IssueDetail> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider
+            .update_issue(&token, &owner, &repo, number, &body)
+            .await?)
     }
 
-    pub async fn github_create_issue(
+    pub async fn forge_create_issue(
         &self,
+        provider: String,
         owner: String,
         repo: String,
         title: String,
         body: Option<String>,
         labels: Vec<String>,
-    ) -> Result<GithubIssueDetail> {
+    ) -> Result<IssueDetail> {
         if title.trim().is_empty() {
             return Err(GitError::invalid_input("issue title must not be empty"));
         }
-        self.github
-            .create_issue(&owner, &repo, &title, body.as_deref(), &labels)
-            .await
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider
+            .create_issue(&token, &owner, &repo, &title, body.as_deref(), &labels)
+            .await?)
     }
 
-    pub async fn github_update_issue_comment(
+    pub async fn forge_update_issue_comment(
         &self,
+        provider: String,
         owner: String,
         repo: String,
         comment_id: u64,
         body: String,
-    ) -> Result<GithubIssueComment> {
+    ) -> Result<IssueComment> {
         if body.trim().is_empty() {
             return Err(GitError::invalid_input("comment body must not be empty"));
         }
-        self.github
-            .update_issue_comment(&owner, &repo, comment_id, &body)
-            .await
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider
+            .update_issue_comment(&token, &owner, &repo, comment_id, &body)
+            .await?)
     }
 
-    pub async fn github_delete_issue_comment(
+    pub async fn forge_delete_issue_comment(
         &self,
+        provider: String,
         owner: String,
         repo: String,
         comment_id: u64,
     ) -> Result<()> {
-        self.github
-            .delete_issue_comment(&owner, &repo, comment_id)
-            .await
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider
+            .delete_issue_comment(&token, &owner, &repo, comment_id)
+            .await?)
     }
 
     /// The signed-in user's access on the repository, for gating
     /// comment moderation in the UI.
-    pub async fn github_repo_permissions(
+    pub async fn forge_repo_permissions(
         &self,
+        provider: String,
         owner: String,
         repo: String,
-    ) -> Result<GithubRepoPermissions> {
-        self.github.repo_permissions(&owner, &repo).await
+    ) -> Result<RepoPermissions> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider.repo_permissions(&token, &owner, &repo).await?)
     }
 
     /// Highlights one markdown code fence with the active theme pair.
@@ -2228,10 +2383,10 @@ impl Backend {
         crate::api::highlight::highlight_code(&language, &text)
     }
 
-    /// Publishes this repository: creates the GitHub repo under `owner`
-    /// (personal account when `None`), points `origin` at it, and pushes
-    /// the current branch with upstream tracking. Credentials are injected
-    /// automatically for github.com remotes when signed in.
+    /// Publishes this repository: creates the repo on the chosen provider
+    /// under `owner` (personal account when `None`), points `origin` at it,
+    /// and pushes the current branch with upstream tracking. Credentials are
+    /// injected automatically for connected providers when signed in.
     pub async fn publish_repository(
         &self,
         id: RepoId,
@@ -2242,6 +2397,17 @@ impl Backend {
         if name.is_empty() {
             return Err(GitError::invalid_input("repository name must not be empty"));
         }
+        let provider_id = match request.provider.clone() {
+            Some(provider) => provider,
+            None => self
+                .accounts
+                .registry()
+                .default_provider()
+                .map(|provider| provider.id().to_owned())
+                .ok_or_else(|| GitError::Unsupported {
+                    capability: "publish".into(),
+                })?,
+        };
         let entry = self.registry.get(id)?;
         let path = entry.canonical_path.clone();
 
@@ -2275,7 +2441,7 @@ impl Backend {
             })
             .await?;
 
-        let body = CreateRepoBody {
+        let body = CreateRepositoryBody {
             name,
             description: request
                 .description
@@ -2283,18 +2449,30 @@ impl Backend {
                 .filter(|d| !d.is_empty()),
             private: request.private,
         };
-        let created = self
-            .github
-            .create_repository(request.owner.as_deref(), &body)
+        let (provider, token) = self.forge(&provider_id)?;
+        if !provider.capabilities().publish {
+            return Err(GitError::Unsupported {
+                capability: "publish".into(),
+            });
+        }
+        let host = provider
+            .hosts()
+            .first()
+            .copied()
+            .unwrap_or_default()
+            .to_owned();
+        let created = provider
+            .create_repository(&token, request.owner.as_deref(), &body)
             .await?;
 
-        // Prefer GitHub's own clone URL; fall back to constructing it from
-        // the full name (the API always includes both in practice).
+        // Prefer the provider's own clone URL; fall back to constructing it
+        // from the host and full name (the API always includes both in
+        // practice).
         let remote_url = created
             .clone_url
             .clone()
             .filter(|url| !url.is_empty())
-            .unwrap_or_else(|| format!("https://github.com/{}.git", created.full_name));
+            .unwrap_or_else(|| format!("https://{host}/{}.git", created.full_name));
         let has_origin = self
             .list_remotes(id)
             .await?
@@ -2526,99 +2704,37 @@ fn origin_url(remotes: &[crate::api::remotes::RemoteInfo]) -> Option<String> {
         .and_then(|remote| remote.url.clone())
 }
 
-/// `host/owner/repo` coordinates for providers with a public repo API,
-/// derived from an https remote URL. Lowercased for stable cache keys.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct RemoteRepoCoords {
-    host: String,
-    owner: String,
-    repo: String,
-}
-
-fn remote_repo_coords(url: &str) -> Option<RemoteRepoCoords> {
-    let parsed = url.trim().parse::<reqwest::Url>().ok()?;
-    let host = parsed.host_str()?.to_ascii_lowercase();
-    let host = host.strip_prefix("www.").unwrap_or(host.as_str());
-    if host != "github.com" && host != "gitlab.com" {
-        return None;
-    }
-    let path = parsed
-        .path()
-        .trim_start_matches('/')
-        .trim_end_matches(".git");
-    let (owner, repo) = path.split_once('/')?;
-    let repo = repo.trim_end_matches('/');
-    if owner.is_empty() || repo.is_empty() {
-        return None;
-    }
-    Some(RemoteRepoCoords {
-        host: host.to_owned(),
-        owner: owner.to_ascii_lowercase(),
-        repo: repo.to_ascii_lowercase(),
-    })
-}
-
-impl RemoteRepoCoords {
-    fn is_gitlab(&self) -> bool {
-        self.host == "gitlab.com"
-    }
-
-    fn cache_key(&self) -> String {
-        let sanitize = crate::runtime::disk::sanitize_component;
-        format!(
-            "{}/{}/{}",
-            sanitize(&self.host),
-            sanitize(&self.owner),
-            sanitize(&self.repo)
-        )
-    }
-
-    fn api_url(&self) -> String {
-        if self.is_gitlab() {
-            format!(
-                "https://gitlab.com/api/v4/projects/{}%2F{}",
-                self.owner, self.repo
-            )
-        } else {
-            format!("https://api.github.com/repos/{}/{}", self.owner, self.repo)
-        }
-    }
+/// Cache key for the remote-info payloads, matching the `host/owner/repo`
+/// layout the icon cache uses.
+fn remote_info_cache_key(coords: &RemoteCoords) -> String {
+    let sanitize = crate::runtime::disk::sanitize_component;
+    format!(
+        "{}/{}/{}",
+        sanitize(&coords.host),
+        sanitize(&coords.owner),
+        sanitize(&coords.repo)
+    )
 }
 
 /// Live provider lookup. `None` means the host is unknown, the request
 /// failed, or the response was unusable; callers fall back or keep stale
 /// bytes instead of caching anything.
-async fn fetch_remote_info(coords: &RemoteRepoCoords) -> Option<RemoteRepoInfo> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(5))
-        .user_agent("gitau")
-        .build()
-        .ok()?;
-    let response = client.get(coords.api_url()).send().await.ok()?;
-    if !response.status().is_success() {
-        return None;
-    }
-    let text = response.text().await.ok()?;
-    let parsed: serde_json::Value = serde_json::from_str(&text).ok()?;
-
-    let mut info = RemoteRepoInfo::default();
-    if let Some(description) = parsed
-        .get("description")
-        .and_then(|d| d.as_str())
-        .filter(|d| !d.is_empty())
-    {
-        info.description = Some(description.to_owned());
-        info.source = Some("remote".to_owned());
-    }
-    let stars_key = if coords.is_gitlab() {
-        "star_count"
-    } else {
-        "stargazers_count"
-    };
-    info.stars = parsed.get(stars_key).and_then(|s| s.as_u64());
-    info.forks = parsed.get("forks_count").and_then(|f| f.as_u64());
-    info.fetched_at_ms = Some(now_ms());
-    Some(info)
+async fn fetch_remote_info(
+    accounts: &ForgeAccounts,
+    coords: &RemoteCoords,
+) -> Option<RemoteRepoInfo> {
+    let provider = accounts.registry().by_id(&coords.provider)?;
+    let metadata = provider
+        .repo_metadata(&coords.host, &coords.owner, &coords.repo)
+        .await
+        .ok()??;
+    Some(RemoteRepoInfo {
+        description: metadata.description,
+        stars: metadata.stars,
+        forks: metadata.forks,
+        fetched_at_ms: Some(now_ms()),
+        ..Default::default()
+    })
 }
 
 fn remote_info_cache_path(dir: &Path, key: &str) -> PathBuf {
@@ -2855,39 +2971,43 @@ mod remote_info_tests {
     use super::*;
 
     #[test]
-    fn coords_parse_github_and_gitlab_urls() {
-        let github = remote_repo_coords("https://github.com/Facebook/React.git").unwrap();
+    fn remote_coords_come_from_the_provider_registry() {
+        let accounts = default_accounts();
+        let registry = accounts.registry();
+
+        let github = registry
+            .resolve_remote("https://github.com/Facebook/React.git")
+            .unwrap();
+        assert_eq!(github.provider, "github");
         assert_eq!(github.host, "github.com");
         assert_eq!(github.owner, "facebook");
         assert_eq!(github.repo, "react");
-        assert_eq!(
-            github.api_url(),
-            "https://api.github.com/repos/facebook/react"
-        );
-        assert_eq!(github.cache_key(), "github.com/facebook/react");
+        assert_eq!(remote_info_cache_key(&github), "github.com/facebook/react");
 
-        let www = remote_repo_coords("https://www.gitlab.com/group/repo/").unwrap();
-        assert_eq!(www.host, "gitlab.com");
-        assert_eq!(www.owner, "group");
-        assert_eq!(www.repo, "repo");
-        assert_eq!(
-            www.api_url(),
-            "https://gitlab.com/api/v4/projects/group%2Frepo"
-        );
+        // scp-style remotes resolve too: the shape is the provider's, not a
+        // URL parser's.
+        let scp = registry
+            .resolve_remote("git@github.com:octo/repo.git")
+            .unwrap();
+        assert_eq!(scp.full_name(), "octo/repo");
     }
 
     #[test]
-    fn coords_reject_unknown_hosts_and_shapes() {
+    fn remote_coords_reject_hosts_no_provider_serves() {
+        let accounts = default_accounts();
+        let registry = accounts.registry();
         for bad in [
-            "git@github.com:octo/repo.git",
-            "/local/path/repo",
             "https://bitbucket.org/team/repo.git",
+            "/local/path/repo",
             "https://github.com/just-owner",
             "not a url",
+            // No GitLab provider crate exists, so its metadata is simply
+            // unavailable rather than special-cased here.
+            "https://gitlab.com/group/repo",
         ] {
             assert!(
-                remote_repo_coords(bad).is_none(),
-                "`{bad}` should not parse"
+                registry.resolve_remote(bad).is_none(),
+                "`{bad}` should not resolve"
             );
         }
     }

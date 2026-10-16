@@ -7,7 +7,7 @@ import type {
     MarkdownExtension,
 } from "@tanstack/markdown";
 
-export interface GithubCoords {
+export interface RepoCoords {
     owner: string;
     repo: string;
 }
@@ -99,7 +99,7 @@ interface FoundLink {
 
 function splitInlineText(
     value: string,
-    coords: GithubCoords | undefined
+    coords: RepoCoords | undefined
 ): InlineNode[] {
     const nodes: InlineNode[] = [];
     let cursor = 0;
@@ -130,7 +130,7 @@ function splitInlineText(
 
 function linkOf(
     match: RegExpExecArray,
-    coords: GithubCoords | undefined
+    coords: RepoCoords | undefined
 ): FoundLink | undefined {
     // The pattern is assembled from strings, so the named groups are invisible
     // to the type checker.
@@ -228,7 +228,7 @@ function isTextNode(value: unknown): value is { type: "text"; value: string } {
  */
 function transformTextDeep(
     value: unknown,
-    coords: GithubCoords | undefined
+    coords: RepoCoords | undefined
 ): unknown {
     if (Array.isArray(value)) {
         const out: unknown[] = [];
@@ -337,7 +337,7 @@ function parseSetextHeading(context: BlockParseContext): BlockNode | undefined {
 }
 
 export function githubMarkdownExtension(
-    coords?: GithubCoords
+    coords?: RepoCoords
 ): MarkdownExtension {
     return {
         name: "github",

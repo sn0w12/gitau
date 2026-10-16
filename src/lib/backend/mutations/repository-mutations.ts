@@ -252,7 +252,8 @@ export function useCreateBranchMutation(repoId: number) {
     );
 }
 
-export interface PublishToGitHubInput {
+export interface PublishRepositoryInput {
+    provider?: string;
     owner?: string;
     name: string;
     description?: string;
@@ -260,14 +261,14 @@ export interface PublishToGitHubInput {
 }
 
 /**
- * Creates the repository on GitHub, wires up `origin`, and pushes the
- * current branch. The backend injects the stored GitHub token itself.
+ * Creates the repository on the chosen provider, wires up `origin`, and
+ * pushes the current branch. The backend injects the stored token itself.
  */
-export function usePublishToGitHubMutation(repoId: number) {
-    return useRepoWrite<PublishToGitHubInput, PublishResult>(
+export function usePublishRepositoryMutation(repoId: number) {
+    return useRepoWrite<PublishRepositoryInput, PublishResult>(
         repoId,
         (be, input, expectedGeneration) =>
-            be.github
+            be.forge
                 .publishRepository(repoId, input, expectedGeneration)
                 .then(expectOk),
         { scopes: ["remotes", "refs", "history"] }

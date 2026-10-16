@@ -1,11 +1,11 @@
 import { GitPullRequest } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 
-import { LabelBadge } from "@/components/github/label-badge";
+import { LabelBadge } from "@/components/forge/label-badge";
 import {
     pullRequestStatusOf,
     StatusBadge,
-} from "@/components/github/status-badge";
+} from "@/components/forge/status-badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,14 +33,11 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
-import { useGithubAccount } from "@/hooks/github/use-github-account";
-import { useGithubCoords } from "@/hooks/github/use-github-issues";
-import { useRepoPullRequests } from "@/hooks/github/use-github-pull-requests";
+import { useForgeAccount } from "@/hooks/forge/use-forge-account";
+import { useRepoCoords } from "@/hooks/forge/use-forge-issues";
+import { useRepoPullRequests } from "@/hooks/forge/use-forge-pull-requests";
 import { useInternalLink } from "@/hooks/tabs/use-internal-link";
-import type {
-    GithubLabel,
-    GithubPullRequestListItem,
-} from "@/lib/backend/protocol";
+import type { Label, PullRequestListItem } from "@/lib/backend/protocol";
 import type { ListTab } from "@/lib/routing/repo-search";
 
 export function PullRequestsView({
@@ -56,12 +53,12 @@ export function PullRequestsView({
     label: string;
     onLabelChange: (label: string) => void;
 }) {
-    const account = useGithubAccount();
-    const { coords, isLoading: coordsLoading } = useGithubCoords(repoId);
+    const { coords, isLoading: coordsLoading } = useRepoCoords(repoId);
+    const account = useForgeAccount(coords?.provider ?? null);
     const pulls = useRepoPullRequests(repoId, tab);
 
     const labels = useMemo(() => {
-        const seen = new Map<string, GithubLabel>();
+        const seen = new Map<string, Label>();
         for (const pull of pulls.pulls) {
             for (const item of pull.labels) {
                 if (!seen.has(item.name)) seen.set(item.name, item);
@@ -198,7 +195,7 @@ function PullsTable({
 }: {
     repoId: number;
     state: ListTab;
-    rows: GithubPullRequestListItem[];
+    rows: PullRequestListItem[];
     isLoading: boolean;
     isError: boolean;
     errorMessage: string;
@@ -231,22 +228,6 @@ function PullsTable({
         return <PullsTableSkeleton />;
     }
 
-    if (!signedIn) {
-        return (
-            <Empty>
-                <EmptyMedia variant="icon">
-                    <GitPullRequest />
-                </EmptyMedia>
-                <EmptyHeader>
-                    <EmptyTitle>Connect GitHub</EmptyTitle>
-                    <EmptyDescription>
-                        Sign in on the Account page to read pull requests.
-                    </EmptyDescription>
-                </EmptyHeader>
-            </Empty>
-        );
-    }
-
     if (!hasCoords) {
         return (
             <Empty>
@@ -254,10 +235,26 @@ function PullsTable({
                     <GitPullRequest />
                 </EmptyMedia>
                 <EmptyHeader>
-                    <EmptyTitle>No GitHub remote</EmptyTitle>
+                    <EmptyTitle>No provider remote</EmptyTitle>
                     <EmptyDescription>
-                        This repository has no github.com remote, so there are
-                        no pull requests to show.
+                        No remote of this repository points at a provider this
+                        build knows, so there are no pull requests to show.
+                    </EmptyDescription>
+                </EmptyHeader>
+            </Empty>
+        );
+    }
+
+    if (!signedIn) {
+        return (
+            <Empty>
+                <EmptyMedia variant="icon">
+                    <GitPullRequest />
+                </EmptyMedia>
+                <EmptyHeader>
+                    <EmptyTitle>Connect an account</EmptyTitle>
+                    <EmptyDescription>
+                        Sign in on the Account page to read pull requests.
                     </EmptyDescription>
                 </EmptyHeader>
             </Empty>

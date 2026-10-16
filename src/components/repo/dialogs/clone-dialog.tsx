@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 
 import { useAppServices } from "@/contexts/services-context";
+import { useActiveConnection } from "@/hooks/forge/use-forge-account";
 import { CloneSessionController } from "@/lib/repositories/clone-session";
 import { joinRepoPath } from "@/lib/repositories/create-repository";
 import {
@@ -43,6 +44,7 @@ export function CloneRepoDialog({
     onCloned: (repoPath: string) => void;
 }) {
     const { backend } = useAppServices();
+    const connection = useActiveConnection();
     const [controller] = useState(() => new CloneSessionController(backend));
     const session = useSelector(controller.store, (state) => state);
 
@@ -91,7 +93,7 @@ export function CloneRepoDialog({
         rememberRepositoryDirectory(parentDirectory);
         void controller
             .start({
-                url: normalizeUrl(trimmedUrl),
+                url: normalizeUrl(trimmedUrl, connection?.host),
                 destination: joinRepoPath(parentDirectory, trimmedFolder),
             })
             .then((outcome) => {
@@ -159,7 +161,8 @@ export function CloneRepoDialog({
                                         <FieldLabel>Repository URL</FieldLabel>
                                         <Input
                                             type="text"
-                                            placeholder="https://github.com/owner/repo.git"
+                                            data-testid="clone-url"
+                                            placeholder="https://git.example.com/owner/repo.git"
                                             value={url}
                                             onChange={(event) =>
                                                 handleChangeUrl(
@@ -266,8 +269,14 @@ function isLikelyUrl(value: string): boolean {
     }
 }
 
-function normalizeUrl(value: string): string {
+/**
+ * `owner/repo` is shorthand, not a URL: it is expanded against the host of
+ * the active connection, since that is the account the clone will use.
+ * GitHub stays the fallback for a signed-out or unknown host, because the
+ * shorthand is its own convention.
+ */
+function normalizeUrl(value: string, host: string | undefined): string {
     return /^[\w.-]+\/[\w.-]+$/.test(value)
-        ? `https://github.com/${value}.git`
+        ? `https://${host ?? "github.com"}/${value}.git`
         : value;
 }

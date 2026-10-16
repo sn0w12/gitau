@@ -3,7 +3,7 @@ import type { ComponentType } from "react";
 import {
     IssueTitleBadge,
     PullRequestTitleBadge,
-} from "@/components/github/title-badge";
+} from "@/components/forge/title-badge";
 import { RepoTitleBadge } from "@/components/repo/repo-title-badge";
 import type { TitleBadge } from "@/stores/app-store";
 

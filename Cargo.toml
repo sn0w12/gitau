@@ -1,6 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/ansi",
+    "crates/forge-core",
+    "crates/forge-github",
     "crates/git-backend",
     "crates/tauri",
     "crates/tauri-plugin-snap-layout",
@@ -12,9 +15,12 @@ edition = "2021"
 rust-version = "1.85"
 
 [workspace.dependencies]
+ansi = { path = "crates/ansi" }
 base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["alloc"] }
 criterion = "0.7"
+forge-core = { path = "crates/forge-core" }
+forge-github = { path = "crates/forge-github" }
 fuzzy-matcher = "0.3.7"
 git-backend = { path = "crates/git-backend" }
 git2 = { version = "0.21.0", features = [

@@ -6,13 +6,15 @@ import {
     Download,
     PlayCircle,
     RotateCcw,
+    Upload,
 } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 
-import { CustomMarkdown } from "@/components/github/markdown";
+import { CustomMarkdown } from "@/components/forge/markdown";
 import { CloneRepoDialog } from "@/components/repo/dialogs/clone-dialog";
 import { CloneProgressPanel } from "@/components/repo/dialogs/clone-progress-panel";
 import { NewRepoDialog } from "@/components/repo/dialogs/new-repo-dialog";
+import { PublishRepositoryDialog } from "@/components/repo/dialogs/publish-dialog";
 import { Button } from "@/components/ui/button";
 import { Frame, FramePanel } from "@/components/ui/frame";
 import { Input } from "@/components/ui/input";
@@ -81,8 +83,18 @@ function Card({
     );
 }
 
+/**
+ * No repository is open under this id, so the backend refuses the write
+ * before it resolves a provider: the preview can be driven here without
+ * creating anything on a real account.
+ */
+const DEV_PUBLISH_REPO_ID = 999_999;
+const DEV_PUBLISH_REPO_PATH = "C:/dev/demo-repository";
+
 function DialogsCard() {
-    const [dialog, setDialog] = useState<null | "new" | "clone">(null);
+    const [dialog, setDialog] = useState<null | "new" | "clone" | "publish">(
+        null
+    );
 
     const devCreated = (repoPath: string) => {
         window.setTimeout(
@@ -93,7 +105,7 @@ function DialogsCard() {
 
     return (
         <Card title="Repository dialogs">
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
                 <Button variant="secondary" onClick={() => setDialog("new")}>
                     <FolderPlus />
                     New repo
@@ -102,11 +114,20 @@ function DialogsCard() {
                     <Download />
                     Clone
                 </Button>
+                <Button
+                    variant="secondary"
+                    onClick={() => setDialog("publish")}
+                >
+                    <Upload />
+                    Publish repo
+                </Button>
             </div>
             <p className="text-xs text-muted-foreground">
                 The clone dialog morphs between form and progress; a destination
                 picked here persists into the hidden lastRepositoryDirectory
-                setting.
+                setting. The publish dialog reads the real provider list and
+                connections, and can be filled in, but its repo id is a dev
+                placeholder so Create is refused instead of publishing.
             </p>
             <NewRepoDialog
                 open={dialog === "new"}
@@ -123,6 +144,12 @@ function DialogsCard() {
                     setDialog(null);
                     devCreated(repoPath);
                 }}
+            />
+            <PublishRepositoryDialog
+                open={dialog === "publish"}
+                repoId={DEV_PUBLISH_REPO_ID}
+                repoPath={DEV_PUBLISH_REPO_PATH}
+                onClose={() => setDialog(null)}
             />
         </Card>
     );

@@ -11,112 +11,191 @@ import {
     FramePanel,
     FrameTitle,
 } from "@/components/ui/frame";
+import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+    Select,
+    SelectItem,
+    SelectPopup,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useConfirm } from "@/contexts/confirm-context";
 import {
-    useGithubAccount,
-    useGithubSignIn,
-    useGithubSignOut,
-} from "@/hooks/github/use-github-account";
+    useForgeAccount,
+    useForgeProviders,
+    useForgeSignIn,
+    useForgeSignOut,
+} from "@/hooks/forge/use-forge-account";
 import { useRemoteIcon } from "@/hooks/repositories/use-repository-queries";
+import type { ProviderDescriptor } from "@/lib/backend/protocol";
 import { toastError } from "@/lib/toast-error";
 
 /**
- * GitHub connection management: device-flow sign-in, profile summary, and
- * sign-out.
+ * Connection management for every provider this build supports: device-flow
+ * sign-in per host, profile summary, and sign-out.
  */
 export function AccountPage() {
-    const account = useGithubAccount();
-    const [signInError, setSignInError] = useState<string | null>(null);
-
-    const signInController = useGithubSignIn(() => setSignInError(null));
-
-    const handleSignIn = async () => {
-        setSignInError(null);
-        try {
-            await signInController.signIn();
-        } catch (error) {
-            toastError("GitHub sign-in failed", error);
-        }
-    };
+    const providers = useForgeProviders();
 
     return (
         <div className="container h-full min-h-0 p-2">
             <ScrollArea className="h-full" scrollFade>
-                <Frame className="mx-auto max-w-2xl gap-1 p-1">
-                    <FrameHeader className="px-3 py-1.5">
-                        <FrameTitle className="text-base font-semibold">
-                            GitHub
-                        </FrameTitle>
-                        <FrameDescription className="text-sm text-muted-foreground">
-                            Connect a GitHub account to work with private
-                            repositories and publish local projects.
-                        </FrameDescription>
-                    </FrameHeader>
-                    <FramePanel data-testid="account-panel" className="p-2">
-                        {account.isLoading ? (
-                            <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+                <div className="mx-auto flex max-w-2xl flex-col gap-1 p-1">
+                    {providers.isLoading ? (
+                        <Frame className="gap-1 p-1">
+                            <FramePanel className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
                                 <Spinner className="size-4" />
-                                Checking connection...
-                            </div>
-                        ) : account.data ? (
-                            <ConnectedCard />
-                        ) : (
-                            <SignInCard
-                                pending={signInController.pending}
-                                start={signInController.start}
-                                error={signInError}
-                                onSignIn={() => void handleSignIn()}
-                                onCancel={signInController.cancel}
+                                Checking connections...
+                            </FramePanel>
+                        </Frame>
+                    ) : (providers.data ?? []).length === 0 ? (
+                        <Frame className="gap-1 p-1">
+                            <FramePanel className="py-8 text-center text-sm text-muted-foreground">
+                                This build has no providers.
+                            </FramePanel>
+                        </Frame>
+                    ) : (
+                        (providers.data ?? []).map((provider) => (
+                            <ProviderCard
+                                key={provider.id}
+                                provider={provider}
                             />
-                        )}
-                    </FramePanel>
-                </Frame>
+                        ))
+                    )}
+                </div>
             </ScrollArea>
         </div>
     );
 }
 
-function SignInCard({
-    pending,
-    start,
-    error,
-    onSignIn,
-    onCancel,
+function ProviderCard({ provider }: { provider: ProviderDescriptor }) {
+    const [host, setHost] = useState<string>(provider.hosts[0] ?? "");
+    const account = useForgeAccount(provider.id);
+
+    const description = `Connect ${provider.label} to work with private repositories and publish local projects.`;
+
+    return (
+        <Frame
+            className="gap-1 p-1"
+            data-testid={`provider-card-${provider.id}`}
+        >
+            <FrameHeader className="px-3 py-1.5">
+                <FrameTitle className="text-base font-semibold">
+                    {provider.label}
+                </FrameTitle>
+                <FrameDescription className="text-sm text-muted-foreground">
+                    {description}
+                </FrameDescription>
+            </FrameHeader>
+            <FramePanel data-testid="account-panel" className="p-2">
+                {account.isLoading ? (
+                    <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+                        <Spinner className="size-4" />
+                        Checking connection...
+                    </div>
+                ) : account.data ? (
+                    <ConnectedCard provider={provider} host={host} />
+                ) : (
+                    <SignInCard
+                        provider={provider}
+                        host={host}
+                        onHostChange={setHost}
+                    />
+                )}
+            </FramePanel>
+        </Frame>
+    );
+}
+
+function HostSelect({
+    provider,
+    host,
+    onHostChange,
 }: {
-    pending: boolean;
-    start: ReturnType<typeof useGithubSignIn>["start"];
-    error: string | null;
-    onSignIn: () => void;
-    onCancel: () => void;
+    provider: ProviderDescriptor;
+    host: string;
+    onHostChange: (host: string) => void;
 }) {
-    if (start) {
+    if (provider.hosts.length <= 1) return null;
+    return (
+        <div className="flex w-full max-w-xs flex-col gap-1.5">
+            <Label htmlFor={`host-${provider.id}`}>Host</Label>
+            <Select
+                value={host}
+                onValueChange={(value) => {
+                    if (typeof value === "string") onHostChange(value);
+                }}
+                items={provider.hosts.map((entry) => ({
+                    label: entry,
+                    value: entry,
+                }))}
+            >
+                <SelectTrigger className="w-full" aria-label="Host">
+                    <SelectValue />
+                </SelectTrigger>
+                <SelectPopup>
+                    {provider.hosts.map((entry) => (
+                        <SelectItem key={entry} value={entry}>
+                            {entry}
+                        </SelectItem>
+                    ))}
+                </SelectPopup>
+            </Select>
+        </div>
+    );
+}
+
+function SignInCard({
+    provider,
+    host,
+    onHostChange,
+}: {
+    provider: ProviderDescriptor;
+    host: string;
+    onHostChange: (host: string) => void;
+}) {
+    const [signInError, setSignInError] = useState<string | null>(null);
+    const signIn = useForgeSignIn(provider.id, host, () =>
+        setSignInError(null)
+    );
+
+    const handleSignIn = async () => {
+        setSignInError(null);
+        try {
+            await signIn.signIn();
+        } catch (error) {
+            toastError(`${provider.label} sign-in failed`, error);
+        }
+    };
+
+    if (signIn.start) {
         return (
             <div className="flex flex-col items-center gap-2 py-2">
                 <div className="text-center">
-                    <p className="font-medium">Enter this code on GitHub</p>
+                    <p className="font-medium">
+                        Enter this code on {provider.label}
+                    </p>
                     <p className="text-sm text-muted-foreground">
-                        GitHub asks for it at{" "}
-                        <span className="font-mono">
-                            github.com/login/device
-                        </span>
+                        {provider.label} asks for it at{" "}
+                        <span className="font-mono">{host}/login/device</span>
                     </p>
                 </div>
                 <code
-                    data-testid="github-user-code"
+                    data-testid="forge-user-code"
                     className="rounded-lg border bg-muted px-6 py-3 font-mono text-3xl font-semibold tracking-[0.3em] select-all"
                 >
-                    {start.userCode}
+                    {signIn.start.userCode}
                 </code>
                 <div className="flex items-center gap-2">
                     <a
-                        href={start.verificationUri}
+                        href={signIn.start.verificationUri}
                         target="_blank"
                         rel="noreferrer"
                     >
                         <Button>
-                            Open github.com/login/device
+                            Open {host}/login/device
                             <ExternalLinkIcon />
                         </Button>
                     </a>
@@ -127,8 +206,8 @@ function SignInCard({
                     <Button
                         variant="ghost"
                         size="sm"
-                        data-testid="github-cancel-signin"
-                        onClick={onCancel}
+                        data-testid="forge-cancel-signin"
+                        onClick={signIn.cancel}
                     >
                         Cancel
                     </Button>
@@ -139,40 +218,51 @@ function SignInCard({
 
     return (
         <div className="flex flex-col items-center gap-5 py-2">
-            {error ? (
+            {signInError ? (
                 <p className="text-sm text-destructive" role="alert">
-                    {error}
+                    {signInError}
                 </p>
             ) : null}
+            <HostSelect
+                provider={provider}
+                host={host}
+                onHostChange={onHostChange}
+            />
             <Button
                 size="lg"
-                disabled={pending}
-                loading={pending}
-                onClick={onSignIn}
+                disabled={signIn.pending}
+                loading={signIn.pending}
+                onClick={() => void handleSignIn()}
             >
-                Sign in with GitHub
+                Sign in with {provider.label}
             </Button>
         </div>
     );
 }
 
-function ConnectedCard() {
-    const account = useGithubAccount();
+function ConnectedCard({
+    provider,
+    host,
+}: {
+    provider: ProviderDescriptor;
+    host: string;
+}) {
+    const account = useForgeAccount(provider.id);
     const profile = account.data;
     const { confirm } = useConfirm();
-    const signOut = useGithubSignOut();
+    const signOut = useForgeSignOut(provider.id, host);
 
     // Resolve through the shared icon pipeline so the image is cached as a
     // data URL instead of loaded from the network inside the webview.
     const avatar = useRemoteIcon(
-        profile ? `https://github.com/${profile.login}` : undefined
+        profile ? `https://${host}/${profile.login}` : undefined
     );
 
     if (!profile) return null;
 
     const handleSignOut = async () => {
         const result = await confirm({
-            title: "Sign out of GitHub?",
+            title: `Sign out of ${provider.label}?`,
             description:
                 "gitau removes its stored token from your system keychain. Private repositories will require signing in again.",
             confirmText: "Sign out",
@@ -189,7 +279,7 @@ function ConnectedCard() {
     return (
         <div
             className="flex items-center gap-2"
-            data-testid="github-account-connected"
+            data-testid="forge-account-connected"
         >
             <Avatar className="size-8">
                 <AvatarImage
@@ -215,7 +305,7 @@ function ConnectedCard() {
                     ) : null}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                    Connected{" "}
+                    {host} · connected{" "}
                     {new Date(profile.connectedAtMs).toLocaleDateString()}
                 </p>
             </div>

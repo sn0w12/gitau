@@ -2,11 +2,11 @@ import { CircleDot, Inbox, RotateCw } from "lucide-react";
 import { useMemo } from "react";
 
 import { ExternalLink } from "@/components/external-link";
-import { LabelBadge } from "@/components/github/label-badge";
+import { LabelBadge } from "@/components/forge/label-badge";
 import {
     issueStatusOf,
     ThreadStatusIcon,
-} from "@/components/github/status-badge";
+} from "@/components/forge/status-badge";
 import { Button } from "@/components/ui/button";
 import {
     Empty,
@@ -27,26 +27,26 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import { useGithubAccount } from "@/hooks/github/use-github-account";
+import { useForgeConnections } from "@/hooks/forge/use-forge-account";
 import {
-    useGithubSearchIssues,
+    useForgeSearchIssues,
     useLocalRepoMap,
-} from "@/hooks/github/use-github-issues";
+} from "@/hooks/forge/use-forge-issues";
 import { useInternalLink } from "@/hooks/tabs/use-internal-link";
 import type { SearchIssueItem } from "@/lib/backend/protocol";
 import { GitBackendError } from "@/lib/backend/transport/invoke";
-import { parseIssueUrl } from "@/lib/github/repo-coords";
+import { parseIssueUrl } from "@/lib/forge/repo-coords";
 import { formatRelativeDate } from "@/lib/utils";
 
 /**
- * Signed-in GitHub issues matching `is:issue involves:@me
+ * Signed-in issues matching `is:issue involves:@me
  * sort:updated-desc`, newest first, paged from the backend 100 items
  * at a time. Styled like the inbox page.
  */
 export function IssuesPage() {
     const link = useInternalLink();
-    const account = useGithubAccount();
-    const search = useGithubSearchIssues();
+    const account = useForgeConnections();
+    const search = useForgeSearchIssues();
     const localRepos = useLocalRepoMap();
 
     const issues = search.issues;
@@ -99,8 +99,7 @@ export function IssuesPage() {
                         </div>
                     </div>
                     <FrameDescription className="text-sm text-muted-foreground">
-                        GitHub issues involving you, sorted by most recently
-                        updated.
+                        Issues involving you, sorted by most recently updated.
                     </FrameDescription>
                 </FrameHeader>
                 <FramePanel data-testid="issues-panel" className="min-h-0 p-2">
@@ -110,13 +109,13 @@ export function IssuesPage() {
                                 <Spinner className="size-4" />
                                 Checking connection...
                             </div>
-                        ) : !account.data ? (
+                        ) : !account.data?.length ? (
                             <Empty>
                                 <EmptyMedia variant="icon">
                                     <Inbox />
                                 </EmptyMedia>
                                 <EmptyHeader>
-                                    <EmptyTitle>Connect GitHub</EmptyTitle>
+                                    <EmptyTitle>Connect an account</EmptyTitle>
                                     <EmptyDescription>
                                         Sign in to see issues that involve you.
                                     </EmptyDescription>

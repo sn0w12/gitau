@@ -85,7 +85,7 @@ impl Default for PushRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
-pub struct PullRequest {
+pub struct GitPullRequest {
     pub remote: String,
     pub branch: Option<String>,
     pub fast_forward_only: bool,
@@ -93,7 +93,7 @@ pub struct PullRequest {
     pub credential: Option<CredentialRequest>,
 }
 
-impl Default for PullRequest {
+impl Default for GitPullRequest {
     fn default() -> Self {
         Self {
             remote: "origin".into(),

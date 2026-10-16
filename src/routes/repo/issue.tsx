@@ -3,17 +3,17 @@ import { useSelector } from "@tanstack/react-store";
 import { X } from "lucide-react";
 import { Fragment, useRef } from "react";
 
-import { TimelineEvent } from "@/components/github/event";
+import { TimelineEvent } from "@/components/forge/event";
 import {
     ConversationInput,
     type ConversationInputHandle,
-} from "@/components/github/input";
-import { MessageSpacer, TimelineMessage } from "@/components/github/message";
+} from "@/components/forge/input";
+import { MessageSpacer, TimelineMessage } from "@/components/forge/message";
 import {
     isOpenThread,
     issueStatusOf,
     StatusBadge,
-} from "@/components/github/status-badge";
+} from "@/components/forge/status-badge";
 import {
     AvatarStack,
     ComposerSkeleton,
@@ -22,7 +22,7 @@ import {
     LabelList,
     MessageSkeleton,
     SidebarBlock,
-} from "@/components/github/thread-chrome";
+} from "@/components/forge/thread-chrome";
 import { Button } from "@/components/ui/button";
 import {
     Empty,
@@ -33,24 +33,24 @@ import {
 import { Frame } from "@/components/ui/frame";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useGithubAccount } from "@/hooks/github/use-github-account";
+import { useForgeAccount } from "@/hooks/forge/use-forge-account";
 import {
     useCreateIssueComment,
     useDeleteIssueComment,
-    useGithubCoords,
+    useRepoCoords,
     useIssue,
     useRepoPermissions,
     useUpdateIssue,
     useUpdateIssueComment,
-} from "@/hooks/github/use-github-issues";
+} from "@/hooks/forge/use-forge-issues";
 import {
     useActiveTabHistory,
     useActiveTabRouter,
 } from "@/hooks/tabs/use-active-tab-router";
 import type {
-    GithubIssueComment,
-    GithubIssueDetail,
-    GithubIssueEvent,
+    IssueComment,
+    IssueDetail,
+    IssueEvent,
 } from "@/lib/backend/protocol";
 import {
     buildIssueTimeline,
@@ -58,7 +58,7 @@ import {
     timelineKey,
     timelineParticipants,
     type IssueTimelineItem,
-} from "@/lib/github/timeline";
+} from "@/lib/forge/timeline";
 import { toastError } from "@/lib/toast-error";
 import { repositoryStore } from "@/stores/repository-store";
 
@@ -81,7 +81,7 @@ function TimelineRow({
 }: {
     item: IssueTimelineItem;
     last: boolean;
-    issue: GithubIssueDetail;
+    issue: IssueDetail;
     owner: string;
     repo: string;
     actions: MessageActions;
@@ -143,7 +143,7 @@ function IssueSidebar({
     issue,
     participants,
 }: {
-    issue: GithubIssueDetail;
+    issue: IssueDetail;
     participants: ReturnType<typeof timelineParticipants>;
 }) {
     return (
@@ -162,6 +162,7 @@ function IssueSidebar({
 }
 
 function IssueContent({
+    provider,
     owner,
     repo,
     issue,
@@ -171,11 +172,12 @@ function IssueContent({
     viewerLogin,
     goBack,
 }: {
+    provider: string;
     owner: string;
     repo: string;
-    issue: GithubIssueDetail;
-    comments: GithubIssueComment[];
-    events: GithubIssueEvent[];
+    issue: IssueDetail;
+    comments: IssueComment[];
+    events: IssueEvent[];
     signedIn: boolean;
     viewerLogin: string | null;
     goBack: () => void;
@@ -184,7 +186,7 @@ function IssueContent({
     const updateIssue = useUpdateIssue();
     const updateComment = useUpdateIssueComment();
     const deleteComment = useDeleteIssueComment();
-    const permissions = useRepoPermissions(owner, repo);
+    const permissions = useRepoPermissions(provider, owner, repo);
     const composerRef = useRef<ConversationInputHandle>(null);
     const mutating =
         createComment.pending || updateIssue.pending || updateComment.pending;
@@ -194,7 +196,13 @@ function IssueContent({
 
     const handleComment = async (body: string) => {
         try {
-            await createComment.createComment(owner, repo, issue.number, body);
+            await createComment.createComment(
+                provider,
+                owner,
+                repo,
+                issue.number,
+                body
+            );
         } catch (error) {
             toastError("Could not post comment", error);
             throw error;
@@ -203,7 +211,7 @@ function IssueContent({
 
     const handleToggleState = async () => {
         try {
-            await updateIssue.updateIssue(owner, repo, issue.number, {
+            await updateIssue.updateIssue(provider, owner, repo, issue.number, {
                 state: open ? "closed" : "open",
             });
         } catch (error) {
@@ -227,10 +235,13 @@ function IssueContent({
         canEdit,
         // Rejections propagate to the message, which toasts once.
         onSaveBody: async (body) => {
-            await updateIssue.updateIssue(owner, repo, issue.number, { body });
+            await updateIssue.updateIssue(provider, owner, repo, issue.number, {
+                body,
+            });
         },
         onSaveComment: async (commentId, body) => {
             await updateComment.updateComment(
+                provider,
                 owner,
                 repo,
                 commentId,
@@ -240,6 +251,7 @@ function IssueContent({
         },
         onDeleteComment: async (commentId) => {
             await deleteComment.deleteComment(
+                provider,
                 owner,
                 repo,
                 commentId,
@@ -341,9 +353,10 @@ function useIssueRouteData(
         }
         return undefined;
     });
-    const account = useGithubAccount();
-    const { coords } = useGithubCoords(valid ? repoId : undefined);
+    const { coords } = useRepoCoords(valid ? repoId : undefined);
+    const account = useForgeAccount(coords?.provider ?? null);
     const { detail, comments, events } = useIssue(
+        coords?.provider ?? null,
         coords?.owner ?? null,
         coords?.repo ?? null,
         valid ? issueNumber : null
@@ -432,6 +445,7 @@ export function IssuePage() {
 
     return (
         <IssueContent
+            provider={coords?.provider ?? ""}
             owner={coords?.owner ?? ""}
             repo={coords?.repo ?? ""}
             issue={detail.data}

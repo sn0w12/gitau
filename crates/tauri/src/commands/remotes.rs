@@ -2,7 +2,7 @@ use crate::commands::channel::channel_send;
 use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
 use git_backend::api::remotes::{
-    CloneEvent, CloneRequest, CredentialRequest, FetchRequest, PullRequest, PushOutcome,
+    CloneEvent, CloneRequest, CredentialRequest, FetchRequest, GitPullRequest, PushOutcome,
     PushRequest, RemoteAddRequest, RemoteInfo,
 };
 use git_backend::engines::git2::workflows::WorkflowOutcome;
@@ -163,7 +163,7 @@ pub async fn git_pull(
         .backend
         .pull(
             to_repo_id(repo_id),
-            PullRequest {
+            GitPullRequest {
                 remote: remote.unwrap_or_else(|| "origin".into()),
                 branch,
                 fast_forward_only: fast_forward_only.unwrap_or(false),

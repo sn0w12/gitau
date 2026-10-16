@@ -1,5 +1,7 @@
 import type { Dispatch, RefObject } from "react";
 
+import { capabilityAllows } from "@/hooks/forge/use-forge-account";
+import { useRepoCapabilities } from "@/hooks/forge/use-forge-issues";
 import { useSettingHotkey } from "@/hooks/settings/use-setting-hotkey";
 import type { RepoStateAction, RepoView } from "@/lib/routing/repo-search";
 import { REPO_VIEW_SHORTCUTS } from "@/lib/shortcuts";
@@ -29,6 +31,7 @@ export function useRepoShortcuts({
 }: RepoShortcutScope): void {
     const changes = useChangeActions(repoId);
     const sync = useSyncActions(repoId ?? 0, repoPath);
+    const capabilities = useRepoCapabilities(repoId);
 
     // Tab panels stay mounted, so the target exists before the switch
     // paints; focusing is deferred one frame so it lands when visible.
@@ -69,9 +72,11 @@ export function useRepoShortcuts({
     });
     useSettingHotkey(REPO_VIEW_SHORTCUTS.graph, showView("graph"), { enabled });
     useSettingHotkey(REPO_VIEW_SHORTCUTS.issues, showView("issues"), {
-        enabled,
+        enabled: enabled && capabilityAllows(capabilities, "issues"),
     });
-    useSettingHotkey(REPO_VIEW_SHORTCUTS.pulls, showView("pulls"), { enabled });
+    useSettingHotkey(REPO_VIEW_SHORTCUTS.pulls, showView("pulls"), {
+        enabled: enabled && capabilityAllows(capabilities, "pullRequests"),
+    });
     useSettingHotkey(
         "filterChangesShortcut",
         () => focusInChangesPanel("#changes-filter-input"),

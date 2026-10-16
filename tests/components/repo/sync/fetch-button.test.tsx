@@ -251,7 +251,7 @@ describe("RepoFetchButton", () => {
         view.unmount();
     });
 
-    it("publishes to GitHub directly without any configured remote", async () => {
+    it("publishes directly without any configured remote", async () => {
         seedSettingsForTests({});
         hydrateFetchTimestamps({});
         const services = backendWith({

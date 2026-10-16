@@ -60,6 +60,15 @@ describe("UpdateController", () => {
         expect(check).toHaveBeenCalledTimes(1);
     });
 
+    it("records when the endpoint was last checked", async () => {
+        const { controller } = makeController({});
+        expect(controller.checkedAtStore.state).toBeNull();
+
+        await controller.start();
+
+        expect(controller.checkedAtStore.state).toBeTypeOf("number");
+    });
+
     it("surfaces a check failure without an update to show", async () => {
         const { controller } = makeController({
             check: vi.fn().mockRejectedValue(new Error("offline")),

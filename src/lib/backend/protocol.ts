@@ -723,7 +723,7 @@ export interface CachedIcon {
     fetchedAtMs: number;
 }
 
-/** Non-secret profile of the connected GitHub account; the access token
+/** Non-secret profile of a connected account; the access token
  * never leaves the Rust side (it lives in the OS keychain). */
 export interface AccountProfile {
     login: string;
@@ -736,19 +736,50 @@ export interface AccountProfile {
 }
 
 /** User-facing half of an in-progress device-flow sign-in. */
-export interface DeviceFlowStart {
+export interface AuthChallenge {
     userCode: string;
     verificationUri: string;
     expiresInSecs: number;
 }
 
-export interface GithubOrg {
+/** What a provider can do; the UI shows only views and actions whose flag
+ * is set. */
+export interface Capabilities {
+    issues: boolean;
+    pullRequests: boolean;
+    reviews: boolean;
+    notifications: boolean;
+    checks: boolean;
+    commitStatuses: boolean;
+    workflowRuns: boolean;
+    issuesWrite: boolean;
+    pullRequestsWrite: boolean;
+    publish: boolean;
+    orgs: boolean;
+}
+
+/** A provider this build can talk to. */
+export interface ProviderDescriptor {
+    id: string;
+    label: string;
+    hosts: string[];
+    capabilities: Capabilities;
+}
+
+/** A connected account on one provider host. */
+export interface ConnectionProfile {
+    provider: string;
+    host: string;
+    account: AccountProfile;
+}
+
+export interface Org {
     login: string;
     avatarUrl?: string;
 }
 
-/** One GitHub notification thread as projected by the backend. */
-export interface GithubNotification {
+/** One notification thread as projected by the provider. */
+export interface Notification {
     id: string;
     unread: boolean;
     reason: string;
@@ -764,13 +795,13 @@ export interface GithubNotification {
 /** One 1-based page of the inbox; `hasMore` derives from the response
  * `Link` header. */
 export interface NotificationPage {
-    notifications: GithubNotification[];
+    notifications: Notification[];
     page: number;
     hasMore: boolean;
 }
 
-/** Why a thread ended, from GitHub's `state_reason`. A thread that was never
- * closed carries no reason, and so does one GitHub reports as `reopened`,
+/** Why a thread ended, from the provider's `state_reason`. A thread that was
+ * never closed carries no reason, and so does one reported as `reopened`,
  * which describes a state rather than an ending. Anything unrecognised comes
  * back as `none`, so a new value degrades to "closed" instead of failing the
  * read. */
@@ -780,7 +811,7 @@ export type ThreadStateReason =
     | "notPlanned"
     | "duplicate";
 
-/** One issue from a GitHub search result. */
+/** One issue from a search result. */
 export interface SearchIssueItem {
     number: number;
     title: string;
@@ -788,9 +819,9 @@ export interface SearchIssueItem {
     /** Separates an issue closed as fixed from one closed as stale, since
      * both report `state: "closed"`. */
     stateReason: ThreadStateReason;
-    labels: GithubLabel[];
+    labels: Label[];
     commentCount: number;
-    assignees: GithubUser[];
+    assignees: User[];
     author: string;
     updatedAt: string;
     htmlUrl: string;
@@ -808,15 +839,15 @@ export interface SearchIssuePage {
 /** One row of the pull requests list. `mergedAt` is the only signal that
  * separates a merged pull request from a closed one: search reports both as
  * `state: "closed"`. */
-export interface GithubPullRequestListItem {
+export interface PullRequestListItem {
     number: number;
     title: string;
     state: string;
     stateReason: ThreadStateReason;
-    labels: GithubLabel[];
+    labels: Label[];
     commentCount: number;
-    assignees: GithubUser[];
-    author: GithubUser;
+    assignees: User[];
+    author: User;
     updatedAt: string;
     mergedAt?: string | null;
     htmlUrl: string;
@@ -827,7 +858,7 @@ export interface GithubPullRequestListItem {
 
 /** One 1-based page of pull request search results. */
 export interface SearchPullRequestPage {
-    items: GithubPullRequestListItem[];
+    items: PullRequestListItem[];
     page: number;
     hasMore: boolean;
 }
@@ -838,58 +869,58 @@ export interface PublishResult {
     defaultBranch?: string | null;
 }
 
-/** A GitHub user as shown on issues: login plus avatar. */
-export interface GithubUser {
+/** A user as shown on issues: login plus avatar. */
+export interface User {
     login: string;
     avatarUrl: string;
 }
 
 /** A label on an issue. `color` is hex without `#`. */
-export interface GithubLabel {
+export interface Label {
     name: string;
     color: string;
 }
 
 /** One row of the issues list; pull requests are filtered out backend-side. */
-export interface GithubIssueListItem {
+export interface IssueListItem {
     number: number;
     title: string;
     state: string;
-    labels: GithubLabel[];
+    labels: Label[];
     commentCount: number;
-    assignees: GithubUser[];
+    assignees: User[];
     author: string;
     updatedAt: string;
 }
 
 /** Full issue detail for the issue page header and sidebar. */
-export interface GithubIssueDetail {
+export interface IssueDetail {
     number: number;
     title: string;
     state: string;
     stateReason: ThreadStateReason;
     body: string;
-    author: GithubUser;
-    labels: GithubLabel[];
-    assignees: GithubUser[];
+    author: User;
+    labels: Label[];
+    assignees: User[];
     /** Author plus assignees, deduped; the UI merges comment authors in. */
-    participants: GithubUser[];
+    participants: User[];
     createdAt: string;
     updatedAt: string;
     htmlUrl: string;
 }
 
 /** One comment on the issue timeline. */
-export interface GithubIssueComment {
+export interface IssueComment {
     id: number;
-    author: GithubUser;
+    author: User;
     body: string;
     createdAt: string;
     htmlUrl: string;
 }
 
-/** One non-comment timeline entry. `kind` is the raw GitHub event name. */
-export interface GithubIssueEvent {
+/** One non-comment timeline entry. `kind` is the raw provider event name. */
+export interface IssueEvent {
     id: number;
     kind: string;
     actor: string;
@@ -921,13 +952,13 @@ export interface UpdateIssueBody {
 
 /** The signed-in user's access on a repository. The issue UI gates
  * editing and deleting other people's comments on `push`. */
-export interface GithubRepoPermissions {
+export interface RepoPermissions {
     push: boolean;
     admin: boolean;
 }
 
 /** One side of a pull request. */
-export interface GithubPullRequestRef {
+export interface PullRequestRef {
     ref: string;
     sha: string;
     label: string;
@@ -935,16 +966,16 @@ export interface GithubPullRequestRef {
 
 /** Full pull request detail. Everything the issue projection carries plus
  * what only the pulls endpoint reports. */
-export interface GithubPullRequestDetail {
+export interface PullRequestDetail {
     number: number;
     title: string;
     state: string;
     stateReason: ThreadStateReason;
     body: string;
-    author: GithubUser;
-    labels: GithubLabel[];
+    author: User;
+    labels: Label[];
     /** Reviewers requested on the pull request. */
-    assignees: GithubUser[];
+    assignees: User[];
     createdAt: string;
     updatedAt: string;
     htmlUrl: string;
@@ -952,13 +983,13 @@ export interface GithubPullRequestDetail {
     /** Merge commit time. Set only once merged, which is also how a merged
      * pull request is told apart from a closed one. */
     mergedAt?: string | null;
-    /** null while GitHub is still computing the merge, so the UI must
+    /** null while the provider is still computing the merge, so the UI must
      * re-read before offering the merge button. */
     mergeable?: boolean | null;
     /** Why the merge landed where it did, e.g. `clean` or `blocked`. */
     mergeableState: string;
-    head: GithubPullRequestRef;
-    base: GithubPullRequestRef;
+    head: PullRequestRef;
+    base: PullRequestRef;
     additions: number;
     deletions: number;
     changedFiles: number;
@@ -966,20 +997,20 @@ export interface GithubPullRequestDetail {
 }
 
 /** One commit on a pull request's head branch. `author.login` falls back to
- * the git author name when the commit is not linked to a GitHub account, in
+ * the git author name when the commit is not linked to a provider account, in
  * which case `author.avatarUrl` is empty. */
-export interface GithubPullRequestCommit {
+export interface PullRequestCommit {
     sha: string;
     message: string;
-    author: GithubUser;
+    author: User;
     authoredAt: string;
     htmlUrl: string;
 }
 
-/** One submitted review. `state` is GitHub's raw verdict. */
-export interface GithubPullRequestReview {
+/** One submitted review. `state` is the provider's raw verdict. */
+export interface PullRequestReview {
     id: number;
-    author: GithubUser;
+    author: User;
     state: string;
     body: string;
     submittedAt: string;
@@ -987,9 +1018,9 @@ export interface GithubPullRequestReview {
 }
 
 /** One inline comment anchored to a line in the diff. */
-export interface GithubPullRequestReviewComment {
+export interface PullRequestReviewComment {
     id: number;
-    author: GithubUser;
+    author: User;
     body: string;
     /** Repository-relative path the comment is anchored to. */
     path: string;
@@ -1006,7 +1037,7 @@ export interface GithubPullRequestReviewComment {
 }
 
 /** The output a check run produced. Only the single-run read reports this. */
-export interface GithubCheckRunOutput {
+export interface CheckRunOutput {
     title: string;
     summary: string;
     /** Raw log text, which can be very large. */
@@ -1016,7 +1047,7 @@ export interface GithubCheckRunOutput {
 
 /** One annotation on a check run. Test runners report failures here, so
  * this is where the reason a run failed actually lives. */
-export interface GithubCheckAnnotation {
+export interface CheckAnnotation {
     path: string;
     startLine?: number;
     endLine?: number;
@@ -1027,7 +1058,7 @@ export interface GithubCheckAnnotation {
 }
 
 /** One step of a run's job, in the order it ran. */
-export interface GithubActionStep {
+export interface ActionStep {
     number: number;
     name: string;
     status: string;
@@ -1038,15 +1069,15 @@ export interface GithubActionStep {
      * timestamp, with any ANSI colour escapes removed. */
     log: string;
     /** Span triples per line of `log`, indexing
-     * `GithubCheckRunLog.styles`. */
+     * `CheckRunLog.styles`. */
     spansByLine: number[][];
 }
 
 /** A run's job log, split the way GitHub's job view splits it. The check run
  * endpoint does not carry log text: `output.text` is null for Actions jobs and
  * the real log only exists on the job. */
-export interface GithubCheckRunLog {
-    steps: GithubActionStep[];
+export interface CheckRunLog {
+    steps: ActionStep[];
     /** The 1-based table every step's spans index into, carrying the log's own
      * colours rather than any syntax theme. */
     styles: SyntaxStyle[];
@@ -1057,16 +1088,16 @@ export interface GithubCheckRunLog {
 }
 
 /** One check run with its output and annotations, for the results dialog. */
-export interface GithubCheckRunDetail extends GithubCheckRun {
-    output: GithubCheckRunOutput;
-    annotations: GithubCheckAnnotation[];
+export interface CheckRunDetail extends CheckRun {
+    output: CheckRunOutput;
+    annotations: CheckAnnotation[];
 }
 
 /** One CI check run on a commit. `status` is the progress
  * (`queued`, `in_progress`, `completed`); `conclusion` is absent until it
  * completes. Only the latest run per name is returned, so a workflow triggered
  * by both a push and the pull request appears once. */
-export interface GithubCheckRun {
+export interface CheckRun {
     id: number;
     name: string;
     status: string;
@@ -1077,9 +1108,9 @@ export interface GithubCheckRun {
 }
 
 /** One commit status, the older sibling of a check run. Apps that never
- * moved to the checks API report only here, and GitHub lists both in the same
+ * moved to the checks API report only here, and the provider lists both in the
  * place. */
-export interface GithubCommitStatus {
+export interface CommitStatus {
     id: number;
     /** The reporter's name for the check, e.g. `CodeRabbit`. */
     context: string;
@@ -1091,7 +1122,7 @@ export interface GithubCommitStatus {
 
 /** One workflow run for a commit. Only the latest run per workflow name is
  * returned, since a branch push and the pull request both trigger one. */
-export interface GithubWorkflowRun {
+export interface WorkflowRun {
     id: number;
     name: string;
     event: string;
@@ -1113,14 +1144,14 @@ export interface UpdatePullRequestBody {
 
 export type PullRequestMergeMethod = "merge" | "rebase" | "squash";
 
-/** Merge options. An absent title or message lets GitHub pick its own. */
+/** Merge options. An absent title or message lets the provider pick its own. */
 export interface MergePullRequestBody {
     mergeMethod: PullRequestMergeMethod;
     commitTitle?: string;
     commitMessage?: string;
 }
 
-/** `merged` is false when GitHub accepted the call but declined to merge. */
+/** `merged` is false when the provider accepted the call but declined to merge. */
 export interface MergePullRequestResult {
     sha: string;
     merged: boolean;

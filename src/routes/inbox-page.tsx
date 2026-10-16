@@ -39,18 +39,21 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { useConfirm } from "@/contexts/confirm-context";
-import { useGithubAccount } from "@/hooks/github/use-github-account";
 import {
-    useGithubNotifications,
+    useActiveConnection,
+    useForgeConnections,
+} from "@/hooks/forge/use-forge-account";
+import {
+    useNotifications,
     useMarkAllNotificationsRead,
     useMarkNotificationRead,
     useResolveSubjectUrl,
-} from "@/hooks/github/use-github-inbox";
-import { useLocalRepoMap } from "@/hooks/github/use-github-issues";
+} from "@/hooks/forge/use-forge-inbox";
+import { useLocalRepoMap } from "@/hooks/forge/use-forge-issues";
 import { useInternalLink } from "@/hooks/tabs/use-internal-link";
-import type { GithubNotification } from "@/lib/backend/protocol";
+import type { Notification } from "@/lib/backend/protocol";
 import { GitBackendError } from "@/lib/backend/transport/invoke";
-import { parseIssueUrl, parsePullUrl } from "@/lib/github/repo-coords";
+import { parseIssueUrl, parsePullUrl } from "@/lib/forge/repo-coords";
 import { openExternal } from "@/lib/open-external";
 import { toastError } from "@/lib/toast-error";
 import { cn, formatRelativeDate } from "@/lib/utils";
@@ -65,10 +68,7 @@ const FILTER_OPTIONS: { value: InboxFilter; label: string }[] = [
     { value: "assign", label: "Assignments" },
 ];
 
-function matchesFilter(
-    thread: GithubNotification,
-    filter: InboxFilter
-): boolean {
+function matchesFilter(thread: Notification, filter: InboxFilter): boolean {
     switch (filter) {
         case "all":
             return true;
@@ -108,16 +108,20 @@ function formatSubjectType(type: string): string {
 }
 
 /**
- * Signed-in GitHub notifications, newest first, paged from the backend 100
+ * Signed-in notifications, newest first, paged from the backend 100
  * threads at a time. Unread state updates in place on mark-read; the
  * sidebar badge reads the same cache. Only the list scrolls; the header
  * stays pinned.
  */
 export function InboxPage() {
     const link = useInternalLink();
-    const account = useGithubAccount();
+    const connections = useForgeConnections();
+    const account = {
+        isLoading: connections.isLoading,
+        data: connections.data?.[0]?.account ?? null,
+    };
     const [filter, setFilter] = useState<InboxFilter>("all");
-    const inbox = useGithubNotifications();
+    const inbox = useNotifications();
     const markRead = useMarkNotificationRead();
     const markAll = useMarkAllNotificationsRead();
     const [markingIds, setMarkingIds] = useState<ReadonlySet<string>>(
@@ -133,7 +137,7 @@ export function InboxPage() {
         [inbox.threads, filter]
     );
     const groups = useMemo(() => {
-        const byRepo = new Map<string, GithubNotification[]>();
+        const byRepo = new Map<string, Notification[]>();
         for (const thread of threads) {
             const key = thread.repoFullName || "Unknown repository";
             const list = byRepo.get(key);
@@ -153,7 +157,7 @@ export function InboxPage() {
         const result = await confirm({
             title: "Mark all notifications read?",
             description:
-                "Every GitHub notification is marked read, including threads on pages you have not loaded yet.",
+                "Every notification is marked read, including threads on pages you have not loaded yet.",
             confirmText: "Mark all read",
         });
         if (!result.confirmed) return;
@@ -246,7 +250,7 @@ export function InboxPage() {
                         </div>
                     </div>
                     <FrameDescription className="text-sm text-muted-foreground">
-                        GitHub notifications for the connected account.
+                        Notifications for the connected account.
                     </FrameDescription>
                 </FrameHeader>
                 <FramePanel data-testid="inbox-panel" className="min-h-0 p-2">
@@ -262,7 +266,7 @@ export function InboxPage() {
                                     <Inbox />
                                 </EmptyMedia>
                                 <EmptyHeader>
-                                    <EmptyTitle>Connect GitHub</EmptyTitle>
+                                    <EmptyTitle>Connect an account</EmptyTitle>
                                     <EmptyDescription>
                                         Sign in to read notifications, review
                                         requests, and mentions.
@@ -391,7 +395,7 @@ function InboxSubjectTitle({
     onMarkRead,
     onOpenResolved,
 }: {
-    thread: GithubNotification;
+    thread: Notification;
     repoPath?: string;
     threadTarget: { number: number } | null;
     resolving: boolean;
@@ -453,12 +457,13 @@ function InboxRow({
     onMarkRead,
     localRepos,
 }: {
-    thread: GithubNotification;
+    thread: Notification;
     marking: boolean;
     onMarkRead: () => void;
     localRepos: Map<string, string>;
 }) {
     const resolve = useResolveSubjectUrl();
+    const connection = useActiveConnection();
     const [resolving, setResolving] = useState(false);
 
     // Issue and pull request threads whose repo is in the app resolve to the
@@ -484,7 +489,7 @@ function InboxRow({
             const target =
                 url ??
                 (thread.repoFullName
-                    ? `https://github.com/${thread.repoFullName}`
+                    ? `https://${connection?.host ?? ""}/${thread.repoFullName}`
                     : null);
             if (target) await openExternal(target);
         } catch (error) {

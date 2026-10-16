@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import babel from "@rolldown/plugin-babel";
@@ -32,7 +33,23 @@ function reactScan(): Plugin {
     };
 }
 
+function buildCommit(): string {
+    const sha = process.env.GITHUB_SHA;
+    if (sha) return sha.slice(0, 7);
+    try {
+        return execFileSync("git", ["rev-parse", "--short=7", "HEAD"], {
+            encoding: "utf8",
+        }).trim();
+    } catch {
+        return "unknown";
+    }
+}
+
 const config = defineConfig({
+    define: {
+        __BUILD_COMMIT__: JSON.stringify(buildCommit()),
+        __BUILD_DATE__: JSON.stringify(new Date().toISOString()),
+    },
     resolve: {
         alias: {
             "@": fileURLToPath(new URL("./src", import.meta.url)),

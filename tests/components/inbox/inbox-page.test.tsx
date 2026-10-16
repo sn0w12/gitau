@@ -10,8 +10,11 @@ import { ConfirmProvider } from "@/contexts/confirm-context";
 import { AppServicesContext } from "@/contexts/services-context";
 import type {
     AccountProfile,
-    GithubNotification,
+    Capabilities,
+    ConnectionProfile,
+    Notification,
     NotificationPage,
+    ProviderDescriptor,
 } from "@/lib/backend/protocol";
 import type { BackendClient } from "@/lib/backend/transport/client";
 import type { Result } from "@/lib/backend/transport/result";
@@ -22,9 +25,7 @@ import { seedSettingsForTests } from "@/stores/settings-store";
     globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-function thread(
-    overrides: Partial<GithubNotification> = {}
-): GithubNotification {
+function thread(overrides: Partial<Notification> = {}): Notification {
     return {
         id: "1",
         unread: true,
@@ -48,18 +49,54 @@ const PROFILE: AccountProfile = {
     connectedAtMs: 1_700_000_000_000,
 };
 
+const CAPABILITIES: Capabilities = {
+    issues: true,
+    pullRequests: true,
+    reviews: true,
+    notifications: true,
+    checks: true,
+    commitStatuses: true,
+    workflowRuns: true,
+    issuesWrite: true,
+    pullRequestsWrite: true,
+    publish: true,
+    orgs: true,
+};
+
+const PROVIDER: ProviderDescriptor = {
+    id: "github",
+    label: "GitHub",
+    hosts: ["github.com"],
+    capabilities: CAPABILITIES,
+};
+
+const CONNECTION: ConnectionProfile = {
+    provider: "github",
+    host: "github.com",
+    account: PROFILE,
+};
+
 function backendWith(pages: NotificationPage[]) {
     let markReadCalls: string[] = [];
     let markAllCalls = 0;
     let resolveCalls: string[] = [];
 
     const backend = {
-        github: {
+        forge: {
+            providers: async (): Promise<Result<ProviderDescriptor[]>> => ({
+                ok: true,
+                value: [PROVIDER],
+            }),
+            connections: async (): Promise<Result<ConnectionProfile[]>> => ({
+                ok: true,
+                value: [CONNECTION],
+            }),
             account: async (): Promise<Result<AccountProfile | null>> => ({
                 ok: true,
                 value: PROFILE,
             }),
             listNotifications: async (
+                _provider: string,
                 page?: number
             ): Promise<Result<NotificationPage>> => {
                 const next = pages[page === undefined ? 0 : page - 1] ?? {
@@ -70,6 +107,7 @@ function backendWith(pages: NotificationPage[]) {
                 return { ok: true, value: next };
             },
             markNotificationRead: async (
+                _provider: string,
                 threadId: string
             ): Promise<Result<void>> => {
                 markReadCalls.push(threadId);
@@ -88,6 +126,7 @@ function backendWith(pages: NotificationPage[]) {
                 return { ok: true, value: undefined };
             },
             resolveSubjectUrl: async (
+                _provider: string,
                 subjectUrl: string
             ): Promise<Result<string | null>> => {
                 resolveCalls.push(subjectUrl);
@@ -123,7 +162,15 @@ function backendWith(pages: NotificationPage[]) {
 
 function backendSignedOut() {
     const backend = {
-        github: {
+        forge: {
+            providers: async (): Promise<Result<ProviderDescriptor[]>> => ({
+                ok: true,
+                value: [PROVIDER],
+            }),
+            connections: async (): Promise<Result<ConnectionProfile[]>> => ({
+                ok: true,
+                value: [],
+            }),
             account: async (): Promise<Result<AccountProfile | null>> => ({
                 ok: true,
                 value: null,
@@ -226,7 +273,7 @@ describe("InboxPage", () => {
         await flush();
 
         const shown = await waitFor(() =>
-            view.container.textContent!.includes("Connect GitHub")
+            view.container.textContent!.includes("Connect an account")
         );
         expect(shown).toBe(true);
         view.unmount();

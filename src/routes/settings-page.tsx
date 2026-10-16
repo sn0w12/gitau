@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { AttributionsCard } from "@/components/settings/attributions-card";
+import { ReleaseInfoCard } from "@/components/settings/release-info-card";
 import { Frame } from "@/components/ui/frame";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
@@ -106,6 +107,7 @@ export function SettingsPage() {
                                 value={aboutTab.id}
                                 className="min-h-0 space-y-1"
                             >
+                                <ReleaseInfoCard />
                                 <AttributionsCard />
                             </TabsPanel>
                         </div>
