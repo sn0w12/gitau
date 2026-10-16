@@ -1,12 +1,22 @@
+import Scritto from "@scritto/react";
 import { useHotkeyRecorder } from "@tanstack/react-hotkeys";
 import { X } from "lucide-react";
+import type { ReactNode } from "react";
 import { Fragment } from "react";
 
+import { AnimatedWidth } from "@/components/ui/animated-width";
+import { BlurCrossfade } from "@/components/ui/blur-crossfade";
 import { Button } from "@/components/ui/button";
-import { Kbd, KbdGroup } from "@/components/ui/kbd";
+import {
+    InsetInput,
+    InsetInputAddition,
+    InsetInputValue,
+} from "@/components/ui/inset-input";
+import { KbdGroup } from "@/components/ui/kbd";
+import { useHeldChord } from "@/hooks/use-held-chord";
 import { displayToken, splitChord } from "@/lib/shortcuts";
 
-import { ButtonGroup } from "../ui/group";
+type Preview = { key: string; node: ReactNode };
 
 function Chord({ chord }: { chord: string }) {
     const parts = splitChord(chord);
@@ -14,14 +24,46 @@ function Chord({ chord }: { chord: string }) {
     if (parts.length === 0) return null;
 
     return (
-        <KbdGroup>
+        <KbdGroup className="h-full items-center">
             {parts.map((part, index) => (
                 <Fragment key={`${part}-${index}`}>
-                    <Kbd>{displayToken(part)}</Kbd>
+                    <span>{displayToken(part)}</span>
+                    {index + 1 !== parts.length && <span>+</span>}
                 </Fragment>
             ))}
         </KbdGroup>
     );
+}
+
+function Placeholder({ children }: { children: ReactNode }) {
+    return (
+        <span className="font-mono text-nowrap text-muted-foreground">
+            {children}
+        </span>
+    );
+}
+
+function buildPreview(
+    recording: boolean,
+    heldChord: string,
+    value: string
+): Preview {
+    if (recording) {
+        if (heldChord) {
+            return {
+                key: `record:${heldChord}`,
+                node: <Chord chord={heldChord} />,
+            };
+        }
+        return {
+            key: "record:none",
+            node: <Placeholder>Press keys…</Placeholder>,
+        };
+    }
+    if (value) {
+        return { key: `value:${value}`, node: <Chord chord={value} /> };
+    }
+    return { key: "value:none", node: <Placeholder>Not set</Placeholder> };
 }
 
 /**
@@ -40,51 +82,51 @@ export function ShortcutControl({
             onChange(typeof hotkey === "string" ? hotkey.trim() : "");
         },
     });
-
-    if (recorder.isRecording) {
-        return (
-            <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">
-                    Press keys…
-                </span>
-                <Button
-                    variant="outline"
-                    onClick={() => recorder.cancelRecording()}
-                >
-                    Cancel
-                </Button>
-            </div>
-        );
-    }
+    const heldChord = useHeldChord(recorder.isRecording);
+    const preview = buildPreview(recorder.isRecording, heldChord, value);
 
     return (
-        <div className="flex items-center gap-2">
-            {value ? (
-                <Chord chord={value} />
-            ) : (
-                <span className="text-xs text-muted-foreground">Not set</span>
-            )}
-            <ButtonGroup>
+        <InsetInput className="cursor-default">
+            <InsetInputAddition align="inline-start" className="cursor-default">
                 <Button
-                    variant="outline"
-                    onClick={() => recorder.startRecording()}
-                >
-                    Edit
-                </Button>
-                {value && (
-                    <Button
-                        variant="destructive"
-                        size="icon"
-                        aria-label="Clear shortcut"
-                        onClick={() => onChange("")}
-                        render={
-                            <span role="button">
-                                <X />
-                            </span>
+                    variant="ghost"
+                    size="sm"
+                    className="px-1"
+                    onClick={() => {
+                        if (recorder.isRecording) {
+                            recorder.cancelRecording();
+                            return;
                         }
-                    />
-                )}
-            </ButtonGroup>
-        </div>
+
+                        recorder.startRecording();
+                    }}
+                >
+                    <Scritto value={recorder.isRecording ? "Cancel" : "Edit"} />
+                </Button>
+            </InsetInputAddition>
+            <InsetInputValue className="cursor-text px-2">
+                <AnimatedWidth>
+                    <BlurCrossfade valueKey={preview.key}>
+                        {preview.node}
+                    </BlurCrossfade>
+                </AnimatedWidth>
+            </InsetInputValue>
+            <InsetInputAddition
+                align="inline-end"
+                className="-mr-2 cursor-default"
+            >
+                <Button
+                    variant="destructive"
+                    size="icon-sm"
+                    aria-label="Clear shortcut"
+                    onClick={() => onChange("")}
+                    render={
+                        <span role="button">
+                            <X />
+                        </span>
+                    }
+                />
+            </InsetInputAddition>
+        </InsetInput>
     );
 }
