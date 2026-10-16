@@ -450,9 +450,7 @@ impl Backend {
             let root_for_trash = repo_root.clone();
             self.scheduler
                 .run(&CancellationToken::new(), move || {
-                    trash::delete(&root_for_trash).map_err(|error| GitError::Trash {
-                        details: error.to_string(),
-                    })
+                    trash_working_copy(&root_for_trash)
                 })
                 .await?;
         }
@@ -2714,6 +2712,36 @@ fn remote_info_cache_key(coords: &RemoteCoords) -> String {
         sanitize(&coords.owner),
         sanitize(&coords.repo)
     )
+}
+
+/// Moves a working copy to the OS trash, bounded in time.
+///
+/// The Windows shell move runs through `IFileOperation` and blocks
+/// indefinitely when a filter driver (antivirus, indexer) holds a file in
+/// the tree, which would wedge the operation and its scheduler permit. The
+/// call therefore runs on its own thread and is waited on with a deadline;
+/// on timeout the caller gets `trashFailed` and the worker is left to the
+/// shell, which returns when the move finishes or the process exits.
+fn trash_working_copy(root: &Path) -> Result<()> {
+    const TRASH_TIMEOUT: Duration = Duration::from_secs(30);
+    let (tx, rx) = std::sync::mpsc::channel();
+    let path = root.to_path_buf();
+    std::thread::Builder::new()
+        .name("gitau-trash".to_owned())
+        .spawn(move || {
+            let outcome = trash::delete(&path).map_err(|error| error.to_string());
+            let _ = tx.send(outcome);
+        })
+        .map_err(|error| GitError::Trash {
+            details: error.to_string(),
+        })?;
+    match rx.recv_timeout(TRASH_TIMEOUT) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(details)) => Err(GitError::Trash { details }),
+        Err(_) => Err(GitError::Trash {
+            details: "the file manager did not finish moving the working copy".to_owned(),
+        }),
+    }
 }
 
 /// Live provider lookup. `None` means the host is unknown, the request
