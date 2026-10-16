@@ -47,7 +47,7 @@ fn commit_at(fixture: &TestRepo, message: &str, seconds: i64, files: &[(&str, &s
     index
         .add_all(["*"], git2::IndexAddOption::DEFAULT, None)
         .unwrap();
-    index.write().unwrap();
+    common::write_index(&mut index);
     let tree = fixture.repo.find_tree(index.write_tree().unwrap()).unwrap();
     let sig = git2::Signature::new(
         "Test User",

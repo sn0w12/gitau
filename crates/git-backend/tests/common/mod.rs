@@ -45,7 +45,7 @@ impl TestRepo {
         index.add_path(path).unwrap_or_else(|e| {
             panic!("add_path {rel} failed: {e}");
         });
-        index.write().unwrap();
+        write_index(&mut index);
     }
 
     pub fn commit_all(&self, message: &str) -> git2::Oid {
@@ -53,7 +53,7 @@ impl TestRepo {
         index
             .add_all(["*"], git2::IndexAddOption::DEFAULT, None)
             .unwrap();
-        index.write().unwrap();
+        write_index(&mut index);
         let tree_id = index.write_tree().unwrap();
         let tree = self.repo.find_tree(tree_id).unwrap();
         let sig = git2::Signature::now("Test User", "test@example.com").unwrap();
@@ -76,5 +76,30 @@ impl TestRepo {
 
     pub fn head_commit(&self) -> git2::Commit<'_> {
         self.repo.head().unwrap().peel_to_commit().unwrap()
+    }
+}
+
+/// libgit2 raises `Locked` instead of waiting when another writer holds
+/// `index.lock`. The backend's background status warmup holds it while it
+/// rewrites refreshed stat data, so a test that writes the index right after
+/// opening a repository races it and must retry, the way the backend's own
+/// writers do.
+pub fn write_index(index: &mut git2::Index) {
+    const DEADLINE: std::time::Duration = std::time::Duration::from_secs(10);
+    const MAX_WAIT: std::time::Duration = std::time::Duration::from_millis(50);
+    let started = std::time::Instant::now();
+    let mut wait = std::time::Duration::from_millis(2);
+    loop {
+        match index.write() {
+            Ok(()) => return,
+            Err(error) if error.code() == git2::ErrorCode::Locked => {
+                if started.elapsed() >= DEADLINE {
+                    panic!("index stayed locked for {DEADLINE:?}: {error}");
+                }
+                std::thread::sleep(wait);
+                wait = (wait * 2).min(MAX_WAIT);
+            }
+            Err(error) => panic!("index write failed: {error}"),
+        }
     }
 }
