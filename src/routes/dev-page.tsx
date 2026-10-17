@@ -549,6 +549,10 @@ const MARKDOWN_SAMPLES: MarkdownSample[] = [
         source: "```rust file=src/main.rs\nlet x = 1;\n```\n\n```js title=entry.js\nconst x = 1;\n```",
     },
     {
+        title: "Mermaid diagram",
+        source: "```mermaid\nflowchart LR\n    A[Pull request] --> B{Checks pass?}\n    B -- yes --> C[Merge]\n    B -- no --> D[Fix]\n```",
+    },
+    {
         title: "Tables",
         source: "| Left | Center | Right |\n| :--- | :----: | ----: |\n| a | b | c |\n| longer cell | x | y |",
     },

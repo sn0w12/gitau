@@ -207,6 +207,18 @@
     --code-foreground: var(--foreground);
     --code-highlight: --alpha(var(--color-black) / 4%);
 
+    --pele-bg: var(--card);
+    --pele-fg: var(--card-foreground);
+    --pele-muted: var(--muted-foreground);
+    --pele-line: var(--muted-foreground);
+    --pele-surface: color-mix(in srgb, var(--color-black) 4%, var(--card));
+    --pele-surface-alt: color-mix(in srgb, var(--color-black) 2%, var(--card));
+    --pele-border: color-mix(in srgb, var(--color-black) 10%, var(--card));
+    --pele-accent: var(--info);
+    --pele-critical: var(--destructive);
+    --pele-font: var(--font-sans);
+    --pele-font-mono: var(--font-mono);
+
     --destructive: oklch(63.1% 0.236 18);
     --destructive-foreground: color-mix(
         in srgb,
@@ -236,6 +248,15 @@
     --graph-lane-5: oklch(0.631 0.2157 287.24);
     --graph-lane-6: var(--color-teal-500);
     --graph-lane-7: var(--color-rose-500);
+
+    --pele-series-1: var(--graph-lane-0);
+    --pele-series-2: var(--graph-lane-1);
+    --pele-series-3: var(--graph-lane-2);
+    --pele-series-4: var(--graph-lane-3);
+    --pele-series-5: var(--graph-lane-4);
+    --pele-series-6: var(--graph-lane-5);
+    --pele-series-7: var(--graph-lane-6);
+    --pele-series-8: var(--graph-lane-7);
 
     --ease-snappy: cubic-bezier(0.2, 0.4, 0.1, 0.95);
 }
@@ -290,6 +311,10 @@
     --code: color-mix(in srgb, var(--background) 98%, var(--color-white));
     --code-foreground: var(--foreground);
     --code-highlight: --alpha(var(--color-white) / 4%);
+
+    --pele-surface: color-mix(in srgb, var(--color-white) 4%, var(--card));
+    --pele-surface-alt: color-mix(in srgb, var(--color-white) 2%, var(--card));
+    --pele-border: color-mix(in srgb, var(--color-white) 8%, var(--card));
 }
 
 @utility clip-inset-backdrop {

@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import {
+    cleanup,
+    fireEvent,
+    render,
+    screen,
+    waitFor,
+} from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -10,6 +16,11 @@ import type { HighlightedSnippet } from "@/lib/backend/protocol";
 import type { BackendClient } from "@/lib/backend/transport/client";
 import type { Result } from "@/lib/backend/transport/result";
 import { seedSettingsForTests } from "@/stores/settings-store";
+
+// jsdom has no canvas package, so the probe pele uses for text measurement
+// throws a "not implemented" error before falling back to its width table.
+HTMLCanvasElement.prototype.getContext = (() =>
+    null) as typeof HTMLCanvasElement.prototype.getContext;
 
 const PLAIN: HighlightedSnippet = {
     highlighted: false,
@@ -366,6 +377,43 @@ describe("Alerts", () => {
         const view = renderMarkdown("> [!CUSTOM]\n> Body.");
         expect(view.container.querySelector("[role='note']")).toBeNull();
         expect(view.container.querySelector("blockquote")).not.toBeNull();
+    });
+});
+
+describe("Mermaid diagrams", () => {
+    it("renders a mermaid fence as a diagram", async () => {
+        const view = renderMarkdown("```mermaid\nflowchart LR\n  A --> B\n```");
+        await waitFor(() => {
+            expect(
+                view.container.querySelector(
+                    '[data-testid="mermaid-diagram"] svg'
+                )
+            ).not.toBeNull();
+        });
+    });
+
+    it("falls back to the source when the diagram will not parse", async () => {
+        const view = renderMarkdown("```mermaid\nnot a diagram\n```");
+        await waitFor(() => {
+            expect(view.container.textContent).toContain(
+                "Diagram could not be rendered"
+            );
+        });
+        expect(view.container.textContent).toContain("not a diagram");
+    });
+
+    it("opens the diagram over the page", async () => {
+        const view = renderMarkdown("```mermaid\nflowchart LR\n  A --> B\n```");
+        const open = await waitFor(() =>
+            view.getByRole("button", { name: "Expand diagram" })
+        );
+        fireEvent.click(open);
+        await waitFor(() => {
+            expect(screen.getByRole("dialog")).not.toBeNull();
+        });
+        expect(
+            screen.getByRole("button", { name: "Close diagram" })
+        ).not.toBeNull();
     });
 });
 
