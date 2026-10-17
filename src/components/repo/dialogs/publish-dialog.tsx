@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
     Dialog,
     DialogClose,
@@ -11,8 +12,9 @@ import {
     DialogPopup,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
     Select,
     SelectGroup,
@@ -22,7 +24,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import {
     usePublishOwnerGroups,
     type PublishOwnerGroup,
@@ -114,6 +115,7 @@ function PublishRepositoryDialogBody({
     }));
 
     const handleSubmit = async () => {
+        if (!canSubmit) return;
         setConflict(null);
         try {
             const result: PublishResult = await mutation.mutateAsync({
@@ -158,108 +160,112 @@ function PublishRepositoryDialogBody({
                         : "Creates the repository, points origin at it, and pushes your current branch."}
                 </DialogDescription>
             </DialogHeader>
-            <DialogPanel className="flex flex-col gap-3">
-                {target == null || activeGroup == null ? (
-                    <p className="text-sm text-muted-foreground">{notice}</p>
-                ) : (
-                    <>
-                        <div className="flex flex-col gap-1.5">
-                            <Label htmlFor="publish-owner">Owner</Label>
-                            <Select
-                                value={value ?? ""}
-                                onValueChange={(next) => {
-                                    if (typeof next === "string")
-                                        setSelected(next);
-                                }}
-                                items={items}
-                            >
-                                <SelectTrigger
-                                    className="w-full"
-                                    aria-label="Owner"
+            <Form
+                className="contents"
+                onSubmit={(event) => {
+                    event.preventDefault();
+                    void handleSubmit();
+                }}
+            >
+                <DialogPanel className="flex flex-col gap-3">
+                    {target == null || activeGroup == null ? (
+                        <p className="text-sm text-muted-foreground">
+                            {notice}
+                        </p>
+                    ) : (
+                        <>
+                            <Field>
+                                <FieldLabel>Owner</FieldLabel>
+                                <Select
+                                    value={value ?? ""}
+                                    onValueChange={(next) => {
+                                        if (typeof next === "string")
+                                            setSelected(next);
+                                    }}
+                                    items={items}
                                 >
-                                    <SelectValue>
-                                        {() => ownerLabel(activeGroup, value)}
-                                    </SelectValue>
-                                </SelectTrigger>
-                                <SelectPopup>
-                                    {items.map((group) => (
-                                        <SelectGroup key={group.label}>
-                                            <SelectGroupLabel>
-                                                {group.label}
-                                            </SelectGroupLabel>
-                                            {group.items.map((entry) => (
-                                                <SelectItem
-                                                    key={entry.value}
-                                                    value={entry.value}
-                                                >
-                                                    {entry.label}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectGroup>
-                                    ))}
-                                </SelectPopup>
-                            </Select>
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                            <Label htmlFor="publish-name">Name</Label>
-                            <Input
-                                id="publish-name"
-                                value={name}
-                                onChange={(event) =>
-                                    setName(event.target.value)
-                                }
-                                placeholder="my-project"
-                                autoFocus
-                            />
-                            {conflict ? (
-                                <p
-                                    className="text-sm text-destructive"
-                                    role="alert"
-                                >
-                                    {conflict}
-                                </p>
-                            ) : null}
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                            <Label htmlFor="publish-description">
-                                Description
-                            </Label>
-                            <Input
-                                id="publish-description"
-                                value={description}
-                                onChange={(event) =>
-                                    setDescription(event.target.value)
-                                }
-                                placeholder="Optional"
-                            />
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <Switch
-                                    id="publish-private"
-                                    checked={isPrivate}
-                                    onCheckedChange={(checked) =>
-                                        setIsPrivate(checked === true)
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue>
+                                            {() =>
+                                                ownerLabel(activeGroup, value)
+                                            }
+                                        </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectPopup>
+                                        {items.map((group) => (
+                                            <SelectGroup key={group.label}>
+                                                <SelectGroupLabel>
+                                                    {group.label}
+                                                </SelectGroupLabel>
+                                                {group.items.map((entry) => (
+                                                    <SelectItem
+                                                        key={entry.value}
+                                                        value={entry.value}
+                                                    >
+                                                        {entry.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectGroup>
+                                        ))}
+                                    </SelectPopup>
+                                </Select>
+                            </Field>
+                            <Field>
+                                <FieldLabel>Name</FieldLabel>
+                                <Input
+                                    value={name}
+                                    onChange={(event) =>
+                                        setName(event.target.value)
                                     }
+                                    placeholder="my-project"
+                                    autoFocus
                                 />
-                                <Label htmlFor="publish-private">Private</Label>
-                            </div>
-                        </div>
-                    </>
-                )}
-            </DialogPanel>
-            <DialogFooter>
-                <DialogClose render={<Button variant="ghost" />}>
-                    Cancel
-                </DialogClose>
-                <Button
-                    disabled={!canSubmit}
-                    loading={mutation.isPending}
-                    onClick={() => void handleSubmit()}
-                >
-                    Create repository
-                </Button>
-            </DialogFooter>
+                                {conflict ? (
+                                    <p
+                                        className="text-sm text-destructive"
+                                        role="alert"
+                                    >
+                                        {conflict}
+                                    </p>
+                                ) : null}
+                            </Field>
+                            <Field>
+                                <FieldLabel>Description</FieldLabel>
+                                <Input
+                                    value={description}
+                                    onChange={(event) =>
+                                        setDescription(event.target.value)
+                                    }
+                                    placeholder="Optional"
+                                />
+                            </Field>
+                            <Field>
+                                <FieldLabel>
+                                    <Checkbox
+                                        checked={isPrivate}
+                                        onCheckedChange={(checked) =>
+                                            setIsPrivate(checked === true)
+                                        }
+                                    />
+                                    Private
+                                </FieldLabel>
+                            </Field>
+                        </>
+                    )}
+                </DialogPanel>
+                <DialogFooter>
+                    <DialogClose render={<Button variant="ghost" />}>
+                        Cancel
+                    </DialogClose>
+                    <Button
+                        type="submit"
+                        disabled={!canSubmit}
+                        loading={mutation.isPending}
+                    >
+                        Create repository
+                    </Button>
+                </DialogFooter>
+            </Form>
         </>
     );
 }

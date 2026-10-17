@@ -14,6 +14,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
+import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTab } from "@/components/ui/tabs";
 import {
@@ -145,115 +146,113 @@ function CreateCheckoutForm({
                         : "Adds a linked checkout beside this repository."}
                 </DialogDescription>
             </DialogHeader>
-            <DialogPanel
-                className="p-0"
-                onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                        event.preventDefault();
-                        void handleSubmit();
-                    }
+            <Form
+                className="contents"
+                onSubmit={(event) => {
+                    event.preventDefault();
+                    void handleSubmit();
                 }}
             >
-                <div className="flex flex-col gap-2 px-6 pb-6">
-                    <Tabs
-                        value={target}
-                        onValueChange={(value) => {
-                            if (value === "branch" || value === "worktree") {
-                                setTarget(value);
-                            }
-                        }}
-                    >
-                        <TabsList className="w-full">
-                            <TabsTab value="branch" className="flex-1">
-                                <GitBranch />
-                                Branch
-                            </TabsTab>
-                            <TabsTab value="worktree" className="flex-1">
-                                <FolderGit2 />
-                                Worktree
-                            </TabsTab>
-                        </TabsList>
-                    </Tabs>
-                    <Field>
-                        <FieldLabel htmlFor="create-checkout-name">
-                            Name
-                        </FieldLabel>
-                        <Input
-                            id="create-checkout-name"
-                            value={name}
-                            onChange={(event) => setName(event.target.value)}
-                            placeholder="feature/thing"
-                            aria-label="Name"
-                            autoFocus
-                        />
-                        {trimmed.length > 0 && nameTaken && (
-                            <p className="text-xs text-destructive">
-                                That name is invalid or already exists locally.
-                            </p>
-                        )}
-                    </Field>
-                    <Field>
-                        <FieldLabel htmlFor="create-checkout-start">
-                            Start point
-                        </FieldLabel>
-                        <Input
-                            id="create-checkout-start"
-                            value={startPoint}
-                            onChange={(event) =>
-                                setStartPoint(event.target.value)
-                            }
-                            placeholder={
-                                target === "branch"
-                                    ? "Defaults to HEAD"
-                                    : "HEAD"
-                            }
-                            aria-label="Start point"
-                        />
-                    </Field>
-                    <div
-                        className={cn(
-                            "grid transition-[grid-template-rows,opacity,margin] duration-200 ease-snappy",
-                            // Collapsed, the row is 0fr but the parent's gap-3
-                            // would still reserve 12px, so cancel it out.
-                            target === "worktree"
-                                ? "mt-0 grid-rows-[1fr] opacity-100"
-                                : "-mt-3 grid-rows-[0fr] opacity-0"
-                        )}
-                    >
-                        <div className="min-h-0 overflow-hidden">
-                            <Field>
-                                <FieldLabel htmlFor="create-checkout-path">
-                                    Path
-                                </FieldLabel>
-                                <Input
-                                    id="create-checkout-path"
-                                    value={path}
-                                    onChange={(event) =>
-                                        setPath(event.target.value)
-                                    }
-                                    placeholder="Defaults to a folder named after the worktree"
-                                    aria-label="Path"
-                                    tabIndex={
-                                        target === "worktree" ? undefined : -1
-                                    }
-                                />
-                            </Field>
+                <DialogPanel className="p-0">
+                    <div className="flex flex-col gap-2 px-6 pb-6">
+                        <Tabs
+                            value={target}
+                            onValueChange={(value) => {
+                                if (
+                                    value === "branch" ||
+                                    value === "worktree"
+                                ) {
+                                    setTarget(value);
+                                }
+                            }}
+                        >
+                            <TabsList className="w-full">
+                                <TabsTab value="branch" className="flex-1">
+                                    <GitBranch />
+                                    Branch
+                                </TabsTab>
+                                <TabsTab value="worktree" className="flex-1">
+                                    <FolderGit2 />
+                                    Worktree
+                                </TabsTab>
+                            </TabsList>
+                        </Tabs>
+                        <Field>
+                            <FieldLabel>Name</FieldLabel>
+                            <Input
+                                value={name}
+                                onChange={(event) =>
+                                    setName(event.target.value)
+                                }
+                                placeholder="feature/thing"
+                                autoFocus
+                            />
+                            {trimmed.length > 0 && nameTaken && (
+                                <p className="text-xs text-destructive">
+                                    That name is invalid or already exists
+                                    locally.
+                                </p>
+                            )}
+                        </Field>
+                        <Field>
+                            <FieldLabel>Start point</FieldLabel>
+                            <Input
+                                value={startPoint}
+                                onChange={(event) =>
+                                    setStartPoint(event.target.value)
+                                }
+                                placeholder={
+                                    target === "branch"
+                                        ? "Defaults to HEAD"
+                                        : "HEAD"
+                                }
+                            />
+                        </Field>
+                        <div
+                            className={cn(
+                                "grid transition-[grid-template-rows,opacity,margin] duration-200 ease-snappy",
+                                // Collapsed, the row is 0fr but the parent's gap-3
+                                // would still reserve 12px, so cancel it out.
+                                target === "worktree"
+                                    ? "mt-0 grid-rows-[1fr] opacity-100"
+                                    : "-mt-3 grid-rows-[0fr] opacity-0"
+                            )}
+                        >
+                            <div className="min-h-0 overflow-hidden">
+                                <Field>
+                                    <FieldLabel>Path</FieldLabel>
+                                    <Input
+                                        value={path}
+                                        onChange={(event) =>
+                                            setPath(event.target.value)
+                                        }
+                                        placeholder="Defaults to a folder named after the worktree"
+                                        tabIndex={
+                                            target === "worktree"
+                                                ? undefined
+                                                : -1
+                                        }
+                                    />
+                                </Field>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </DialogPanel>
-            <DialogFooter>
-                <DialogClose render={<Button variant="ghost" />}>
-                    Cancel
-                </DialogClose>
-                <Button
-                    disabled={!canSubmit}
-                    loading={submitting}
-                    onClick={() => void handleSubmit()}
-                >
-                    {target === "branch" ? "Create branch" : "Create worktree"}
-                </Button>
-            </DialogFooter>
+                </DialogPanel>
+                <DialogFooter>
+                    <DialogClose render={<Button variant="ghost" />}>
+                        Cancel
+                    </DialogClose>
+                    <Button
+                        type="submit"
+                        disabled={!canSubmit}
+                        loading={submitting}
+                    >
+                        {target === "branch"
+                            ? "Create branch"
+                            : "Create worktree"}
+                    </Button>
+                </DialogFooter>
+            </Form>
         </>
     );
 }

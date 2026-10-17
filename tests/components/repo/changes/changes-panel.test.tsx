@@ -207,6 +207,15 @@ function buttonByText(text: string): HTMLButtonElement | undefined {
     );
 }
 
+/** Resolves the control a FieldLabel points at through its `htmlFor`. */
+function labeledControl<T extends HTMLElement>(labelText: string): T | null {
+    const label = [...document.querySelectorAll("label")].find(
+        (candidate) => candidate.textContent?.trim() === labelText
+    );
+    const id = label?.getAttribute("for");
+    return id ? (document.getElementById(id) as T | null) : null;
+}
+
 function dialogTitleIncludes(fragment: string): boolean {
     return Array.from(
         document.querySelectorAll('[data-slot="dialog-title"]')
@@ -919,10 +928,7 @@ describe("ChangesPanel", () => {
         );
         expect(opened).toBe(true);
 
-        await typeInto(
-            document.querySelector<HTMLInputElement>("#stash-message")!,
-            "wip"
-        );
+        await typeInto(labeledControl<HTMLInputElement>("Message")!, "wip");
         await click(buttonByText("Stash")!);
 
         const settled = await waitFor(

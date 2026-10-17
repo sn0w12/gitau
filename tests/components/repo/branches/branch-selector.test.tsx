@@ -305,6 +305,25 @@ function dialogButton(label: string): HTMLButtonElement {
     )!;
 }
 
+/** Resolves the control a FieldLabel points at through its `htmlFor`. */
+function labeledControl<T extends HTMLElement>(
+    root: ParentNode,
+    labelText: string
+): T | null {
+    const label = [...root.querySelectorAll("label")].find(
+        (candidate) => candidate.textContent?.trim() === labelText
+    );
+    const id = label?.getAttribute("for");
+    return id ? (document.getElementById(id) as T | null) : null;
+}
+
+function checkoutNameInput(): HTMLInputElement {
+    const dialog = document.querySelector(
+        '[data-testid="create-checkout-dialog"]'
+    )!;
+    return labeledControl<HTMLInputElement>(dialog, "Name")!;
+}
+
 describe("BranchSelector", () => {
     it("groups branches into default and other", async () => {
         const services = listingBackend(listing);
@@ -409,9 +428,7 @@ describe("BranchSelector", () => {
         const view = await openSelector(services);
 
         await openCreateDialog(services);
-        const nameInput = document.querySelector<HTMLInputElement>(
-            '[data-testid="create-checkout-dialog"] [aria-label="Name"]'
-        )!;
+        const nameInput = checkoutNameInput();
         await typeInto(nameInput, "feature/new-thing");
         await flush();
 
@@ -434,9 +451,7 @@ describe("BranchSelector", () => {
         await click(dialogButton("Worktree"));
         await flush();
 
-        const nameInput = document.querySelector<HTMLInputElement>(
-            '[data-testid="create-checkout-dialog"] [aria-label="Name"]'
-        )!;
+        const nameInput = checkoutNameInput();
         await typeInto(nameInput, "scratch");
         await flush();
 
@@ -458,9 +473,7 @@ describe("BranchSelector", () => {
         const view = await openSelector(services);
 
         await openCreateDialog(services);
-        const nameInput = document.querySelector<HTMLInputElement>(
-            '[data-testid="create-checkout-dialog"] [aria-label="Name"]'
-        )!;
+        const nameInput = checkoutNameInput();
 
         for (const bad of ["has space", "main"]) {
             await typeInto(nameInput, bad);

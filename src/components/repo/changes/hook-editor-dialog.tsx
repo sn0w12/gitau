@@ -12,7 +12,8 @@ import {
     DialogPopup,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Form } from "@/components/ui/form";
 import { ScrollTextarea } from "@/components/ui/textarea";
 import { useAppServices } from "@/contexts/services-context";
 import type { GitHook } from "@/lib/backend/protocol";
@@ -157,59 +158,60 @@ function HookEditorDialogBody({
                     created on save.
                 </DialogDescription>
             </DialogHeader>
-            <DialogPanel className="grid grid-cols-[9.5rem_1fr] gap-4">
-                <ul className="flex flex-col gap-1">
-                    {STANDARD_HOOKS.map((name) => (
-                        <HookPickerRow
-                            key={name}
-                            name={name}
-                            hook={hooks.find((hook) => hook.name === name)}
-                            active={activeHook === name}
-                            onSelect={() => setActiveHook(name)}
-                        />
-                    ))}
-                </ul>
-                <div className="flex min-w-0 flex-col gap-1.5">
-                    <Label htmlFor="hook-editor-content">
-                        {activeHook} script
-                    </Label>
-                    {loading ? (
-                        <ScrollTextarea
-                            className="h-[12lh] font-mono"
-                            disabled
-                        />
-                    ) : (
-                        <ScrollTextarea
-                            id="hook-editor-content"
-                            value={entry.content}
-                            onChange={(event) =>
-                                setByHook((prev) => ({
-                                    ...prev,
-                                    [activeHook]: {
-                                        ...prev[activeHook],
-                                        content: event.target.value,
-                                    },
-                                }))
-                            }
-                            spellCheck={false}
-                            autoFocus
-                            className="h-[12lh] font-mono"
-                        />
-                    )}
-                </div>
-            </DialogPanel>
-            <DialogFooter>
-                <DialogClose render={<Button variant="ghost" />}>
-                    Cancel
-                </DialogClose>
-                <Button
-                    disabled={!canSave}
-                    loading={saving}
-                    onClick={() => void handleSave()}
-                >
-                    Save
-                </Button>
-            </DialogFooter>
+            <Form
+                className="contents"
+                onSubmit={(event) => {
+                    event.preventDefault();
+                    void handleSave();
+                }}
+            >
+                <DialogPanel className="grid grid-cols-[9.5rem_1fr] gap-4">
+                    <ul className="flex flex-col gap-1">
+                        {STANDARD_HOOKS.map((name) => (
+                            <HookPickerRow
+                                key={name}
+                                name={name}
+                                hook={hooks.find((hook) => hook.name === name)}
+                                active={activeHook === name}
+                                onSelect={() => setActiveHook(name)}
+                            />
+                        ))}
+                    </ul>
+                    <Field className="min-w-0 gap-1.5">
+                        <FieldLabel>{activeHook} script</FieldLabel>
+                        {loading ? (
+                            <ScrollTextarea
+                                className="h-[12lh] font-mono"
+                                disabled
+                            />
+                        ) : (
+                            <ScrollTextarea
+                                value={entry.content}
+                                onChange={(event) =>
+                                    setByHook((prev) => ({
+                                        ...prev,
+                                        [activeHook]: {
+                                            ...prev[activeHook],
+                                            content: event.target.value,
+                                        },
+                                    }))
+                                }
+                                spellCheck={false}
+                                autoFocus
+                                className="h-[12lh] font-mono"
+                            />
+                        )}
+                    </Field>
+                </DialogPanel>
+                <DialogFooter>
+                    <DialogClose render={<Button variant="ghost" />}>
+                        Cancel
+                    </DialogClose>
+                    <Button type="submit" disabled={!canSave} loading={saving}>
+                        Save
+                    </Button>
+                </DialogFooter>
+            </Form>
         </>
     );
 }

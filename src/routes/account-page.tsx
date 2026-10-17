@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ExternalLink } from "@/components/external-link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
 import {
     Frame,
     FrameDescription,
@@ -11,7 +12,6 @@ import {
     FramePanel,
     FrameTitle,
 } from "@/components/ui/frame";
-import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Select,
@@ -120,8 +120,8 @@ function HostSelect({
 }) {
     if (provider.hosts.length <= 1) return null;
     return (
-        <div className="flex w-full max-w-xs flex-col gap-1.5">
-            <Label htmlFor={`host-${provider.id}`}>Host</Label>
+        <Field className="w-full max-w-xs">
+            <FieldLabel>Host</FieldLabel>
             <Select
                 value={host}
                 onValueChange={(value) => {
@@ -132,7 +132,7 @@ function HostSelect({
                     value: entry,
                 }))}
             >
-                <SelectTrigger className="w-full" aria-label="Host">
+                <SelectTrigger className="w-full">
                     <SelectValue />
                 </SelectTrigger>
                 <SelectPopup>
@@ -143,7 +143,7 @@ function HostSelect({
                     ))}
                 </SelectPopup>
             </Select>
-        </div>
+        </Field>
     );
 }
 

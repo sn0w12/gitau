@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -12,8 +12,9 @@ import {
     DialogPopup,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useStashPushMutation } from "@/lib/backend/mutations/repository-mutations";
 import { toastError } from "@/lib/toast-error";
 
@@ -66,7 +67,6 @@ function StashChangesDialogBody({
     const [includeUntracked, setIncludeUntracked] = useState(
         defaultIncludeUntracked
     );
-    const checkboxId = useId();
 
     const scoped = paths !== undefined;
 
@@ -95,39 +95,44 @@ function StashChangesDialogBody({
                         : "Saves your local changes on the stash and leaves a clean working tree."}
                 </DialogDescription>
             </DialogHeader>
-            <DialogPanel className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="stash-message">Message</Label>
-                    <Input
-                        id="stash-message"
-                        value={message}
-                        onChange={(event) => setMessage(event.target.value)}
-                        placeholder="Optional"
-                        autoFocus
-                    />
-                </div>
-                <Label htmlFor={checkboxId}>
-                    <Checkbox
-                        id={checkboxId}
-                        checked={includeUntracked}
-                        onCheckedChange={(checked) =>
-                            setIncludeUntracked(checked === true)
-                        }
-                    />
-                    Include untracked files
-                </Label>
-            </DialogPanel>
-            <DialogFooter>
-                <DialogClose render={<Button variant="ghost" />}>
-                    Cancel
-                </DialogClose>
-                <Button
-                    loading={push.isPending}
-                    onClick={() => void handleSubmit()}
-                >
-                    Stash
-                </Button>
-            </DialogFooter>
+            <Form
+                className="contents"
+                onSubmit={(event) => {
+                    event.preventDefault();
+                    void handleSubmit();
+                }}
+            >
+                <DialogPanel className="flex flex-col gap-3">
+                    <Field>
+                        <FieldLabel>Message</FieldLabel>
+                        <Input
+                            value={message}
+                            onChange={(event) => setMessage(event.target.value)}
+                            placeholder="Optional"
+                            autoFocus
+                        />
+                    </Field>
+                    <Field>
+                        <FieldLabel>
+                            <Checkbox
+                                checked={includeUntracked}
+                                onCheckedChange={(checked) =>
+                                    setIncludeUntracked(checked === true)
+                                }
+                            />
+                            Include untracked files
+                        </FieldLabel>
+                    </Field>
+                </DialogPanel>
+                <DialogFooter>
+                    <DialogClose render={<Button variant="ghost" />}>
+                        Cancel
+                    </DialogClose>
+                    <Button type="submit" loading={push.isPending}>
+                        Stash
+                    </Button>
+                </DialogFooter>
+            </Form>
         </>
     );
 }

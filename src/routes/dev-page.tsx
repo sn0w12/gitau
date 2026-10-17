@@ -16,6 +16,7 @@ import { CloneProgressPanel } from "@/components/repo/dialogs/clone-progress-pan
 import { NewRepoDialog } from "@/components/repo/dialogs/new-repo-dialog";
 import { PublishRepositoryDialog } from "@/components/repo/dialogs/publish-dialog";
 import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Frame, FramePanel } from "@/components/ui/frame";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
@@ -662,22 +663,26 @@ function MarkdownCard() {
                 clear a field to see them fall back to text.
             </p>
             <div className="flex flex-wrap items-end gap-2">
-                <label className="flex flex-col gap-1">
-                    <span className="text-xs text-muted-foreground">owner</span>
+                <Field className="gap-1">
+                    <FieldLabel className="text-xs font-normal text-muted-foreground">
+                        owner
+                    </FieldLabel>
                     <Input
                         value={owner}
                         onChange={(event) => setOwner(event.target.value)}
                         className="h-7 w-36 font-mono text-xs"
                     />
-                </label>
-                <label className="flex flex-col gap-1">
-                    <span className="text-xs text-muted-foreground">repo</span>
+                </Field>
+                <Field className="gap-1">
+                    <FieldLabel className="text-xs font-normal text-muted-foreground">
+                        repo
+                    </FieldLabel>
                     <Input
                         value={repo}
                         onChange={(event) => setRepo(event.target.value)}
                         className="h-7 w-36 font-mono text-xs"
                     />
-                </label>
+                </Field>
             </div>
             <div className="flex flex-col gap-4">
                 {MARKDOWN_SAMPLES.map((sample) => (

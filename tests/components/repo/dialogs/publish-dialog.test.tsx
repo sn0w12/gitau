@@ -201,6 +201,29 @@ async function waitForElement<T extends Element>(selector: string): Promise<T> {
     return element;
 }
 
+/** Resolves the control a FieldLabel points at through its `htmlFor`. */
+function labeledControl<T extends HTMLElement>(labelText: string): T | null {
+    const label = [...document.body.querySelectorAll("label")].find(
+        (candidate) => candidate.textContent?.trim() === labelText
+    );
+    const id = label?.getAttribute("for");
+    return id ? (document.getElementById(id) as T | null) : null;
+}
+
+async function waitForLabeledControl<T extends HTMLElement>(
+    labelText: string
+): Promise<T> {
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline) {
+        const element = labeledControl<T>(labelText);
+        if (element) return element;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    const element = labeledControl<T>(labelText);
+    if (!element) throw new Error(`labeled control not found: ${labelText}`);
+    return element;
+}
+
 async function clickElement(element: Element): Promise<void> {
     await act(async () => {
         element.dispatchEvent(
@@ -225,9 +248,7 @@ async function selectItem(element: Element): Promise<void> {
 }
 
 async function openOwnerSelect(): Promise<HTMLElement> {
-    const trigger = await waitForElement<HTMLElement>(
-        '[data-slot="select-trigger"][aria-label="Owner"]'
-    );
+    const trigger = await waitForLabeledControl<HTMLElement>("Owner");
     await clickElement(trigger);
     return await waitForElement<HTMLElement>('[data-slot="select-popup"]');
 }
@@ -264,13 +285,11 @@ describe("PublishRepositoryDialog", () => {
         await flush();
 
         // The folder name seeds the repository name.
-        const nameInput =
-            await waitForElement<HTMLInputElement>("#publish-name");
+        const nameInput = await waitForLabeledControl<HTMLInputElement>("Name");
         expect(nameInput.value).toBe("demo");
 
-        const descriptionInput = await waitForElement<HTMLInputElement>(
-            "#publish-description"
-        );
+        const descriptionInput =
+            await waitForLabeledControl<HTMLInputElement>("Description");
         await typeInto(nameInput, "demo-renamed");
         await typeInto(descriptionInput, "My demo project");
 

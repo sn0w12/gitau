@@ -120,6 +120,7 @@ strict mode plus `noUnusedLocals`, `noUnusedParameters`, `verbatimModuleSyntax`;
 - Queries via `queryOptions()` factories (`src/lib/backend/queries/repository-queries.ts`) + structured keys (`query-keys.ts`); `useQuery` hooks guard with `hasValidRepoId(repoId)` before calling the backend.
 - Store ownership: durable tab data → `appStore`; repo set → `repositoryStore` (keyed by path); ephemeral per-tab UI → `tab-runtime.ts`; op tracking → `operationStore`. Setters return unchanged state when nothing changed.
 - Errors surfaced via `toastError(title, error)` (`src/lib/toast-error.ts`); destructive actions go through `useConfirm()`.
+- Form controls: label through `Field` + `FieldLabel` (never hand-wire `Label htmlFor` + `id`); a dialog that submits wraps `DialogPanel` + `DialogFooter` in `<Form className="contents">` with the confirm button `type="submit"`. Dialog options that apply on confirm are `Checkbox`; settings rows that apply immediately are `Switch`.
 - Never use html titles, never use custom font sizes.
 
 ### Critical invariants

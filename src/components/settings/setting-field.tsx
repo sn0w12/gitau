@@ -35,11 +35,11 @@ export function SettingField({
     const { value, setValue } = useSetting(definition.key as SettingKey);
 
     return (
-        <div
-            className="flex items-center justify-between gap-8"
+        <Field
+            className="flex-row items-center justify-between gap-8"
             data-slot="setting-field"
         >
-            <Field className="min-w-0 gap-0">
+            <div className="flex min-w-0 flex-col gap-0">
                 <FieldLabel className="cursor-text">
                     {definition.label}
                 </FieldLabel>
@@ -48,7 +48,7 @@ export function SettingField({
                         {definition.description}
                     </FieldDescription>
                 )}
-            </Field>
+            </div>
             <div
                 className="flex shrink-0 justify-end"
                 data-slot="setting-control"
@@ -59,7 +59,7 @@ export function SettingField({
                     onChange={(next) => setValue(next)}
                 />
             </div>
-        </div>
+        </Field>
     );
 }
 
