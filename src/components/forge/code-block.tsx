@@ -13,7 +13,7 @@ import {
     KIND_ROW_BORDER_CLASS,
     KIND_ROW_CLASS,
 } from "../diff/rows";
-import { Frame, FramePanel } from "../ui/frame";
+import { Frame, FrameHeader, FramePanel } from "../ui/frame";
 
 /** The one-character diff marker at the head of a hunk line. */
 const DIFF_MARKER = /^[+\- ]/;
@@ -40,13 +40,7 @@ function clipSpans(spans: readonly number[], offset: number): number[] {
 
 /** Copies the block's source, revealed on hover so it never covers the first
  * line. */
-function CopyCodeButton({
-    text,
-    inline = false,
-}: {
-    text: string;
-    inline?: boolean;
-}) {
+function CopyCodeButton({ text }: { text: string }) {
     const { copyToClipboard, isCopied } = useCopyToClipboard();
     return (
         <Tooltip>
@@ -56,11 +50,7 @@ function CopyCodeButton({
                         aria-label="Copy code"
                         size="icon-xs"
                         variant="ghost"
-                        className={cn(
-                            inline
-                                ? "ms-auto shrink-0 text-muted-foreground"
-                                : "absolute end-1 top-1 z-10 opacity-0 transition-opacity group-hover/code:opacity-100 focus-visible:opacity-100"
-                        )}
+                        className="absolute end-1 top-1 z-10 opacity-0 transition-opacity group-hover/code:opacity-100 focus-visible:opacity-100"
                         onClick={() => copyToClipboard(text)}
                     />
                 }
@@ -104,27 +94,22 @@ export function CodeBlock({
 
     return (
         <Frame className="group/code relative">
-            {hasLanguage && title === undefined ? (
-                <div className="px-2 pt-1 font-mono text-muted-foreground">
-                    {language}
-                </div>
-            ) : null}
-            <FramePanel className="code-hl p-0 font-mono text-xs">
-                {title === undefined ? (
-                    <CopyCodeButton text={text} />
-                ) : (
-                    <div className="flex items-center gap-2 border-b px-2 py-1">
+            {(hasLanguage || title) && (
+                <FrameHeader className="ui-selectable flex flex-row gap-2 px-2.5 py-1 font-mono text-xs">
+                    {title && (
                         <span className="min-w-0 truncate text-foreground">
                             {title}
                         </span>
-                        {hasLanguage ? (
-                            <span className="shrink-0 text-muted-foreground">
-                                {language}
-                            </span>
-                        ) : null}
-                        <CopyCodeButton text={text} inline />
-                    </div>
-                )}
+                    )}
+                    {hasLanguage && (
+                        <span className="shrink-0 text-muted-foreground">
+                            {language}
+                        </span>
+                    )}
+                </FrameHeader>
+            )}
+            <FramePanel className="code-hl p-0 font-mono text-xs">
+                <CopyCodeButton text={text} />
                 <ScrollArea
                     scrollFade
                     overscrollContain
