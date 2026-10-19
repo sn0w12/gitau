@@ -1,4 +1,3 @@
-import Scritto from "@scritto/react";
 import { useHotkeyRecorder } from "@tanstack/react-hotkeys";
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
@@ -13,6 +12,7 @@ import {
     InsetInputValue,
 } from "@/components/ui/inset-input";
 import { KbdGroup } from "@/components/ui/kbd";
+import { Scritto } from "@/components/ui/scritto";
 import { useHeldChord } from "@/hooks/use-held-chord";
 import { displayToken, splitChord } from "@/lib/shortcuts";
 

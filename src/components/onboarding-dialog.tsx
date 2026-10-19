@@ -1,4 +1,3 @@
-import Scritto from "@scritto/react";
 import {
     Check,
     ChevronLeft,
@@ -21,6 +20,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Scritto } from "@/components/ui/scritto";
 import { Tabs, TabsList, TabsTab } from "@/components/ui/tabs";
 import type { AppCommandActions } from "@/contexts/app-command-context";
 import { useAppCommands } from "@/contexts/app-command-context";

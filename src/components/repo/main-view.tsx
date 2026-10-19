@@ -1,7 +1,7 @@
-import Scritto from "@scritto/react";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useEffect, useState } from "react";
 
+import { Scritto } from "@/components/ui/scritto";
 import { useTabId } from "@/contexts/tab-context";
 import type {
     ListTab,
