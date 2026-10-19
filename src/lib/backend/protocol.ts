@@ -203,6 +203,7 @@ export interface HistoryPage {
     snapshotId: number;
     generation: number;
     commits: CommitSummary[];
+    total: number;
     hasMore: boolean;
     unpushed: string[];
 }

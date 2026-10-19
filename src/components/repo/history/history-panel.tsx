@@ -16,8 +16,6 @@ import { formatRelativeDate } from "@/lib/utils";
 import { Input } from "../../ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip";
 
-const LOAD_MORE_THRESHOLD_PX = 400;
-
 const SEARCH_DEBOUNCE_MS = 250;
 
 const HISTORY_ROW_HEIGHT_PX = 50;
@@ -62,8 +60,10 @@ export function HistoryPanel({
             ),
         [history.data]
     );
-    const { hasNextPage, isFetchingNextPage, isPending, fetchNextPage } =
+    const { hasNextPage, isFetchingNextPage, isPending, fetchNextPage, error } =
         history;
+    const loadedCount = commits.length;
+    const total = Math.max(history.data?.pages[0]?.total ?? 0, loadedCount);
     const [scrollTop, setScrollTop] = useState(0);
     const [viewportHeight, setViewportHeight] = useState(0);
 
@@ -101,15 +101,8 @@ export function HistoryPanel({
                 HISTORY_ROW_HEIGHT_PX
         ) +
         HISTORY_OVERSCAN_ROWS * 2;
-    const lastVisible = Math.min(commits.length, firstVisible + visibleCount);
-    const windowCommits = useMemo(
-        () => commits.slice(firstVisible, lastVisible),
-        [commits, firstVisible, lastVisible]
-    );
+    const lastVisible = Math.min(total, firstVisible + visibleCount);
 
-    // Re-binds whenever guard values change so it never reads stale
-    // hasNextPage/isFetching; the initial call auto-fills a viewport shorter
-    // than the first page.
     useEffect(() => {
         const container = containerRef.current;
         if (!container || !active || isPending) return;
@@ -119,16 +112,15 @@ export function HistoryPanel({
         if (!viewport) return;
 
         const maybeLoadMore = () => {
-            if (!hasNextPage || isFetchingNextPage) return;
-            // A hidden viewport measures 0x0 and would read as "at bottom".
+            if (!hasNextPage || isFetchingNextPage || error) return;
             if (viewport.clientHeight === 0 && viewport.scrollHeight === 0) {
                 return;
             }
-            const distanceToBottom =
-                viewport.scrollHeight -
-                viewport.scrollTop -
-                viewport.clientHeight;
-            if (distanceToBottom < LOAD_MORE_THRESHOLD_PX) {
+            const lastNeededRow =
+                (viewport.scrollTop + viewport.clientHeight) /
+                    HISTORY_ROW_HEIGHT_PX +
+                HISTORY_OVERSCAN_ROWS;
+            if (lastNeededRow >= loadedCount) {
                 void fetchNextPage();
             }
         };
@@ -136,7 +128,15 @@ export function HistoryPanel({
         viewport.addEventListener("scroll", maybeLoadMore);
         maybeLoadMore();
         return () => viewport.removeEventListener("scroll", maybeLoadMore);
-    }, [active, isPending, hasNextPage, isFetchingNextPage, fetchNextPage]);
+    }, [
+        active,
+        isPending,
+        hasNextPage,
+        isFetchingNextPage,
+        fetchNextPage,
+        loadedCount,
+        error,
+    ]);
 
     if (history.isPending) {
         return (
@@ -182,30 +182,52 @@ export function HistoryPanel({
                     className="relative"
                     style={{
                         height: Math.max(
-                            commits.length * HISTORY_ROW_HEIGHT_PX,
+                            total * HISTORY_ROW_HEIGHT_PX,
                             viewportHeight
                         ),
                     }}
                 >
-                    {windowCommits.map((commit, offset) => (
-                        <HistoryRow
-                            key={commit.id}
-                            repoId={repoId}
-                            commit={commit}
-                            unpushed={unpushed.has(commit.id)}
-                            selected={selectedId === commit.id}
-                            top={
-                                (firstVisible + offset) * HISTORY_ROW_HEIGHT_PX
+                    {Array.from(
+                        { length: Math.max(0, lastVisible - firstVisible) },
+                        (_, offset) => {
+                            const index = firstVisible + offset;
+                            const commit = commits[index];
+                            const top = index * HISTORY_ROW_HEIGHT_PX;
+                            if (!commit) {
+                                return (
+                                    <li
+                                        key={`pending-${index}`}
+                                        aria-hidden="true"
+                                        className="absolute right-0 left-0"
+                                        style={{
+                                            top,
+                                            height: HISTORY_ROW_HEIGHT_PX,
+                                        }}
+                                    >
+                                        <Skeleton className="h-full w-full rounded-none" />
+                                    </li>
+                                );
                             }
-                            onSelect={onSelect}
-                            warm={warm}
-                            cancelWarm={cancelWarm}
-                        />
-                    ))}
+                            return (
+                                <HistoryRow
+                                    key={commit.id}
+                                    repoId={repoId}
+                                    commit={commit}
+                                    unpushed={unpushed.has(commit.id)}
+                                    selected={selectedId === commit.id}
+                                    top={top}
+                                    onSelect={onSelect}
+                                    warm={warm}
+                                    cancelWarm={cancelWarm}
+                                />
+                            );
+                        }
+                    )}
                 </div>
                 <HistoryFooter
                     fetching={history.isFetchingNextPage}
-                    error={history.error?.message}
+                    hasNextPage={hasNextPage}
+                    error={error?.message}
                     onRetry={() => void history.fetchNextPage()}
                 />
             </ScrollArea>
@@ -405,10 +427,12 @@ function HighlightedText({
 
 function HistoryFooter({
     fetching,
+    hasNextPage,
     error,
     onRetry,
 }: {
     fetching: boolean;
+    hasNextPage: boolean;
     error: string | undefined;
     onRetry: () => void;
 }) {
@@ -422,17 +446,15 @@ function HistoryFooter({
             </div>
         );
     }
-    if (fetching) {
-        return (
-            <div
-                className="flex items-center justify-center p-3"
-                data-slot="history-loading-more"
-            >
-                <Spinner className="size-4 text-muted-foreground" />
-            </div>
-        );
-    }
-    return null;
+    if (!hasNextPage) return null;
+    return (
+        <div
+            className="flex h-10 items-center justify-center"
+            data-slot="history-loading-more"
+        >
+            {fetching && <Spinner className="size-4 text-muted-foreground" />}
+        </div>
+    );
 }
 
 function HistoryError({ message }: { message: string }) {

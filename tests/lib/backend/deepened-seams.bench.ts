@@ -18,6 +18,7 @@ const page: HistoryPage = {
     snapshotId: 1,
     generation: 2,
     commits: [],
+    total: 0,
     hasMore: false,
     unpushed: [],
 };

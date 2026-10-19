@@ -36,6 +36,7 @@ pub fn history_page(
                         snapshot_id,
                         generation,
                         commits: Vec::new(),
+                        total: 0,
                         has_more: false,
                         unpushed: Vec::new(),
                     });
@@ -121,7 +122,8 @@ pub fn history_page(
 
         let start = query.skip as usize;
         let end = (start + query.limit as usize).min(effective.len());
-        let has_more = effective.len() > end;
+        let total = effective.len();
+        let has_more = total > end;
         let page_oids = &effective[start.min(effective.len())..end];
 
         let mut slots: Vec<Option<Arc<CommitSummary>>> =
@@ -188,6 +190,7 @@ pub fn history_page(
             snapshot_id,
             generation,
             commits,
+            total: total as u32,
             has_more,
             unpushed: unpushed_ids(repo, query.revision.as_ref(), page_oids)?,
         })
