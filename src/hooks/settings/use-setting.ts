@@ -5,7 +5,6 @@ import type {
     SelectOption,
     SettingDefinition,
     SettingsSchema,
-    SettingsSection,
 } from "@/lib/backend/protocol";
 import {
     findSettingDefinition,
@@ -63,35 +62,21 @@ export function useSettingDefinition<TKey extends SettingKey>(
     );
 }
 
+export function useSettingsValues(): SettingsValues {
+    return useSelector(settingsStore, (state) => {
+        if (!state.ready) {
+            throw new Error("settings read before settings were initialized");
+        }
+        return state.values;
+    });
+}
+
 /** A select setting's options, straight from the schema. */
 export function useSettingOptions<TKey extends SettingKey>(
     key: TKey
 ): SelectOption[] {
     return useSelector(settingsStore, (state) =>
         getSettingOptions(state.schema, key)
-    );
-}
-
-export type VisibleSettingDefinition = Extract<
-    SettingDefinition,
-    {
-        kind:
-            | "boolean"
-            | "select"
-            | "number"
-            | "string"
-            | "multilineString"
-            | "shortcut";
-    }
->;
-
-/** Filters out hidden definitions and kinds the UI cannot render. */
-export function visibleSettings(
-    section: SettingsSection
-): VisibleSettingDefinition[] {
-    return section.settings.filter(
-        (definition): definition is VisibleSettingDefinition =>
-            !definition.hidden && definition.kind !== "stringList"
     );
 }
 

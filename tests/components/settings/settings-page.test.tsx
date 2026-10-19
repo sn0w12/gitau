@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { TabContext } from "@/contexts/tab-context";
 import type { SettingsSchema } from "@/lib/backend/protocol";
+import type { SettingsValues } from "@/lib/settings/settings.generated";
 import { SettingsPage } from "@/routes/settings-page";
 import {
     configureSettingsSaver,
@@ -105,7 +106,7 @@ const schema: SettingsSchema = {
     ],
 };
 
-function initialize(): void {
+function initialize(overrides: Partial<SettingsValues> = {}): void {
     initializeSettings({
         schema,
         values: {
@@ -114,6 +115,7 @@ function initialize(): void {
             editorCommand: "",
             newTabShortcut: "Mod+T",
             theme: "system",
+            ...overrides,
         },
         savedKeys: [],
     });
@@ -153,7 +155,9 @@ describe("SettingsPage", () => {
         const { container } = renderPage();
 
         expect(screen.getByText("Editor command")).toBeDefined();
-        const input = container.querySelector('input[data-slot="input"]');
+        const input = container.querySelector(
+            '[data-slot="setting-control"] input[data-slot="input"]'
+        );
         expect(input).not.toBeNull();
         expect((input as HTMLInputElement).value).toBe("");
     });
@@ -193,5 +197,69 @@ describe("SettingsPage", () => {
         fireEvent.click(toggle);
 
         expect(getSetting("closeRepoWithLastTab")).toBe(false);
+    });
+
+    it("filters settings by label across tabs", () => {
+        renderPage();
+
+        fireEvent.change(screen.getByLabelText("Search settings"), {
+            target: { value: "editor" },
+        });
+
+        expect(screen.getByText("Editor command")).toBeDefined();
+        expect(screen.queryByText("Close repository with last tab")).toBeNull();
+    });
+
+    it("filters settings by description", () => {
+        renderPage();
+
+        fireEvent.change(screen.getByLabelText("Search settings"), {
+            target: { value: "Closes the repo." },
+        });
+
+        expect(
+            screen.getByText("Close repository with last tab")
+        ).toBeDefined();
+        expect(screen.queryByText("Editor command")).toBeNull();
+    });
+
+    it("filters settings by their active value", () => {
+        initialize({ theme: "dark" });
+        const { container } = renderPage();
+
+        fireEvent.change(screen.getByLabelText("Search settings"), {
+            target: { value: "dark" },
+        });
+
+        expect(screen.getByText("Dark")).toBeDefined();
+        expect(
+            container.querySelector('[data-slot="select-trigger"]')
+        ).not.toBeNull();
+    });
+
+    it("skips hidden settings and reports no matches", () => {
+        renderPage();
+
+        fireEvent.change(screen.getByLabelText("Search settings"), {
+            target: { value: "pinned" },
+        });
+
+        expect(screen.queryByText("Pinned repositories")).toBeNull();
+        expect(screen.getByText(/No settings match "pinned"/)).toBeDefined();
+    });
+
+    it("clears the query when a tab is selected", () => {
+        renderPage();
+        const search = screen.getByLabelText(
+            "Search settings"
+        ) as HTMLInputElement;
+
+        fireEvent.change(search, { target: { value: "dark" } });
+        fireEvent.click(screen.getByText("General"));
+
+        expect(search.value).toBe("");
+        expect(
+            screen.getByText("Close repository with last tab")
+        ).toBeDefined();
     });
 });

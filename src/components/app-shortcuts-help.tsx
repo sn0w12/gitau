@@ -10,11 +10,9 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Kbd, KbdGroup, KeyboardShortcut } from "@/components/ui/kbd";
-import {
-    useSettingsSchema,
-    visibleSettings,
-} from "@/hooks/settings/use-setting";
+import { useSettingsSchema } from "@/hooks/settings/use-setting";
 import { useSettingHotkey } from "@/hooks/settings/use-setting-hotkey";
+import { visibleSettings } from "@/lib/settings/schema";
 import type { ShortcutSettingKey } from "@/lib/settings/settings.generated";
 import { displayToken, splitChord } from "@/lib/shortcuts";
 

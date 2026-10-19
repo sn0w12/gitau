@@ -18,8 +18,8 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import type { VisibleSettingDefinition } from "@/hooks/settings/use-setting";
 import { useSetting } from "@/hooks/settings/use-setting";
+import type { VisibleSettingDefinition } from "@/lib/settings/schema";
 import type { SettingKey } from "@/lib/settings/settings.generated";
 import { cn } from "@/lib/utils";
 

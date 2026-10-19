@@ -2,7 +2,31 @@ import type {
     SelectOption,
     SettingDefinition,
     SettingsSchema,
+    SettingsSection,
 } from "@/lib/backend/protocol";
+
+export type VisibleSettingDefinition = Extract<
+    SettingDefinition,
+    {
+        kind:
+            | "boolean"
+            | "select"
+            | "number"
+            | "string"
+            | "multilineString"
+            | "shortcut";
+    }
+>;
+
+/** Filters out hidden definitions and kinds the UI cannot render. */
+export function visibleSettings(
+    section: SettingsSection
+): VisibleSettingDefinition[] {
+    return section.settings.filter(
+        (definition): definition is VisibleSettingDefinition =>
+            !definition.hidden && definition.kind !== "stringList"
+    );
+}
 
 export function findSettingDefinition(
     schema: SettingsSchema,
