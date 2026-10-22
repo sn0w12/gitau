@@ -63,7 +63,7 @@
     "devDependencies": {
         "@babel/core": "^8.0.1",
         "@rolldown/plugin-babel": "^0.2.3",
-        "@tauri-apps/cli": "^2",
+        "@tauri-apps/cli": "^2.12.4",
         "@testing-library/dom": "^10.4.2",
         "@testing-library/react": "^16.3.2",
         "@types/node": "^24",
