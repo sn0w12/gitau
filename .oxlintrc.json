@@ -29,8 +29,6 @@
         "pnpm-lock.yaml",
         "yarn.lock",
         "routeTree.gen.ts",
-        "src/lib/settings/settings.generated.ts",
-        "crates/tauri-plugin-snap-layout/dist-js",
-        "crates/tauri-plugin-snap-layout/permissions"
+        "src/lib/settings/settings.generated.ts"
     ]
 }

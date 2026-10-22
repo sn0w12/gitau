@@ -6,20 +6,14 @@
     "permissions": [
         "core:default",
         "core:window:allow-show",
-        "core:window:allow-close",
-        "core:window:allow-minimize",
-        "core:window:allow-maximize",
-        "core:window:allow-unmaximize",
-        "core:window:allow-toggle-maximize",
         "core:window:allow-set-fullscreen",
         "core:window:allow-set-simple-fullscreen",
-        "core:window:allow-set-size",
         "core:window:allow-start-dragging",
         "opener:default",
         "dialog:allow-open",
         "log:default",
         "os:default",
-        "snap-layout:default",
+        "window-controls-overlay:default",
         "updater:default",
         "process:default"
     ]

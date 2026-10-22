@@ -45,10 +45,6 @@ const globalsInstalled = vi.hoisted(() => {
 });
 void globalsInstalled;
 
-vi.mock("@/components/window-controls", () => ({
-    WindowTitlebar: ({ children }: { children?: React.ReactNode }) => children,
-}));
-
 function Shell() {
     return (
         <StrictMode>

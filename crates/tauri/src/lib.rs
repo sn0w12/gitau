@@ -31,6 +31,18 @@ fn prevent_default() -> tauri::plugin::TauriPlugin<tauri::Wry> {
     }
 }
 
+/// `GITAU_WINDOW_CONTROLS_LEADING=1` draws the band on the leading edge in dev
+/// builds, to check the left-hand titlebar layout without a right-to-left
+/// Windows session.
+fn window_controls_config() -> tauri_plugin_window_controls_overlay::Config {
+    let config = tauri_plugin_window_controls_overlay::Config::new().height(32.0);
+    if cfg!(debug_assertions) && std::env::var_os("GITAU_WINDOW_CONTROLS_LEADING").is_some() {
+        config.leading(true)
+    } else {
+        config
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // The webview stays hidden until it finishes loading, so the elapsed
@@ -58,13 +70,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
-        // Must match the id on the maximize button in
-        // src/components/window-controls/WindowControls.tsx.
-        .plugin(
-            tauri_plugin_snap_layout::init()
-                .button_id("gitau-snap-maximize")
-                .build(),
-        )
+        .plugin(tauri_plugin_window_controls_overlay::init_with_config(
+            window_controls_config(),
+        ))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(external_navigation_plugin())
         .plugin(prevent_default())
