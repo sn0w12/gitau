@@ -144,13 +144,13 @@ export function DiffStatusBar({
     deletions: number;
 }) {
     return (
-        <div className="flex h-7 shrink-0 items-center gap-3 border-t px-2 text-xs text-muted-foreground">
+        <div className="flex h-5 shrink-0 items-center gap-3 border-t px-2 font-mono text-xs text-muted-foreground">
             {status === "running" && <Spinner className="size-3" />}
-            <span className="ml-auto tabular-nums">
+            <span className="ml-auto">
                 {totalRows === null ? "" : `${totalRows} lines`}
             </span>
-            <span className="text-success tabular-nums">+{additions}</span>
-            <span className="text-destructive tabular-nums">
+            <span className="text-success">+{additions}</span>
+            <span className="text-destructive">
                 {"\u2212"}
                 {deletions}
             </span>
