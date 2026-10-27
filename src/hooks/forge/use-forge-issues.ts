@@ -23,6 +23,7 @@ import { forgeKeys } from "@/lib/backend/queries/query-keys";
 import { remotesByPathQuery } from "@/lib/backend/queries/repository-queries";
 import { expectOk } from "@/lib/backend/transport/result";
 import { pickRepoCoords } from "@/lib/forge/repo-coords";
+import type { RepoView } from "@/lib/routing/repo-search";
 import { repositoryStore } from "@/stores/repository-store";
 
 import { useRemotes } from "../repositories/use-repository-queries";
@@ -30,6 +31,7 @@ import {
     useActiveProvider,
     useForgeAccount,
     useForgeProviders,
+    capabilityAllows,
 } from "./use-forge-account";
 
 /** Provider coordinates of a local repository, via its remotes. Null while
@@ -59,6 +61,33 @@ export function useRepoCapabilities(
         providers.data?.find((entry) => entry.id === coords.provider)
             ?.capabilities ?? null
     );
+}
+
+/**
+ * Which views a repository can open.
+ */
+export function useRepoViewAccess(
+    repoId: number | undefined
+): Record<RepoView, boolean> {
+    const { coords, data: remotes } = useRepoCoords(repoId);
+    const providers = useForgeProviders();
+    const capabilities = useRepoCapabilities(repoId);
+    if (coords === null) {
+        const unresolved =
+            remotes === undefined || providers.data === undefined;
+        return {
+            overview: true,
+            graph: true,
+            issues: unresolved,
+            pulls: unresolved,
+        };
+    }
+    return {
+        overview: true,
+        graph: true,
+        issues: capabilityAllows(capabilities, "issues"),
+        pulls: capabilityAllows(capabilities, "pullRequests"),
+    };
 }
 
 /** Issues of the repository open in `repoId`, filtered by state, paginated. */

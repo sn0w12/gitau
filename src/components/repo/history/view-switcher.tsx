@@ -10,8 +10,7 @@ import {
     MenuShortcutBinding,
     MenuTrigger,
 } from "@/components/ui/menu";
-import { capabilityAllows } from "@/hooks/forge/use-forge-account";
-import { useRepoCapabilities } from "@/hooks/forge/use-forge-issues";
+import { useRepoViewAccess } from "@/hooks/forge/use-forge-issues";
 import { REPO_TOOLBAR_TRIGGER_CLASS } from "@/lib/constants";
 import type { RepoView } from "@/lib/routing/repo-search";
 import { REPO_VIEW_SHORTCUTS } from "@/lib/shortcuts";
@@ -35,17 +34,7 @@ export function RepoViewSwitcher({
     onView: (view: RepoView) => void;
 }) {
     const [open, setOpen] = useState(false);
-    const capabilities = useRepoCapabilities(repoId);
-
-    // A view the connected provider cannot serve stays in the menu so the set
-    // of views never shifts; it is disabled rather than hidden.
-    const available = (candidate: RepoView): boolean => {
-        if (candidate === "issues")
-            return capabilityAllows(capabilities, "issues");
-        if (candidate === "pulls")
-            return capabilityAllows(capabilities, "pullRequests");
-        return true;
-    };
+    const access = useRepoViewAccess(repoId);
 
     return (
         <Menu open={open} onOpenChange={setOpen}>
@@ -76,7 +65,7 @@ export function RepoViewSwitcher({
                                 <MenuRadioItem
                                     key={repoView}
                                     value={repoView}
-                                    disabled={!available(repoView)}
+                                    disabled={!access[repoView]}
                                     onClick={() => {
                                         onView(repoView);
                                         setOpen(false);
