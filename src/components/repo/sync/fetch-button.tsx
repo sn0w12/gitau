@@ -32,7 +32,7 @@ import { useSyncActions } from "@/hooks/repositories/use-sync-actions";
 import { REPO_TOOLBAR_TRIGGER_CLASS } from "@/lib/constants";
 import { EASE_SNAPPY } from "@/lib/motion";
 import { deriveFetchAction } from "@/lib/repositories/fetch-action";
-import { formatRelativeDate } from "@/lib/utils";
+import { cn, formatRelativeDate } from "@/lib/utils";
 import { fetchStore } from "@/stores/fetch-store";
 
 const RELATIVE_TIME_TICK_MS = 30_000;
@@ -326,6 +326,11 @@ function AheadBehind({ ahead, behind }: { ahead: number; behind: number }) {
 const SPIN_SPEED_DEG_PER_SEC = 360;
 const SPIN_SPRING = { stiffness: 120, damping: 16, mass: 1 } as const;
 const ICON_SLOT_CLASS = "absolute inset-0 flex items-center justify-center";
+// Motion writes the rotation as an inline style every frame, which Chromium
+// does not promote the way it does an `animate-spin` keyframe: it re-rasterizes
+// the SVG at each new angle, and on Windows the GPU rasterizer leaves stray
+// pixels along the stroke edges. `will-change` keeps one raster and rotates it.
+const SPIN_LAYER_CLASS = "will-change-transform";
 const ICON_SWAP_TRANSITION = { duration: 0.18, ease: "easeOut" } as const;
 const BLURRED = "blur(4px)";
 const SHARP = "blur(0px)";
@@ -392,7 +397,10 @@ function SpinnerIcon({
                           }
                         : undefined
                 }
-                className={ICON_SLOT_CLASS}
+                className={cn(
+                    ICON_SLOT_CLASS,
+                    phase !== "idle" && SPIN_LAYER_CLASS
+                )}
                 style={{ rotate }}
                 transition={ICON_SWAP_TRANSITION}
             >
