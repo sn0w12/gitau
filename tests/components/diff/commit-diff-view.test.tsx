@@ -43,7 +43,18 @@ function row(kind: DiffRowKind, content: string): DiffRow {
     return { kind, content };
 }
 
-function fakeBackend(events: DiffEvent[]) {
+function fakeBackend(events: DiffEvent[], message = "Fix the bar") {
+    const withMessage = events.map((event) =>
+        event.event === "started"
+            ? {
+                  ...event,
+                  commitMessage: {
+                      summaryLine: message.split("\n")[0],
+                      message,
+                  },
+              }
+            : event
+    );
     const backend = {
         diff: {
             open: async (
@@ -52,7 +63,7 @@ function fakeBackend(events: DiffEvent[]) {
                 onEvent: (event: DiffEvent) => void
             ) => {
                 queueMicrotask(() => {
-                    for (const event of events) onEvent(event);
+                    for (const event of withMessage) onEvent(event);
                 });
                 return { ok: true as const, value: 1 };
             },
@@ -369,6 +380,39 @@ describe("CommitDiffView", () => {
         );
         await settle();
         expect(actions).toEqual([{ type: "CLEAR_SELECTION" }]);
+        view.unmount();
+    });
+
+    it("shows the commit subject and its description from the commit detail", async () => {
+        seedSettingsForTests({
+            diffViewMode: "unified",
+            commitFileListOpen: true,
+        });
+        const { dispatch } = recordedActions();
+        const view = renderWith(
+            fakeBackend(
+                eventsForTwoFiles(),
+                "Fix the section bar\n\nExplain the details."
+            ),
+            <CommitDiffView repoId={1} commitId="abc123" dispatch={dispatch} />
+        );
+        await settle();
+
+        expect(view.container.textContent).toContain("Fix the section bar");
+        expect(view.container.textContent).toContain("Explain the details.");
+        expect(view.container.textContent).not.toContain("Commit Message");
+
+        const expand = view.container.querySelector<HTMLButtonElement>(
+            'button[aria-label="Show commit description"]'
+        );
+        expect(expand).not.toBeNull();
+        act(() => expand!.click());
+        await settle();
+        expect(
+            view.container.querySelector(
+                'button[aria-label="Hide commit description"]'
+            )
+        ).not.toBeNull();
         view.unmount();
     });
 

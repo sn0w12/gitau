@@ -514,6 +514,11 @@ export interface SyntaxStyle {
     u?: boolean;
 }
 
+export interface CommitMessage {
+    summaryLine: string;
+    message: string;
+}
+
 export type DiffEvent =
     | {
           event: "started";
@@ -522,6 +527,7 @@ export type DiffEvent =
           generation: number;
           sections: SectionMeta[];
           estimatedTotalRows: number;
+          commitMessage?: CommitMessage;
       }
     | {
           event: "sectionLayout";

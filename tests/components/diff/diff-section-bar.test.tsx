@@ -7,6 +7,7 @@ import type { SettingsSchema } from "@/lib/backend/protocol";
 import {
     initializeSettings,
     resetSettingsForTests,
+    seedSettingsForTests,
 } from "@/stores/settings-store";
 
 const schema: SettingsSchema = {
@@ -106,5 +107,72 @@ describe("DiffSectionBar view menu", () => {
         );
         expect(await screen.findByText("Difference")).toBeDefined();
         expect(menuLabels()).toEqual(["Side by side", "Swipe", "Difference"]);
+    });
+
+    it("shows the path when not viewing a commit", () => {
+        seedSettingsForTests({
+            commitFileListOpen: true,
+            diffViewMode: "unified",
+            imageDiffViewMode: "sideBySide",
+        });
+        render(
+            <DiffSectionBar
+                path="src/a.txt"
+                kind="modified"
+                mode="unified"
+                onModeChange={() => {}}
+                dispatch={() => {}}
+            />
+        );
+
+        const filename = screen.getByText("a.txt");
+        expect(filename.closest('[aria-hidden="false"]')).not.toBeNull();
+    });
+
+    it("keeps the commit view before the message arrives", () => {
+        seedSettingsForTests({
+            commitFileListOpen: true,
+            diffViewMode: "unified",
+            imageDiffViewMode: "sideBySide",
+        });
+        render(
+            <DiffSectionBar
+                path="src/a.txt"
+                kind="modified"
+                isCommitView
+                mode="unified"
+                onModeChange={() => {}}
+                dispatch={() => {}}
+            />
+        );
+
+        expect(
+            screen.getByText("a.txt").closest('[aria-hidden="false"]')
+        ).toBeNull();
+    });
+
+    it("shows the commit subject in place of the path while the file list is open", () => {
+        seedSettingsForTests({
+            commitFileListOpen: true,
+            diffViewMode: "unified",
+            imageDiffViewMode: "sideBySide",
+        });
+        render(
+            <DiffSectionBar
+                path="src/a.txt"
+                kind="modified"
+                isCommitView
+                commitMessage="Fix the section bar"
+                mode="unified"
+                onModeChange={() => {}}
+                dispatch={() => {}}
+            />
+        );
+
+        const subject = screen.getByText("Fix the section bar");
+        expect(subject.closest('[aria-hidden="false"]')).not.toBeNull();
+        expect(
+            screen.getByText("a.txt").closest('[aria-hidden="false"]')
+        ).toBeNull();
     });
 });

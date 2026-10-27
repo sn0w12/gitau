@@ -86,6 +86,11 @@ const handle = TooltipCreateHandle<ComponentType>();
 
 const FILE_ROW_HEIGHT_PX = 30;
 
+function descriptionOf(message: string): string | undefined {
+    const [, ...body] = message.split("\n");
+    return body.join("\n").trim() || undefined;
+}
+
 function CommitDiffContent({
     state,
     controller,
@@ -99,6 +104,10 @@ function CommitDiffContent({
 }) {
     const { mode, setMode } = useDiffViewMode();
     const { mode: imageMode, setMode: setImageMode } = useImageDiffViewMode();
+    const commitMessage = state.commitMessage?.summaryLine;
+    const commitDescription = state.commitMessage
+        ? descriptionOf(state.commitMessage.message)
+        : undefined;
     const sections = state.sections;
     const resetKey = `${state.sessionId}:${sections.length}`;
     const [index, setIndex] = useClampedIndex(sections.length, resetKey);
@@ -136,6 +145,9 @@ function CommitDiffContent({
                     path={section.path}
                     oldPath={section.oldPath}
                     kind={section.kind}
+                    isCommitView
+                    commitMessage={commitMessage}
+                    commitDescription={commitDescription}
                     mode={mode}
                     onModeChange={setMode}
                     imageMode={section.image ? imageMode : undefined}
@@ -209,17 +221,19 @@ function CommitFileList({
             open={open}
             onOpenChange={setOpen}
         >
-            <CollapsibleTrigger className="flex size-8 w-full shrink-0 touch-manipulation items-center justify-start gap-1 border-b px-2 text-sm group-data-closed:justify-center">
-                <ChevronDown className="size-4.5 group-data-closed:-rotate-90" />
-                <span className="text-xs group-data-closed:hidden">
-                    {sections.length}{" "}
-                    {pluralize("Changed File", sections.length)}
+            <CollapsibleTrigger className="group-data-closed:justify-left flex size-8 w-full shrink-0 touch-manipulation items-center justify-start gap-1 border-b px-2 text-sm group-data-closed:pr-0">
+                <ChevronDown className="size-4.5 transition-[rotate] duration-200 ease-snappy group-data-closed:-rotate-90" />
+                <span className="grid grid-cols-[1fr] transition-[grid-template-columns,opacity,filter] duration-100 group-data-closed:grid-cols-[0fr] group-data-closed:opacity-0 group-data-closed:blur-[1px]">
+                    <span className="overflow-hidden text-xs whitespace-nowrap">
+                        {sections.length}{" "}
+                        {pluralize("Changed File", sections.length)}
+                    </span>
                 </span>
             </CollapsibleTrigger>
             <CollapsiblePanel
                 hidden={false}
                 keepMounted
-                className="min-h-0 w-[calc(var(--spacing)*64-1px)] flex-1 transition-none data-closed:w-8.5"
+                className="min-h-0 w-[calc(var(--spacing)*64-1px)] flex-1 data-closed:w-8.5"
             >
                 <ScrollArea
                     scrollFade
@@ -299,7 +313,7 @@ const CommitFileRow = React.memo(function CommitFileRow({
                                     />
                                     <SplitPath
                                         path={section.path}
-                                        className="text-xs group-data-closed:hidden"
+                                        className="text-xs transition-[opacity,filter] duration-100 group-data-closed:opacity-0 group-data-closed:blur-[1px]"
                                     />
                                 </button>
                             }

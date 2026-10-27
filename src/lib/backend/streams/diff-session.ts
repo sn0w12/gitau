@@ -1,6 +1,7 @@
 import { beginOperation, finishOperation } from "@/stores/operation-store";
 
 import type {
+    CommitMessage,
     DiffEvent,
     DiffImage,
     DiffRequest,
@@ -57,6 +58,7 @@ export interface DiffSessionState {
     expansionsBySection: Map<number, SectionGapExpansions>;
     imagesBySection: Map<number, DiffImage>;
     imageErrorsBySection: Map<number, GitBackendError>;
+    commitMessage?: CommitMessage;
     estimatedTotalRows: number;
     totalRows: number | null;
     additions: number;
@@ -258,6 +260,7 @@ class DiffStreamSpec implements StreamSessionSpec<
                     expansionsBySection: new Map(),
                     imagesBySection: new Map(),
                     imageErrorsBySection: new Map(),
+                    commitMessage: event.commitMessage,
                     estimatedTotalRows: event.estimatedTotalRows,
                     totalRows: null,
                 }));

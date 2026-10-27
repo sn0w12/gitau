@@ -47,10 +47,10 @@ async fn commit_diff_after_cancelled_worktree_diff_completes() {
     let _ = rx_wt.recv().await;
     backend.cancel_operation(_op_wt).unwrap();
 
-    for (label, oid_hex) in [
-        ("head-entry", oids[0].clone()),
-        ("next", oids[1].clone()),
-        ("revisit-head", oids[0].clone()),
+    for (label, oid_hex, message) in [
+        ("head-entry", oids[0].clone(), "third"),
+        ("next", oids[1].clone(), "second"),
+        ("revisit-head", oids[0].clone(), "third"),
     ] {
         let token = CancellationToken::new();
         let (_op, mut rx) = backend
@@ -73,8 +73,17 @@ async fn commit_diff_after_cancelled_worktree_diff_completes() {
             let mut saw_layout = false;
             while let Some(event) = rx.recv().await {
                 match &event {
-                    DiffEvent::Started { sections, .. } => {
+                    DiffEvent::Started {
+                        sections,
+                        commit_message,
+                        ..
+                    } => {
                         terminal = format!("started({})", sections.len());
+                        assert_eq!(
+                            commit_message.as_ref().map(|m| m.summary_line.as_str()),
+                            Some(message),
+                            "{label}: missing commit message"
+                        );
                     }
                     DiffEvent::SectionLayout { .. } => saw_layout = true,
                     DiffEvent::Completed { .. } => terminal = "completed".into(),

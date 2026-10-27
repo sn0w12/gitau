@@ -9,7 +9,9 @@ use crate::api::queries::DiffRequest;
 use crate::domain::{Generation, OperationId, RelativePath, SnapshotId};
 use crate::engines::gix::session::GixSession;
 use crate::error::{GitError, Result};
-use crate::streaming::model::{DiffEvent, DiffRow, DiffRowKind, SectionKind, SectionMeta};
+use crate::streaming::model::{
+    DiffComparison, DiffEvent, DiffRow, DiffRowKind, SectionKind, SectionMeta,
+};
 use crate::streaming::store::DiffOperation;
 const CHUNK_ROWS: usize = 256;
 /// Highlighting is inline per chunk, so the first chunk stays small enough
@@ -142,6 +144,12 @@ fn compute(job: &DiffJob, op: &Arc<DiffOperation>, tx: &Sender<DiffEvent>) -> Re
         generation: job.generation.0,
         sections: metas,
         estimated_total_rows: estimate,
+        commit_message: match &job.request.comparison {
+            DiffComparison::CommitToParent { commit } => {
+                crate::engines::gix::objects::commit_message(&job.session, commit.as_str()).ok()
+            }
+            _ => None,
+        },
     });
 
     // Sections are independent; the persistent rayon pool materializes and
