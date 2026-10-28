@@ -14,7 +14,8 @@ export type VisibleSettingDefinition = Extract<
             | "number"
             | "string"
             | "multilineString"
-            | "shortcut";
+            | "shortcut"
+            | "font";
     }
 >;
 

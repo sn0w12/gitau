@@ -193,6 +193,11 @@ export const templateKeys = {
     licenses: ["templates", "licenses"] as const,
 };
 
+export const fontKeys = {
+    /** Installed families; invariant for the life of the process. */
+    system: ["fonts", "system"] as const,
+};
+
 export const highlightKeys = {
     snippet: (
         language: string,

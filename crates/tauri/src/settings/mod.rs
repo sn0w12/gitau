@@ -77,9 +77,10 @@ fn ts_value_type(setting_type: &SettingType) -> String {
     match setting_type {
         SettingType::Boolean => "boolean".to_owned(),
         SettingType::Number { .. } => "number".to_owned(),
-        SettingType::String | SettingType::Shortcut | SettingType::MultilineString => {
-            "string".to_owned()
-        }
+        SettingType::String
+        | SettingType::Shortcut
+        | SettingType::MultilineString
+        | SettingType::Font => "string".to_owned(),
         SettingType::StringList => "string[]".to_owned(),
         SettingType::Select { options } => options
             .iter()
@@ -187,6 +188,13 @@ mod tests {
             .validate(SettingValue::StringList(vec!["a".to_owned()]))
             .is_ok());
         assert!(pinned.validate(SettingValue::Bool(true)).is_err());
+
+        let font = builtin.find("fontSans").unwrap();
+        assert!(font
+            .validate(SettingValue::Str("Inter Variable".to_owned()))
+            .is_ok());
+        assert!(font.validate(SettingValue::Str("  ".to_owned())).is_err());
+        assert!(font.validate(SettingValue::Bool(true)).is_err());
     }
 
     #[test]

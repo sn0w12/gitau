@@ -91,6 +91,7 @@ function valueTerms(
 
         case "string":
         case "multilineString":
+        case "font":
             return typeof value === "string" ? [value] : [];
 
         case "shortcut": {

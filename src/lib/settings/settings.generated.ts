@@ -14,6 +14,10 @@ export interface SettingsValues {
     repoSidebarSize: number;
     onboardingComplete: boolean;
     theme: "system" | "light" | "dark";
+    fontSans: string;
+    fontMono: string;
+    fontHeading: string;
+    fontDisplay: string;
     diffViewMode: "unified" | "split";
     imageDiffViewMode: "sideBySide" | "swipe" | "difference";
     syntaxThemeLight: "catppuccinLatte" | "coldarkCold" | "github" | "gruvboxLight" | "inspiredGithub" | "monokaiExtendedLight" | "oneHalfLight" | "solarizedLight" | "base16OceanLight";

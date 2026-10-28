@@ -1,11 +1,20 @@
 import { prepareWithSegments, measureNaturalWidth } from "@chenglou/pretext";
 
 /**
- * The diff rows render in `font-mono text-xs` = 0.75rem = 12px Geist Mono
- * (see styles.css). Pretext measures through the browser's own font engine,
- * so this returns the real advance width instead of a guessed average.
+ * The diff rows render in `font-mono text-xs` = 0.75rem = 12px. The family
+ * comes from `--font-mono` so a custom code font is measured instead of the
+ * default Geist Mono. Pretext measures through the browser's own font
+ * engine, so this returns the real advance width instead of a guess.
  */
-const DIFF_FONT = '12px "Geist Mono Variable", monospace';
+const DIFF_FONT_SIZE = 12;
+
+function diffFont(): string {
+    if (typeof document === "undefined") return `${DIFF_FONT_SIZE}px monospace`;
+    const family = getComputedStyle(document.documentElement)
+        .getPropertyValue("--app-font-mono")
+        .trim();
+    return `${DIFF_FONT_SIZE}px ${family || "monospace"}`;
+}
 
 /** Used when canvas measurement is unavailable (tests, SSR). */
 const FALLBACK_CHAR_WIDTH = 7.25;
@@ -24,7 +33,7 @@ function measureOnce(): number | null {
         if (typeof document === "undefined") return null;
         const prepared = prepareWithSegments(
             "M".repeat(SAMPLE_CHARS),
-            DIFF_FONT
+            diffFont()
         );
         const total = measureNaturalWidth(prepared);
         if (Number.isFinite(total) && total > 0) {
@@ -52,10 +61,19 @@ export function subscribeDiffCharWidth(listener: () => void): () => void {
     };
 }
 
+/** Re-samples the current code font; called when the font setting changes. */
+export function remeasureDiffCharWidth(): void {
+    const next = measureOnce();
+    if (next !== null && Math.abs(next - (cachedWidth ?? Number.NaN)) > 1e-6) {
+        cachedWidth = next;
+        notify();
+    }
+}
+
 /**
- * Re-measures when the bundled mono font becomes available to canvas;
- * measuring earlier silently reports fallback system-mono metrics, which
- * under-measure Geist Mono and make rows wrap too early.
+ * Re-measures when the code font becomes available to canvas; measuring
+ * earlier silently reports fallback metrics, which under-measure a custom
+ * font and make rows wrap too early.
  */
 export function watchDiffCharWidth(): () => void {
     if (typeof document === "undefined") return () => undefined;
@@ -64,28 +82,20 @@ export function watchDiffCharWidth(): () => void {
 
     let active = true;
     const remeasure = () => {
-        if (!active) return;
-        const next = measureOnce();
-        if (
-            next !== null &&
-            Math.abs(next - (cachedWidth ?? Number.NaN)) > 1e-6
-        ) {
-            cachedWidth = next;
-            notify();
-        }
+        if (active) remeasureDiffCharWidth();
     };
 
     // An immediate measurement is only trustworthy if the face is already
     // loaded; otherwise wait for our explicit load request to settle.
     try {
-        if (fonts.check(DIFF_FONT)) remeasure();
+        if (fonts.check(diffFont())) remeasure();
     } catch {
         // check() can throw for unparseable fonts on odd platforms.
     }
 
     const request =
         typeof fonts.load === "function"
-            ? fonts.load(DIFF_FONT).catch(() => undefined)
+            ? fonts.load(diffFont()).catch(() => undefined)
             : Promise.resolve();
     Promise.resolve(request)
         .then(() => fonts.ready)

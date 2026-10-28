@@ -19,10 +19,12 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useSetting } from "@/hooks/settings/use-setting";
+import { FONT_SETTINGS } from "@/lib/fonts";
 import type { VisibleSettingDefinition } from "@/lib/settings/schema";
 import type { SettingKey } from "@/lib/settings/settings.generated";
 import { cn } from "@/lib/utils";
 
+import { FontControl } from "./font-control";
 import { ShortcutControl } from "./shortcut-control";
 
 export function SettingField({
@@ -152,6 +154,19 @@ function SettingControl({
                     onChange={(next) => onChange(next)}
                 />
             );
+
+        case "font": {
+            const spec = FONT_SETTINGS.find(
+                (setting) => setting.key === definition.key
+            );
+            return (
+                <FontControl
+                    value={String(value)}
+                    fallback={spec?.fallback ?? "sans-serif"}
+                    onChange={(next) => onChange(next)}
+                />
+            );
+        }
     }
 }
 

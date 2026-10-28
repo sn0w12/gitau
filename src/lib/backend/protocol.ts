@@ -687,6 +687,7 @@ export type SettingDefinition =
     | (SettingDefinitionBase & { kind: "string" })
     | (SettingDefinitionBase & { kind: "multilineString" })
     | (SettingDefinitionBase & { kind: "shortcut" })
+    | (SettingDefinitionBase & { kind: "font" })
     | (SettingDefinitionBase & { kind: "stringList" });
 
 export interface SettingsSection {

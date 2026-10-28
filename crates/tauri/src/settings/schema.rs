@@ -80,6 +80,11 @@ fn string(key: &'static str, label: &'static str) -> SettingDefinition {
     SettingDefinition::new(key, label, SettingType::String)
 }
 
+fn font(key: &'static str, label: &'static str, default: &'static str) -> SettingDefinition {
+    SettingDefinition::new(key, label, SettingType::Font)
+        .default_value(SettingValue::Str(default.to_owned()))
+}
+
 fn multiline_string(key: &'static str, label: &'static str) -> SettingDefinition {
     SettingDefinition::new(key, label, SettingType::MultilineString)
 }
@@ -147,6 +152,17 @@ pub fn builtin() -> SettingsSchema {
                             )
                             .description("Color scheme used across the app.")
                             .default_value(SettingValue::Str("system".to_owned())),
+                            // Defaults must match BUNDLED_FONTS in src/lib/fonts.ts.
+                            font("fontSans", "Interface font", "Inter Variable")
+                                .description(
+                                    "Typeface used for interface text. Any font installed on this computer can be chosen.",
+                                ),
+                            font("fontMono", "Code font", "Geist Mono Variable")
+                                .description("Typeface used for code, diffs, and commit hashes."),
+                            font("fontHeading", "Heading font", "Kalnia Variable")
+                                .description("Typeface used for headings."),
+                            font("fontDisplay", "Display font", "Instrument Serif")
+                                .description("Typeface used for large display text."),
                             select(
                                 "diffViewMode",
                                 "Diff view",

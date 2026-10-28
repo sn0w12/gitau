@@ -978,6 +978,10 @@ function createRawBackendClient() {
                 }),
         },
 
+        fonts: {
+            list: () => invokeCommand<string[]>("fonts_list"),
+        },
+
         editor: {
             /** Opens `path` (optionally `relativePath` joined onto it) in
              * the editor configured by the `editorCommand` setting. */
@@ -1095,6 +1099,7 @@ export function createBackendClient(): BackendClient {
         highlight: resultifyGroup(raw.highlight),
         forge: resultifyGroup(raw.forge),
         settings: resultifyGroup(raw.settings),
+        fonts: resultifyGroup(raw.fonts),
         editor: resultifyGroup(raw.editor),
         fileManager: resultifyGroup(raw.fileManager),
         terminal: resultifyGroup(raw.terminal),

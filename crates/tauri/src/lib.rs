@@ -351,6 +351,7 @@ pub fn run() {
             commands::highlight::highlight_code,
             commands::settings::settings_load,
             commands::settings::settings_set,
+            commands::fonts::fonts_list,
             commands::editor::open_in_editor,
             commands::terminal::open_in_terminal,
             commands::file_manager::reveal_in_file_manager,

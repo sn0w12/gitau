@@ -29,6 +29,7 @@ required-features = ["devtools"]
 tauri-build.workspace = true
 
 [dependencies]
+fontdb.workspace = true
 git-backend.workspace = true
 log.workspace = true
 pico-args.workspace = true

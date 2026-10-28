@@ -25,6 +25,7 @@ pub mod changes;
 pub mod channel;
 pub mod editor;
 pub mod file_manager;
+pub mod fonts;
 pub mod forge;
 pub mod highlight;
 pub mod hooks;

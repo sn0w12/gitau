@@ -13,10 +13,8 @@ import {
 import { Frame, FrameHeader, FramePanel } from "@/components/ui/frame";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@/components/ui/tooltip";
-
-/** Pele measures labels with the font it draws them in, so the family is
- * passed at render time; the `--pele-font` variable carries the same stack. */
-const FONT = '"Inter Variable", sans-serif';
+import { useSettingValue } from "@/hooks/settings/use-setting";
+import { fontFamilyStack } from "@/lib/fonts";
 
 function describe(cause: unknown): string {
     if (cause instanceof Error) {
@@ -46,13 +44,20 @@ export function MermaidDiagram({ text }: { text: string }) {
     // Pele names each diagram's accessibility title, so the prefix has to be
     // unique across a page or the ids collide between diagrams.
     const idPrefix = `pele${diagramId.replaceAll(":", "")}`;
+    const fontSans = useSettingValue("fontSans");
+    const font = fontFamilyStack(
+        typeof fontSans === "string" ? fontSans : "",
+        "sans-serif"
+    );
 
     useEffect(() => {
         let live = true;
         void (async () => {
             const { renderAsync } = await import("pele/lazy");
+            // Pele measures labels with the font it draws them in, so the
+            // family has to be passed alongside the source.
             const result = await renderAsync(text, {
-                fontFamily: FONT,
+                fontFamily: font,
                 idPrefix,
             });
             if (live) setSvg(result.svg);
@@ -63,7 +68,7 @@ export function MermaidDiagram({ text }: { text: string }) {
         return () => {
             live = false;
         };
-    }, [idPrefix, text]);
+    }, [font, idPrefix, text]);
 
     if (error !== null) {
         // The source is still the content, so it stays readable and

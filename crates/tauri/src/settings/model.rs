@@ -23,6 +23,7 @@ pub enum SettingKind {
     MultilineString,
     Shortcut,
     StringList,
+    Font,
 }
 
 /// The concrete type of a setting. Serialized as a flat discriminated
@@ -48,6 +49,9 @@ pub enum SettingType {
     MultilineString,
     Shortcut,
     StringList,
+    /// A font family name; the options are the fonts installed on the
+    /// machine plus the bundled ones, resolved by the frontend.
+    Font,
 }
 
 impl SettingType {
@@ -60,6 +64,7 @@ impl SettingType {
             SettingType::MultilineString => SettingKind::MultilineString,
             SettingType::Shortcut => SettingKind::Shortcut,
             SettingType::StringList => SettingKind::StringList,
+            SettingType::Font => SettingKind::Font,
         }
     }
 }
@@ -147,6 +152,7 @@ impl SettingDefinition {
             SettingType::String | SettingType::MultilineString | SettingType::Shortcut => {
                 SettingValue::Str(String::new())
             }
+            SettingType::Font => SettingValue::Str(String::new()),
             SettingType::StringList => SettingValue::StringList(Vec::new()),
             SettingType::Select { options } => SettingValue::Str(
                 options
@@ -232,6 +238,13 @@ impl SettingDefinition {
                     Err("list items must be non-empty strings".to_owned())
                 }
                 other => Err(format!("expected string[], got {}", other.kind_name())),
+            },
+            SettingType::Font => match value {
+                SettingValue::Str(family) if !family.trim().is_empty() => {
+                    Ok(SettingValue::Str(family.trim().to_owned()))
+                }
+                SettingValue::Str(_) => Err("font family must not be empty".to_owned()),
+                other => Err(format!("expected string, got {}", other.kind_name())),
             },
         }
     }
