@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import {
     cleanup,
     fireEvent,
@@ -5,7 +6,6 @@ import {
     screen,
     waitFor,
 } from "@testing-library/react";
-// @vitest-environment jsdom
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -72,7 +72,7 @@ describe("titlebar tab strip", () => {
 
     beforeEach(() => {
         resetRuntimesForTests();
-        localStorage.clear();
+        globalThis.localStorage?.clear();
         // The real bootstrap initializes settings before React renders;
         // shell components (shortcut badges) read them at render time.
         seedSettingsForTests({

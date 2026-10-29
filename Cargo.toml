@@ -45,20 +45,22 @@ syntect = { version = "5", default-features = false, features = [
     "default-syntaxes",
     "regex-onig",
 ] }
-tauri = "3.0.0-alpha.4"
-tauri-build = "3.0.0-alpha.3"
-tauri-plugin-dialog = { version = "3.0.0-alpha.3", default-features = false, features = [
+tauri = "3.0.0-alpha.5"
+tauri-build = "3.0.0-alpha.4"
+tauri-plugin-dialog = { version = "3.0.0-alpha.4", default-features = false, features = [
     "xdg-portal",
 ] }
-tauri-plugin-log = "3.0.0-alpha.2"
-tauri-plugin-opener = "3.0.0-alpha.2"
-tauri-plugin-os = "3.0.0-alpha.2"
+tauri-plugin-log = "3.0.0-alpha.3"
+tauri-plugin-opener = "3.0.0-alpha.3"
+tauri-plugin-os = "3.0.0-alpha.3"
 tauri-plugin-prevent-default = { path = "crates/tauri-plugin-prevent-default" }
-tauri-plugin-process = "3.0.0-alpha.2"
+tauri-plugin-process = "3.0.0-alpha.3"
 tauri-plugin-snap-layout = { path = "crates/tauri-plugin-snap-layout" }
-tauri-plugin-updater = "3.0.0-alpha.2"
-tauri-runtime-cef = "3.0.0-alpha.5"
-tauri-runtime-wry = "3.0.0-alpha.4"
+tauri-plugin-updater = "3.0.0-alpha.3"
+# alpha.6 ships CEF 154, which dropped libEGL.so and libGLESv2.so while
+# tauri-bundler alpha.4 still copies them, so deb/appimage bundling aborts.
+tauri-runtime-cef = "=3.0.0-alpha.5"
+tauri-runtime-wry = "3.0.0-alpha.5"
 tempfile = "3"
 thiserror = "2"
 tokio = { version = "1", features = [

@@ -4,7 +4,7 @@
 
 gitau is a cross-platform Git desktop client: a Tauri 3 (alpha) shell (Rust workspace) plus a React 19 frontend. Git work happens entirely in Rust (libgit2 + gitoxide); the frontend never shells out to the git CLI.
 
-- `crates/git-backend/` is the pure-Rust git engine library: status, diff, history, remotes, mutations; dual engines (`git2` 0.21 as reference/mutation engine, `gix` 0.86 for fast reads); syntect syntax highlighting.
+- `crates/git-backend/` is the pure-Rust git engine library: status, diff, history, remotes, mutations; dual engines (`git2` 0.21 as reference/mutation engine, `gix` 0.87 for fast reads); syntect syntax highlighting.
 - `crates/tauri/` holds the Tauri commands and app setup, bridging webview ↔ backend over IPC (~52 registered commands).
 - Webview runtime: Tauri 3 selects it through a runtime crate rather than a `tauri` feature. Linux builds depend on `tauri-runtime-cef` (bundled Chromium) under `[target.'cfg(target_os = "linux")'.dependencies]`; every other target depends on `tauri-runtime-wry` (the system webview). `crates/tauri/src/lib.rs` picks the runtime with the cfg-gated `runtime_attrs()`, and `crates/tauri/src/main.rs` carries the CEF helper entry point on Linux.
 

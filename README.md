@@ -17,7 +17,7 @@ curl -fsSL https://raw.githubusercontent.com/sn0w12/gitau/master/scripts/install
 ### Requirements
 
 - Node LTS
-- Rust 1.85+
+- Rust 1.95+
 - The platform dependencies from the [Tauri prerequisites guide](https://tauri.app/start/prerequisites/).
 
 ### Commands

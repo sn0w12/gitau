@@ -16,5 +16,5 @@ bitflags = "2.13"
 itertools = "0.15"
 serde = { version = "1", features = ["derive"] }
 strum = { version = "0.28", features = ["derive"] }
-tauri = { version = "3.0.0-alpha.4", default-features = false }
+tauri = { version = "3.0.0-alpha.5", default-features = false }
 thiserror = "2"
