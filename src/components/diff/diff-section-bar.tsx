@@ -98,6 +98,7 @@ export function DiffSectionBar({
                         <Swap
                             when={showDescription}
                             className="min-h-0 flex-1 grid-rows-1 *:self-stretch"
+                            align="start"
                             on={
                                 <ScrollArea className="pt-0.5 whitespace-pre-wrap text-muted-foreground">
                                     {commitDescription}
