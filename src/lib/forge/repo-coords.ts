@@ -103,14 +103,25 @@ export function pickRepoCoords(
     remotes: RemoteInfo[],
     providers: ProviderDescriptor[]
 ): RemoteCoords | null {
+    const remote = pickRepoRemote(remotes, providers);
+    return remote ? parseRemoteCoords(remote.url, providers) : null;
+}
+
+/**
+ * The remote [`pickRepoCoords`] resolves, for operations that must name their
+ * remote instead of relying on the backend's `origin` default.
+ */
+export function pickRepoRemote(
+    remotes: RemoteInfo[],
+    providers: ProviderDescriptor[]
+): RemoteInfo | null {
     const ordered = [...remotes].sort((a, b) =>
         a.name === "origin" ? -1 : b.name === "origin" ? 1 : 0
     );
-    for (const remote of ordered) {
-        const coords = parseRemoteCoords(remote.url, providers);
-        if (coords) return coords;
-    }
-    return null;
+    return (
+        ordered.find((remote) => parseRemoteCoords(remote.url, providers)) ??
+        null
+    );
 }
 
 export interface ParsedThreadUrl extends RepoCoords {

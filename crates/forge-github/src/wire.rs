@@ -1,6 +1,29 @@
 use serde::{Deserialize, Serialize};
 
-use forge_core::dto::{MergePullRequestBody, PullRequestMergeMethod};
+use forge_core::dto::{CreatePullRequestBody, MergePullRequestBody, PullRequestMergeMethod};
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) struct CreatePullPayload {
+    pub(crate) title: String,
+    pub(crate) head: String,
+    pub(crate) base: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) body: Option<String>,
+    pub(crate) draft: bool,
+}
+
+impl From<&CreatePullRequestBody> for CreatePullPayload {
+    fn from(body: &CreatePullRequestBody) -> Self {
+        Self {
+            title: body.title.clone(),
+            head: body.head.clone(),
+            base: body.base.clone(),
+            body: body.body.clone(),
+            draft: body.draft,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]

@@ -10,6 +10,7 @@ import {
     parsePullUrl,
     parseRemoteCoords,
     pickRepoCoords,
+    pickRepoRemote,
 } from "@/lib/forge/repo-coords";
 
 const NONE: Capabilities = {
@@ -117,6 +118,41 @@ describe("pickRepoCoords", () => {
     it("returns null without a claimed remote", () => {
         expect(
             pickRepoCoords(
+                [remote("origin", "https://example.com/o/r.git")],
+                PROVIDERS
+            )
+        ).toBeNull();
+    });
+});
+
+describe("pickRepoRemote", () => {
+    it("names the remote the coordinates came from", () => {
+        expect(
+            pickRepoRemote(
+                [
+                    remote("upstream", "https://github.com/up/repo.git"),
+                    remote("origin", "git@github.com:octo/repo.git"),
+                ],
+                PROVIDERS
+            )
+        ).toEqual(remote("origin", "git@github.com:octo/repo.git"));
+    });
+
+    it("falls back to a non-origin remote claimed by a provider", () => {
+        expect(
+            pickRepoRemote(
+                [
+                    remote("upstream", "https://example.com/o/r.git"),
+                    remote("fork", "https://github.com/octo/repo.git"),
+                ],
+                PROVIDERS
+            )?.name
+        ).toBe("fork");
+    });
+
+    it("returns null when no remote resolves", () => {
+        expect(
+            pickRepoRemote(
                 [remote("origin", "https://example.com/o/r.git")],
                 PROVIDERS
             )

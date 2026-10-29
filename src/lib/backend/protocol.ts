@@ -1143,6 +1143,16 @@ export interface WorkflowRun {
     createdAt: string;
 }
 
+/** A new pull request. `head` carries the changes and `base` is the branch it
+ * merges into, both as branch names on the repository. */
+export interface CreatePullRequestBody {
+    title: string;
+    head: string;
+    base: string;
+    body?: string;
+    draft: boolean;
+}
+
 /** Partial pull request update: fields left out are untouched. */
 export interface UpdatePullRequestBody {
     state?: string;

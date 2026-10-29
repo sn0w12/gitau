@@ -1,5 +1,5 @@
-import { GitPullRequest } from "lucide-react";
-import { useEffect, useMemo, useRef } from "react";
+import { GitPullRequest, Plus } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { LabelBadge } from "@/components/forge/label-badge";
 import {
@@ -33,12 +33,20 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
-import { useForgeAccount } from "@/hooks/forge/use-forge-account";
-import { useRepoCoords } from "@/hooks/forge/use-forge-issues";
+import {
+    useForgeAccount,
+    capabilityAllows,
+} from "@/hooks/forge/use-forge-account";
+import {
+    useRepoCapabilities,
+    useRepoCoords,
+} from "@/hooks/forge/use-forge-issues";
 import { useRepoPullRequests } from "@/hooks/forge/use-forge-pull-requests";
 import { useInternalLink } from "@/hooks/tabs/use-internal-link";
 import type { Label, PullRequestListItem } from "@/lib/backend/protocol";
 import type { ListTab } from "@/lib/routing/repo-search";
+
+import { CreatePullDialog } from "./create-pull-dialog";
 
 export function PullRequestsView({
     repoId,
@@ -55,7 +63,9 @@ export function PullRequestsView({
 }) {
     const { coords, isLoading: coordsLoading } = useRepoCoords(repoId);
     const account = useForgeAccount(coords?.provider ?? null);
+    const capabilities = useRepoCapabilities(repoId);
     const pulls = useRepoPullRequests(repoId, tab);
+    const [createOpen, setCreateOpen] = useState(false);
 
     const labels = useMemo(() => {
         const seen = new Map<string, Label>();
@@ -107,6 +117,21 @@ export function PullRequestsView({
                         <TabsTab value="closed">Closed</TabsTab>
                     </TabsList>
                     <div className="flex gap-1">
+                        {coords != null ? (
+                            <Button
+                                variant="outline"
+                                disabled={
+                                    !capabilityAllows(
+                                        capabilities,
+                                        "pullRequestsWrite"
+                                    )
+                                }
+                                onClick={() => setCreateOpen(true)}
+                            >
+                                <Plus />
+                                New pull request
+                            </Button>
+                        ) : null}
                         <Select
                             aria-label="Select label"
                             value={label}
@@ -161,6 +186,11 @@ export function PullRequestsView({
                     ))}
                 </div>
             </Tabs>
+            <CreatePullDialog
+                repoId={repoId}
+                open={createOpen}
+                onClose={() => setCreateOpen(false)}
+            />
         </div>
     );
 }

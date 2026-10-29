@@ -10,6 +10,7 @@ import type {
     CommitHookEvent,
     CommitSummary,
     ConflictFile,
+    CreatePullRequestBody,
     CreateRepositoryRequest,
     CreateRepositoryResult,
     CheckoutMode,
@@ -799,6 +800,15 @@ function createRawBackendClient() {
                     "forge_list_pull_review_comments",
                     { args: { provider, owner, repo, number } }
                 ),
+            createPull: (
+                provider: string,
+                owner: string,
+                repo: string,
+                body: CreatePullRequestBody
+            ) =>
+                invokeCommand<PullRequestDetail>("forge_create_pull", {
+                    args: { provider, owner, repo, body },
+                }),
             updatePull: (
                 provider: string,
                 owner: string,

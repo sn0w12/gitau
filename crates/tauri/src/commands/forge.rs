@@ -1,11 +1,11 @@
 use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
 use git_backend::api::{
-    AccountProfile, CheckRun, CheckRunDetail, CheckRunLog, CommitStatus, IssueComment, IssueDetail,
-    IssueEvent, MergePullRequestBody, MergePullRequestResult, NotificationPage, Org,
-    PublishRepositoryRequest, PublishResult, PullRequestCommit, PullRequestDetail,
-    PullRequestReview, PullRequestReviewComment, RepoPermissions, SearchIssuePage,
-    SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody, WorkflowRun,
+    AccountProfile, CheckRun, CheckRunDetail, CheckRunLog, CommitStatus, CreatePullRequestBody,
+    IssueComment, IssueDetail, IssueEvent, MergePullRequestBody, MergePullRequestResult,
+    NotificationPage, Org, PublishRepositoryRequest, PublishResult, PullRequestCommit,
+    PullRequestDetail, PullRequestReview, PullRequestReviewComment, RepoPermissions,
+    SearchIssuePage, SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody, WorkflowRun,
 };
 use git_backend::{AuthChallenge, ConnectionProfile, ProviderDescriptor};
 
@@ -326,6 +326,21 @@ pub async fn forge_list_pull_review_comments(
     state
         .backend
         .forge_list_pull_review_comments(provider, owner, repo, number)
+        .await
+        .map_err(to_serialized)
+}
+
+#[tauri::command]
+pub async fn forge_create_pull(
+    state: SharedState<'_>,
+    provider: String,
+    owner: String,
+    repo: String,
+    body: CreatePullRequestBody,
+) -> CommandResult<PullRequestDetail> {
+    state
+        .backend
+        .forge_create_pull(provider, owner, repo, body)
         .await
         .map_err(to_serialized)
 }

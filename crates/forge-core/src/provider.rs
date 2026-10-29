@@ -5,11 +5,12 @@ use std::pin::Pin;
 use crate::accounts::{AuthChallenge, AuthPoll};
 use crate::capabilities::Capabilities;
 use crate::dto::{
-    AccountProfile, CheckRun, CheckRunDetail, CheckRunLog, CommitStatus, CreateRepositoryBody,
-    CreatedRepository, IssueComment, IssueDetail, IssueEvent, MergePullRequestBody,
-    MergePullRequestResult, NotificationPage, Org, PullRequestCommit, PullRequestDetail,
-    PullRequestReview, PullRequestReviewComment, RepoPermissions, RepositoryMetadata,
-    SearchIssuePage, SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody, WorkflowRun,
+    AccountProfile, CheckRun, CheckRunDetail, CheckRunLog, CommitStatus, CreatePullRequestBody,
+    CreateRepositoryBody, CreatedRepository, IssueComment, IssueDetail, IssueEvent,
+    MergePullRequestBody, MergePullRequestResult, NotificationPage, Org, PullRequestCommit,
+    PullRequestDetail, PullRequestReview, PullRequestReviewComment, RepoPermissions,
+    RepositoryMetadata, SearchIssuePage, SearchPullRequestPage, UpdateIssueBody,
+    UpdatePullRequestBody, WorkflowRun,
 };
 use crate::error::ProviderError;
 use crate::id::RemoteKind;
@@ -324,6 +325,16 @@ pub trait ForgeProvider: Send + Sync {
         _repo: &str,
         _number: u64,
     ) -> ForgeFuture<Vec<PullRequestReviewComment>> {
+        unsupported()
+    }
+
+    fn create_pull(
+        &self,
+        _token: &str,
+        _owner: &str,
+        _repo: &str,
+        _body: &CreatePullRequestBody,
+    ) -> ForgeFuture<PullRequestDetail> {
         unsupported()
     }
 

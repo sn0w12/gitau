@@ -10,8 +10,12 @@ import { ToastProvider } from "@/components/ui/toast";
 import { ConfirmProvider } from "@/contexts/confirm-context";
 import { AppServicesContext } from "@/contexts/services-context";
 import type {
+    AccountProfile,
     BranchInfo,
+    Capabilities,
     OperationState,
+    ProviderDescriptor,
+    RemoteInfo,
     RepoListing,
     RepoSnapshot,
     WorkflowOutcome,
@@ -47,6 +51,37 @@ const attachedHead: RepoSnapshot["head"] = {
     state: "attached",
     branch: "main",
     target: "abc",
+};
+
+const CAPABILITIES: Capabilities = {
+    issues: true,
+    pullRequests: true,
+    reviews: true,
+    notifications: true,
+    checks: true,
+    commitStatuses: true,
+    workflowRuns: true,
+    issuesWrite: true,
+    pullRequestsWrite: true,
+    publish: true,
+    orgs: true,
+};
+
+const GITHUB: ProviderDescriptor = {
+    id: "github",
+    label: "GitHub",
+    hosts: ["github.com"],
+    imageHosts: [],
+    capabilities: CAPABILITIES,
+};
+
+const PROFILE: AccountProfile = {
+    login: "octocat",
+    name: null,
+    avatarUrl: "",
+    htmlUrl: "",
+    scopes: ["repo"],
+    connectedAtMs: 1,
 };
 
 function listingBackend(
@@ -119,6 +154,24 @@ function listingBackend(
                 checkoutCalls.push(target);
                 return Promise.resolve({ ok: true, value: undefined });
             },
+        },
+        remotes: {
+            list: async (): Promise<Result<RemoteInfo[]>> => ({
+                ok: true,
+                value: [
+                    { name: "origin", url: "https://github.com/octo/repo.git" },
+                ],
+            }),
+        },
+        forge: {
+            providers: async (): Promise<Result<ProviderDescriptor[]>> => ({
+                ok: true,
+                value: [GITHUB],
+            }),
+            account: async (): Promise<Result<AccountProfile | null>> => ({
+                ok: true,
+                value: PROFILE,
+            }),
         },
         workflows: {
             operationState: async (): Promise<Result<OperationState>> =>
@@ -706,6 +759,51 @@ describe("BranchSelector", () => {
         const settled = await waitFor(() => services.mergeCalls.length > 0);
         expect(settled).toBe(true);
         expect(services.mergeCalls[0]).toBe("develop");
+        expect(services.checkoutCalls).toHaveLength(0);
+        view.unmount();
+    });
+
+    it("opens a pull request dialog from the branch context menu", async () => {
+        const services = listingBackend(listing);
+        const view = await openSelector(services);
+
+        const developRow = Array.from(
+            document.querySelectorAll('[data-slot="command-item"]')
+        ).find((item) => item.textContent.includes("develop"))!;
+        await act(async () => {
+            developRow.dispatchEvent(
+                new MouseEvent("contextmenu", {
+                    bubbles: true,
+                    cancelable: true,
+                    clientX: 10,
+                    clientY: 10,
+                })
+            );
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        });
+
+        const offered = await waitFor(() =>
+            Array.from(
+                document.querySelectorAll('[data-slot="context-menu-item"]')
+            ).some((item) => item.textContent.includes("Create pull request"))
+        );
+        expect(offered).toBe(true);
+
+        const createItem = Array.from(
+            document.querySelectorAll('[data-slot="context-menu-item"]')
+        ).find((item) => item.textContent.includes("Create pull request"))!;
+        await click(createItem);
+
+        const opened = await waitFor(() =>
+            Boolean(
+                document.querySelector('[data-testid="create-pull-dialog"]')
+            )
+        );
+        expect(opened).toBe(true);
+        const dialog = document.querySelector(
+            '[data-testid="create-pull-dialog"]'
+        )!;
+        expect(dialog.textContent).toContain("octo/repo");
         expect(services.checkoutCalls).toHaveLength(0);
         view.unmount();
     });

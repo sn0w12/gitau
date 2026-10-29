@@ -7,6 +7,7 @@ import {
 
 import { useAppServices } from "@/contexts/services-context";
 import type {
+    CreatePullRequestBody,
     MergePullRequestBody,
     UpdatePullRequestBody,
 } from "@/lib/backend/protocol";
@@ -224,6 +225,49 @@ function invalidatePull(queryClient: QueryClient, input: PullInput): void {
         ),
     });
     void queryClient.invalidateQueries({ queryKey: ["forge", "issues"] });
+}
+
+export function useCreatePullRequest() {
+    const { backend, queryClient } = useAppServices();
+    const mutation = useMutation({
+        mutationFn: async (
+            input: Omit<PullInput, "number"> & { body: CreatePullRequestBody }
+        ) =>
+            expectOk(
+                await backend.forge.createPull(
+                    input.provider,
+                    input.owner,
+                    input.repo,
+                    input.body
+                )
+            ),
+        onSuccess: (pull, input) => {
+            queryClient.setQueryData(
+                forgeKeys.pullRequest(
+                    input.provider,
+                    input.owner,
+                    input.repo,
+                    pull.number
+                ),
+                pull
+            );
+            void queryClient.invalidateQueries({
+                queryKey: ["forge", "pulls"],
+            });
+            void queryClient.invalidateQueries({
+                queryKey: ["forge", "search-pull-requests"],
+            });
+        },
+    });
+    return {
+        pending: mutation.isPending,
+        createPull: (
+            provider: string,
+            owner: string,
+            repo: string,
+            body: CreatePullRequestBody
+        ) => mutation.mutateAsync({ provider, owner, repo, body }),
+    };
 }
 
 export function useMergePullRequest() {
