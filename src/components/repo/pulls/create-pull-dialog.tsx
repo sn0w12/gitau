@@ -1,7 +1,20 @@
-import { useState } from "react";
+import { Tag } from "lucide-react";
+import { useMemo, useState } from "react";
 
+import { LabelBadge } from "@/components/forge/label-badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+    Combobox,
+    ComboboxChip,
+    ComboboxChips,
+    ComboboxChipsInput,
+    ComboboxEmpty,
+    ComboboxItem,
+    ComboboxList,
+    ComboboxPopup,
+    ComboboxValue,
+} from "@/components/ui/combobox";
 import {
     Dialog,
     DialogClose,
@@ -30,6 +43,7 @@ import {
 import {
     useRepoCapabilities,
     useRepoCoords,
+    useRepoLabels,
 } from "@/hooks/forge/use-forge-issues";
 import { useCreatePullRequest } from "@/hooks/forge/use-forge-pull-requests";
 import {
@@ -42,11 +56,6 @@ import { pickRepoRemote } from "@/lib/forge/repo-coords";
 import { pickBaseBranch } from "@/lib/repositories/default-branch";
 import { toastError } from "@/lib/toast-error";
 
-/**
- * Opens a pull request from a branch into another one. Unpushed commits are
- * pushed first. Always mounted and driven by `open`; the form lives inside the
- * portal body, so it remounts fresh on every open.
- */
 export function CreatePullDialog({
     repoId,
     initialHead,
@@ -54,7 +63,6 @@ export function CreatePullDialog({
     onClose,
 }: {
     repoId: number;
-    /** Branch preselected as the head, e.g. the row that opened the dialog. */
     initialHead?: string;
     open: boolean;
     onClose: () => void;
@@ -77,6 +85,8 @@ export function CreatePullDialog({
     );
 }
 
+type LabelOption = { value: string; label: string; color: string };
+
 function CreatePullForm({
     repoId,
     initialHead,
@@ -92,6 +102,11 @@ function CreatePullForm({
     const account = useForgeAccount(coords?.provider ?? null);
     const listing = useRepoListing(repoId);
     const snapshot = useRepositorySnapshot(repoId);
+    const labelOptions = useRepoLabels(
+        coords?.provider ?? null,
+        coords?.owner ?? null,
+        coords?.repo ?? null
+    );
     const push = usePushMutation(repoId);
     const create = useCreatePullRequest();
     const router = useActiveTabRouter();
@@ -102,12 +117,22 @@ function CreatePullForm({
         snapshot.data?.head.state === "attached"
             ? snapshot.data.head.branch
             : null;
+    const labelItems = useMemo<LabelOption[]>(
+        () =>
+            (labelOptions.data ?? []).map((label) => ({
+                value: label.name,
+                label: label.name,
+                color: label.color,
+            })),
+        [labelOptions.data]
+    );
 
     const [head, setHead] = useState<string | null>(null);
     const [base, setBase] = useState<string | null>(null);
     const [title, setTitle] = useState<string | null>(null);
     const [description, setDescription] = useState("");
     const [draft, setDraft] = useState(false);
+    const [labels, setLabels] = useState<LabelOption[]>([]);
 
     const headValue =
         head ??
@@ -173,6 +198,7 @@ function CreatePullForm({
                     base: baseValue,
                     body: description.trim() || undefined,
                     draft,
+                    labels: labels.map((label) => label.value),
                 }
             );
             onClose();
@@ -290,6 +316,69 @@ function CreatePullForm({
                                     rows={4}
                                     placeholder="Optional"
                                 />
+                            </Field>
+                            <Field>
+                                <FieldLabel>Labels</FieldLabel>
+                                <Combobox
+                                    multiple
+                                    items={labelItems}
+                                    value={labels}
+                                    onValueChange={(value) =>
+                                        setLabels(value as LabelOption[])
+                                    }
+                                >
+                                    <ComboboxChips startAddon={<Tag />}>
+                                        <ComboboxValue>
+                                            {(value: LabelOption[]) => (
+                                                <>
+                                                    {value.map((label) => (
+                                                        <ComboboxChip
+                                                            key={label.value}
+                                                            aria-label={
+                                                                label.label
+                                                            }
+                                                        >
+                                                            <LabelBadge
+                                                                label={{
+                                                                    name: label.label,
+                                                                    color: label.color,
+                                                                }}
+                                                            />
+                                                        </ComboboxChip>
+                                                    ))}
+                                                    <ComboboxChipsInput
+                                                        aria-label="Select labels"
+                                                        placeholder={
+                                                            value.length > 0
+                                                                ? undefined
+                                                                : "None"
+                                                        }
+                                                    />
+                                                </>
+                                            )}
+                                        </ComboboxValue>
+                                    </ComboboxChips>
+                                    <ComboboxPopup>
+                                        <ComboboxEmpty>
+                                            No labels found.
+                                        </ComboboxEmpty>
+                                        <ComboboxList>
+                                            {(item: LabelOption) => (
+                                                <ComboboxItem
+                                                    key={item.value}
+                                                    value={item}
+                                                >
+                                                    <LabelBadge
+                                                        label={{
+                                                            name: item.label,
+                                                            color: item.color,
+                                                        }}
+                                                    />
+                                                </ComboboxItem>
+                                            )}
+                                        </ComboboxList>
+                                    </ComboboxPopup>
+                                </Combobox>
                             </Field>
                             <Field>
                                 <FieldLabel>

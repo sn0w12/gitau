@@ -15,6 +15,7 @@ import {
     issueCommentsQuery,
     issueDetailQuery,
     issueEventsQuery,
+    repoLabelsQuery,
     repoPermissionsQuery,
     type IssueStateFilter,
 } from "@/lib/backend/queries/forge-issues-queries";
@@ -166,6 +167,17 @@ export function useRepoPermissions(
             repo,
             provider != null
         )
+    );
+}
+
+export function useRepoLabels(
+    provider: string | null,
+    owner: string | null,
+    repo: string | null
+) {
+    const { backend } = useAppServices();
+    return useQuery(
+        repoLabelsQuery({ backend }, provider, owner, repo, provider != null)
     );
 }
 

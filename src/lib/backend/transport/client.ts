@@ -29,6 +29,7 @@ import type {
     CommitStatus,
     IssueDetail,
     IssueEvent,
+    Label,
     Org,
     PullRequestCommit,
     PullRequestDetail,
@@ -808,6 +809,10 @@ function createRawBackendClient() {
             ) =>
                 invokeCommand<PullRequestDetail>("forge_create_pull", {
                     args: { provider, owner, repo, body },
+                }),
+            listLabels: (provider: string, owner: string, repo: string) =>
+                invokeCommand<Label[]>("forge_list_labels", {
+                    args: { provider, owner, repo },
                 }),
             updatePull: (
                 provider: string,

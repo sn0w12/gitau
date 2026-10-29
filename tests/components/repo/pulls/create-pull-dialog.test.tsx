@@ -2,7 +2,7 @@
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { CreatePullDialog } from "@/components/repo/pulls/create-pull-dialog";
 import { ToastProvider } from "@/components/ui/toast";
@@ -12,6 +12,7 @@ import type {
     BranchInfo,
     Capabilities,
     CreatePullRequestBody,
+    Label,
     ProviderDescriptor,
     PullRequestDetail,
     RemoteInfo,
@@ -176,6 +177,10 @@ function backendWith(
                 ok: true,
                 value: PROFILE,
             }),
+            listLabels: async (): Promise<Result<Label[]>> => ({
+                ok: true,
+                value: [{ name: "bug", color: "d73a4a" }],
+            }),
             createPull: async (
                 providerId: string,
                 owner: string,
@@ -247,7 +252,16 @@ async function waitFor(predicate: () => boolean): Promise<boolean> {
     return predicate();
 }
 
-/** Resolves the control a FieldLabel points at through its `htmlFor`. */
+async function waitForElement<T extends Element>(selector: string): Promise<T> {
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline) {
+        const element = document.querySelector<T>(selector);
+        if (element) return element;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    throw new Error(`element not found: ${selector}`);
+}
+
 function labeledControl<T extends HTMLElement>(labelText: string): T | null {
     const label = [...document.body.querySelectorAll("label")].find(
         (candidate) => candidate.textContent?.trim() === labelText
@@ -299,6 +313,10 @@ async function clickButtonWithText(text: string): Promise<void> {
 }
 
 describe("CreatePullDialog", () => {
+    beforeEach(() => {
+        document.body.innerHTML = "";
+    });
+
     it("pushes the head branch and opens the pull request", async () => {
         seedSettingsForTests({});
         const services = backendWith();
@@ -331,8 +349,55 @@ describe("CreatePullDialog", () => {
                 base: "main",
                 body: "Does the thing.",
                 draft: false,
+                labels: [],
             },
         });
+        view.unmount();
+    });
+
+    it("attaches the picked labels", async () => {
+        seedSettingsForTests({});
+        const services = backendWith();
+        const view = renderWith(services);
+        await flush();
+
+        const title = await waitForLabeledControl<HTMLInputElement>("Title");
+        await typeInto(title, "Add the thing");
+
+        const input = await waitForElement<HTMLInputElement>(
+            'input[aria-label="Select labels"]'
+        );
+        await typeInto(input, "bug");
+        await act(async () => {
+            input.dispatchEvent(
+                new KeyboardEvent("keydown", {
+                    key: "ArrowDown",
+                    bubbles: true,
+                    cancelable: true,
+                })
+            );
+            await new Promise((resolve) => setTimeout(resolve, 30));
+        });
+
+        const item = await waitForElement<HTMLElement>(
+            '[data-slot="combobox-item"]'
+        );
+        await act(async () => {
+            item.dispatchEvent(
+                new MouseEvent("pointerdown", {
+                    bubbles: true,
+                    cancelable: true,
+                })
+            );
+            item.dispatchEvent(
+                new MouseEvent("click", { bubbles: true, cancelable: true })
+            );
+            await new Promise((resolve) => setTimeout(resolve, 30));
+        });
+
+        await clickButtonWithText("Create pull request");
+        expect(await waitFor(() => services.createCalls.length > 0)).toBe(true);
+        expect(services.createCalls[0].body.labels).toEqual(["bug"]);
         view.unmount();
     });
 

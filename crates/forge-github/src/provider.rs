@@ -30,9 +30,9 @@ use crate::map::{
 use crate::wire::{
     CreatePullPayload, MergePullPayload, RawActionJob, RawCheckAnnotation, RawCheckRunDetail,
     RawCheckRunsResponse, RawCombinedStatus, RawIssue, RawIssueComment, RawIssueEvent,
-    RawMergeResult, RawNotification, RawOrg, RawPermissionsEnvelope, RawPull, RawPullCommit,
-    RawPullReview, RawPullReviewComment, RawRepo, RawSearchIssue, RawSearchIssueResponse,
-    RawSubject, RawUser, RawWorkflowRunsResponse,
+    RawIssueLabel, RawMergeResult, RawNotification, RawOrg, RawPermissionsEnvelope, RawPull,
+    RawPullCommit, RawPullReview, RawPullReviewComment, RawRepo, RawSearchIssue,
+    RawSearchIssueResponse, RawSubject, RawUser, RawWorkflowRunsResponse,
 };
 use crate::{parse_github_remote, resolve_client_id, GithubProvider, HOST, OAUTH_SCOPES};
 
@@ -863,12 +863,60 @@ impl ForgeProvider for GithubProvider {
         let transport = self.transport.clone();
         let url = format!("{API_ROOT}/repos/{owner}/{repo}/pulls");
         let payload = serde_json::to_string(&CreatePullPayload::from(body)).map_err(internal);
+        let labels = body.labels.clone();
+        let owner = owner.to_owned();
+        let repo = repo.to_owned();
         let token = token.to_owned();
         Box::pin(async move {
-            let request = Request::json(Method::Post, url, token, payload?);
+            let request = Request::json(Method::Post, url, token.clone(), payload?);
             let response = send_full(&*transport, request).await?;
             let raw: RawPull = serde_json::from_str(&response.body).map_err(malformed)?;
-            Ok(map_pull_detail(raw))
+            let mut pull = map_pull_detail(raw);
+            if !labels.is_empty() {
+                // GitHub only sets labels through the issues API.
+                let request = Request::json(
+                    Method::Post,
+                    format!(
+                        "{API_ROOT}/repos/{owner}/{repo}/issues/{}/labels",
+                        pull.number
+                    ),
+                    token,
+                    serde_json::json!({ "labels": labels }).to_string(),
+                );
+                let response = send_full(&*transport, request).await?;
+                let raw: Vec<RawIssueLabel> =
+                    serde_json::from_str(&response.body).map_err(malformed)?;
+                pull.labels = raw.iter().map(map_issue_label).collect();
+            }
+            Ok(pull)
+        })
+    }
+
+    fn list_labels(&self, token: &str, owner: &str, repo: &str) -> ForgeFuture<Vec<Label>> {
+        let transport = self.transport.clone();
+        let url = format!("{API_ROOT}/repos/{owner}/{repo}/labels");
+        let token = token.to_owned();
+        Box::pin(async move {
+            let mut items = Vec::new();
+            for page in 1..=MAX_ISSUE_PAGES {
+                let request = Request::query(
+                    url.clone(),
+                    &token,
+                    vec![
+                        ("per_page".to_owned(), ISSUES_PER_PAGE.to_string()),
+                        ("page".to_owned(), page.to_string()),
+                    ],
+                );
+                let response = send_full(&*transport, request).await?;
+                let raw: Vec<RawIssueLabel> =
+                    serde_json::from_str(&response.body).map_err(malformed)?;
+                let has_more = page_has_more(&response, raw.len());
+                items.extend(raw.iter().map(map_issue_label));
+                if !has_more {
+                    break;
+                }
+            }
+            Ok(items)
         })
     }
 
@@ -1324,6 +1372,7 @@ mod tests {
                     base: "main".into(),
                     body: Some("Does the thing".into()),
                     draft: true,
+                    labels: vec![],
                 },
             )
             .await
@@ -1342,6 +1391,63 @@ mod tests {
                 "body": "Does the thing",
                 "draft": true,
             })
+        );
+    }
+
+    #[tokio::test]
+    async fn create_pull_applies_labels_through_the_issues_endpoint() {
+        let recorder = Recorder::new(vec![
+            ok(r#"{"number":9,"title":"Add thing","state":"open"}"#),
+            ok(r#"[{"name":"bug","color":"d73a4a"}]"#),
+        ]);
+        let pull = provider(&recorder)
+            .create_pull(
+                "tok",
+                "octocat",
+                "repo",
+                &CreatePullRequestBody {
+                    title: "Add thing".into(),
+                    head: "feature/thing".into(),
+                    base: "main".into(),
+                    labels: vec!["bug".into()],
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            pull.labels,
+            vec![Label {
+                name: "bug".into(),
+                color: "d73a4a".into()
+            }]
+        );
+        let sent = recorder.sent();
+        assert_eq!(sent.len(), 2);
+        assert!(json_body(&sent[0]).get("labels").is_none());
+        assert_eq!(
+            sent[1].url,
+            format!("{API_ROOT}/repos/octocat/repo/issues/9/labels")
+        );
+        assert_eq!(json_body(&sent[1]), serde_json::json!({"labels": ["bug"]}));
+    }
+
+    #[tokio::test]
+    async fn list_labels_reads_every_page() {
+        let recorder = Recorder::new(vec![ok(
+            r#"[{"name":"bug","color":"d73a4a"},{"name":"docs","color":"0075ca"}]"#,
+        )]);
+        let labels = provider(&recorder)
+            .list_labels("tok", "octocat", "repo")
+            .await
+            .unwrap();
+
+        assert_eq!(labels.len(), 2);
+        assert_eq!(labels[1].name, "docs");
+        assert_eq!(
+            recorder.sent()[0].url,
+            format!("{API_ROOT}/repos/octocat/repo/labels")
         );
     }
 

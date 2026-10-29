@@ -107,10 +107,6 @@ export function pickRepoCoords(
     return remote ? parseRemoteCoords(remote.url, providers) : null;
 }
 
-/**
- * The remote [`pickRepoCoords`] resolves, for operations that must name their
- * remote instead of relying on the backend's `origin` default.
- */
 export function pickRepoRemote(
     remotes: RemoteInfo[],
     providers: ProviderDescriptor[]

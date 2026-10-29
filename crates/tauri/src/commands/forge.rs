@@ -2,7 +2,7 @@ use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
 use git_backend::api::{
     AccountProfile, CheckRun, CheckRunDetail, CheckRunLog, CommitStatus, CreatePullRequestBody,
-    IssueComment, IssueDetail, IssueEvent, MergePullRequestBody, MergePullRequestResult,
+    IssueComment, IssueDetail, IssueEvent, Label, MergePullRequestBody, MergePullRequestResult,
     NotificationPage, Org, PublishRepositoryRequest, PublishResult, PullRequestCommit,
     PullRequestDetail, PullRequestReview, PullRequestReviewComment, RepoPermissions,
     SearchIssuePage, SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody, WorkflowRun,
@@ -326,6 +326,20 @@ pub async fn forge_list_pull_review_comments(
     state
         .backend
         .forge_list_pull_review_comments(provider, owner, repo, number)
+        .await
+        .map_err(to_serialized)
+}
+
+#[tauri::command]
+pub async fn forge_list_labels(
+    state: SharedState<'_>,
+    provider: String,
+    owner: String,
+    repo: String,
+) -> CommandResult<Vec<Label>> {
+    state
+        .backend
+        .forge_list_labels(provider, owner, repo)
         .await
         .map_err(to_serialized)
 }

@@ -13,6 +13,7 @@ import type {
     AccountProfile,
     BranchInfo,
     Capabilities,
+    Label,
     OperationState,
     ProviderDescriptor,
     RemoteInfo,
@@ -171,6 +172,10 @@ function listingBackend(
             account: async (): Promise<Result<AccountProfile | null>> => ({
                 ok: true,
                 value: PROFILE,
+            }),
+            listLabels: async (): Promise<Result<Label[]>> => ({
+                ok: true,
+                value: [],
             }),
         },
         workflows: {

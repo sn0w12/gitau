@@ -149,6 +149,29 @@ export function repoPermissionsQuery(
     });
 }
 
+export function repoLabelsQuery(
+    deps: ForgeIssuesDeps,
+    provider: string | null,
+    owner: string | null,
+    repo: string | null,
+    enabled: boolean
+) {
+    return queryOptions({
+        queryKey: forgeKeys.labels(provider ?? "", owner ?? "", repo ?? ""),
+        queryFn: async () =>
+            expectOk(
+                await deps.backend.forge.listLabels(
+                    provider ?? "",
+                    owner ?? "",
+                    repo ?? ""
+                )
+            ),
+        staleTime: 5 * 60_000,
+        retry: false,
+        enabled: enabled && provider != null && owner != null && repo != null,
+    });
+}
+
 /** Non-comment timeline events (labeled, assigned, closed, ...). */
 export function issueEventsQuery(
     deps: ForgeIssuesDeps,

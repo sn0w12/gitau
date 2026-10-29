@@ -6,7 +6,7 @@ use crate::accounts::{AuthChallenge, AuthPoll};
 use crate::capabilities::Capabilities;
 use crate::dto::{
     AccountProfile, CheckRun, CheckRunDetail, CheckRunLog, CommitStatus, CreatePullRequestBody,
-    CreateRepositoryBody, CreatedRepository, IssueComment, IssueDetail, IssueEvent,
+    CreateRepositoryBody, CreatedRepository, IssueComment, IssueDetail, IssueEvent, Label,
     MergePullRequestBody, MergePullRequestResult, NotificationPage, Org, PullRequestCommit,
     PullRequestDetail, PullRequestReview, PullRequestReviewComment, RepoPermissions,
     RepositoryMetadata, SearchIssuePage, SearchPullRequestPage, UpdateIssueBody,
@@ -335,6 +335,10 @@ pub trait ForgeProvider: Send + Sync {
         _repo: &str,
         _body: &CreatePullRequestBody,
     ) -> ForgeFuture<PullRequestDetail> {
+        unsupported()
+    }
+
+    fn list_labels(&self, _token: &str, _owner: &str, _repo: &str) -> ForgeFuture<Vec<Label>> {
         unsupported()
     }
 

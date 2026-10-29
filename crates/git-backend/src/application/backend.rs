@@ -40,7 +40,7 @@ use crate::api::worktrees::{
 };
 use crate::api::{
     AccountProfile, CheckRun, CheckRunDetail, CheckRunLog, CommitStatus, CreatePullRequestBody,
-    IssueComment, IssueDetail, IssueEvent, MergePullRequestBody, MergePullRequestResult,
+    IssueComment, IssueDetail, IssueEvent, Label, MergePullRequestBody, MergePullRequestResult,
     NotificationPage, Org, PublishRepositoryRequest, PublishResult, PullRequestCommit,
     PullRequestDetail, PullRequestReview, PullRequestReviewComment, RepoPermissions,
     SearchIssuePage, SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody, WorkflowRun,
@@ -2132,9 +2132,6 @@ impl Backend {
             .await?)
     }
 
-    /// Opens a pull request from `body.head` into `body.base`. Both must
-    /// already exist on the repository the API sees; pushing a local branch
-    /// is the caller's job.
     pub async fn forge_create_pull(
         &self,
         provider: String,
@@ -2159,6 +2156,16 @@ impl Backend {
             });
         }
         Ok(provider.create_pull(&token, &owner, &repo, &body).await?)
+    }
+
+    pub async fn forge_list_labels(
+        &self,
+        provider: String,
+        owner: String,
+        repo: String,
+    ) -> Result<Vec<Label>> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider.list_labels(&token, &owner, &repo).await?)
     }
 
     /// Partial update to a pull request: state, base branch, or draft flag.
