@@ -12,6 +12,7 @@ use crate::engines::git2::local;
 use crate::engines::git2::mutations;
 use crate::engines::git2::session::Git2Session;
 use crate::error::{GitError, Result};
+use crate::runtime::history_cache::CommitStatPoint;
 
 pub fn history_page(
     session: &Git2Session,
@@ -35,6 +36,7 @@ pub fn history_page(
                         snapshot_id,
                         generation,
                         commits: Vec::new(),
+                        total: 0,
                         has_more: false,
                         unpushed: Vec::new(),
                     });
@@ -120,32 +122,55 @@ pub fn history_page(
 
         let start = query.skip as usize;
         let end = (start + query.limit as usize).min(effective.len());
-        let has_more = effective.len() > end;
+        let total = effective.len();
+        let has_more = total > end;
         let page_oids = &effective[start.min(effective.len())..end];
 
         let mut slots: Vec<Option<Arc<CommitSummary>>> =
             (0..page_oids.len()).map(|_| None).collect();
-        let mut missing: Vec<(usize, git2::Oid)> = Vec::new();
+        let mut missing: Vec<(usize, git2::Oid, Option<CommitStatPoint>)> = Vec::new();
         for (idx, oid) in page_oids.iter().enumerate() {
             match cache.summary(&oid_bytes(*oid)) {
                 Some(summary) => slots[idx] = Some(summary),
-                None => missing.push((idx, *oid)),
+                None => {
+                    // Merge points carry zeroed line deltas for the chart, so
+                    // only non-merge points can stand in for a page summary.
+                    let point = cache.stat(&oid_bytes(*oid)).filter(|point| !point.is_merge);
+                    missing.push((idx, *oid, point));
+                }
             }
         }
 
-        let computed = summarize_page(repo, &missing, &tags)?;
+        let computed = summarize_page(repo, &missing)?;
         for (idx, arc) in computed {
             cache.store_summary(oid_bytes(page_oids[idx]), arc.clone());
+            if !arc.is_merge() {
+                cache.store_stat(
+                    oid_bytes(page_oids[idx]),
+                    CommitStatPoint {
+                        time_seconds: arc.committer.time_seconds,
+                        additions: arc.additions,
+                        deletions: arc.deletions,
+                        files_changed: arc.files_changed,
+                        is_merge: false,
+                    },
+                );
+            }
             slots[idx] = Some(arc);
         }
 
-        let mut commits = slots
-            .into_iter()
-            .map(|slot| -> Result<CommitSummary> {
-                let arc = slot.ok_or_else(|| GitError::internal("summary slot unfilled"))?;
-                Ok((*arc).clone())
-            })
-            .collect::<Result<Vec<_>>>()?;
+        let mut commits = Vec::with_capacity(slots.len());
+        for (idx, slot) in slots.into_iter().enumerate() {
+            let arc = slot.ok_or_else(|| GitError::internal("summary slot unfilled"))?;
+            let mut summary = (*arc).clone();
+            // Decorations resolve here, not in the cached summary, so a ref
+            // change refreshes names without recomputing diff stats.
+            summary.tags = tags
+                .get(&oid_bytes(page_oids[idx]))
+                .cloned()
+                .unwrap_or_default();
+            commits.push(summary);
+        }
 
         if !search.is_empty() {
             for commit in &mut commits {
@@ -165,6 +190,7 @@ pub fn history_page(
             snapshot_id,
             generation,
             commits,
+            total: total as u32,
             has_more,
             unpushed: unpushed_ids(repo, query.revision.as_ref(), page_oids)?,
         })
@@ -254,16 +280,68 @@ pub(crate) fn commit_diff_stats(
         Some(&mut DiffOptions::new()),
     )?;
 
-    let mut files_changed = 0u32;
+    let files_changed = diff.deltas().len() as u32;
+    let pairs: Vec<(git2::Oid, git2::Oid)> = diff
+        .deltas()
+        .map(|delta| (delta.old_file().id(), delta.new_file().id()))
+        .collect();
+    let (additions, deletions) = sum_numstat(repo, &pairs)?;
+    Ok((files_changed, additions, deletions))
+}
+
+/// Deltas below this count run on the calling thread: a commit's file count
+/// rarely reaches it, and the page/chart walk already parallelizes across
+/// commits, so spawning a nested rayon tree for a handful of small files costs
+/// more than it saves.
+const PARALLEL_DELTA_THRESHOLD: usize = 16;
+
+/// Per-delta `(insertions, deletions, binary)` in input order, fanning a wide
+/// commit across the rayon pool. A single commit touching hundreds of files is
+/// otherwise one indivisible task inside the commit-level parallel walk, so its
+/// blob reads and Myers runs pin one core while the rest idle.
+pub(crate) fn per_delta_numstat(
+    repo: &git2::Repository,
+    pairs: &[(git2::Oid, git2::Oid)],
+) -> Result<Vec<(u64, u64, bool)>> {
+    if pairs.len() < PARALLEL_DELTA_THRESHOLD {
+        return Ok(pairs
+            .iter()
+            .map(|(old, new)| pair_numstat(repo, *old, *new))
+            .collect());
+    }
+
+    let git_dir: PathBuf = repo.path().to_path_buf();
+    pairs
+        .par_iter()
+        .map(|(old, new)| {
+            local::with_repository(&git_dir, |wrepo| Ok(pair_numstat(wrepo, *old, *new)))
+        })
+        .collect()
+}
+
+fn sum_numstat(repo: &git2::Repository, pairs: &[(git2::Oid, git2::Oid)]) -> Result<(u64, u64)> {
     let mut additions = 0u64;
     let mut deletions = 0u64;
-    for delta in diff.deltas() {
-        files_changed += 1;
-        let (added, deleted) = crate::engines::git2::numstat::delta_numstat(repo, &delta);
+    for (added, deleted, _) in per_delta_numstat(repo, pairs)? {
         additions += added;
         deletions += deleted;
     }
-    Ok((files_changed, additions, deletions))
+    Ok((additions, deletions))
+}
+
+fn pair_numstat(repo: &git2::Repository, old: git2::Oid, new: git2::Oid) -> (u64, u64, bool) {
+    let old_blob = load_side(repo, old);
+    let new_blob = load_side(repo, new);
+    let old = old_blob.as_ref().map_or(&[][..], |blob| blob.content());
+    let new = new_blob.as_ref().map_or(&[][..], |blob| blob.content());
+    crate::engines::git2::numstat::numstat_bytes(old, new)
+}
+
+fn load_side(repo: &git2::Repository, oid: git2::Oid) -> Option<git2::Blob<'_>> {
+    if oid == git2::Oid::ZERO_SHA1 {
+        return None;
+    }
+    repo.find_blob(oid).ok()
 }
 
 /// Tag names whose target (peeled for annotated tags) resolves to `oid`.
@@ -295,20 +373,28 @@ fn tag_map(repo: &git2::Repository) -> Result<HashMap<git2::Oid, Vec<String>>> {
 
 /// Summarizes missing commits in parallel. libgit2 handles are not `Sync`, so
 /// each worker thread uses its own cached handle; output pairs keep the input
-/// index order.
+/// index order. Summaries are stored tag-less; decorations attach at assembly.
+/// A cached stat point skips the tree diff and line count.
 fn summarize_page(
     repo: &git2::Repository,
-    missing: &[(usize, git2::Oid)],
-    tags: &HashMap<[u8; 20], Vec<String>>,
+    missing: &[(usize, git2::Oid, Option<CommitStatPoint>)],
 ) -> Result<Vec<(usize, Arc<CommitSummary>)>> {
     let git_dir: PathBuf = repo.path().to_path_buf();
     let results: Vec<Result<(usize, Arc<CommitSummary>)>> = missing
         .par_iter()
-        .map(|(idx, oid)| {
+        .map(|(idx, oid, point)| {
             local::with_repository(&git_dir, |wrepo| {
                 let commit = wrepo.find_commit(*oid)?;
-                let names = tags.get(oid.as_bytes()).cloned().unwrap_or_default();
-                let summary = mutations::summarize_with_tag_names(wrepo, &commit, names)?;
+                let summary = match point {
+                    Some(point) => mutations::summarize_with_stats(
+                        &commit,
+                        Vec::new(),
+                        point.files_changed,
+                        point.additions,
+                        point.deletions,
+                    )?,
+                    None => mutations::summarize_with_tag_names(wrepo, &commit, Vec::new())?,
+                };
                 Ok((*idx, Arc::new(summary)))
             })
         })

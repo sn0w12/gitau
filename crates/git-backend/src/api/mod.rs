@@ -1,5 +1,4 @@
 pub mod changes;
-pub mod github;
 pub mod graph;
 pub mod highlight;
 pub mod history;
@@ -15,15 +14,15 @@ pub mod submodules;
 pub mod worktrees;
 
 pub use changes::{DiscardRequest, StageHunkRequest, StageRequest, StatusOptions};
-pub use github::{
-    AccountProfile, DeviceFlowStart, GithubCheckRun, GithubCheckRunDetail, GithubCheckRunOutput,
-    GithubIssueComment, GithubIssueDetail, GithubIssueEvent, GithubIssueListItem, GithubLabel,
-    GithubNotification, GithubOrg, GithubPullRequestDetail, GithubPullRequestListItem,
-    GithubPullRequestRef, GithubPullRequestReview, GithubPullRequestReviewComment,
-    GithubRepoPermissions, GithubUser, GithubWorkflowRun, MergePullRequestBody,
-    MergePullRequestResult, NotificationPage, PublishRepositoryRequest, PublishResult,
-    PullRequestMergeMethod, SearchIssueItem, SearchIssuePage, SearchPullRequestPage,
-    UpdateIssueBody, UpdatePullRequestBody,
+pub use forge_core::dto::{
+    AccountProfile, ActionStep, CheckAnnotation, CheckRun, CheckRunDetail, CheckRunLog,
+    CheckRunOutput, CommitStatus, CreatePullRequestBody, CreateRepositoryBody, IssueComment,
+    IssueDetail, IssueEvent, IssueListItem, Label, MergePullRequestBody, MergePullRequestResult,
+    Notification, NotificationPage, Org, PublishRepositoryRequest, PublishResult,
+    PullRequestCommit, PullRequestDetail, PullRequestListItem, PullRequestMergeMethod,
+    PullRequestRef, PullRequestReview, PullRequestReviewComment, RepoPermissions, SearchIssueItem,
+    SearchIssuePage, SearchPullRequestPage, ThreadStateReason, UpdateIssueBody,
+    UpdatePullRequestBody, User, WorkflowRun,
 };
 pub use highlight::{HighlightedSnippet, SnippetStyle, highlight_code};
 pub use history::{BlameQuery, CommitDetailQuery, FileAtRevisionQuery, HistoryPageQuery};
@@ -37,7 +36,7 @@ pub use mutations::{
 pub use remote_info::RemoteRepoInfo;
 pub use remotes::{
     CloneEvent, ClonePhase, CloneProgress, CloneRequest, CredentialRequest, FetchRequest,
-    PullRequest, PushRequest, RemoteAddRequest,
+    GitPullRequest, PushRequest, RemoteAddRequest,
 };
 pub use repository::{
     CreateRepositoryRequest, GitignoreTemplateInfo, LicenseTemplateInfo, OpenRepositoryRequest,

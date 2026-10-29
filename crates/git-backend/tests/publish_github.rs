@@ -1,30 +1,25 @@
-//! End-to-end publish orchestration: fake GitHub API, local bare remote.
+//! End-to-end publish orchestration: fake provider, local bare remote.
 //! Exercises create -> origin setup -> push with upstream, offline.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use git_backend::Backend;
-use git_backend::api::github::{
-    AccountProfile, DeviceFlowStart, GithubCheckRun, GithubCheckRunDetail, GithubCheckRunLog,
-    GithubCommitStatus, GithubOrg, GithubPullRequestCommit, GithubPullRequestDetail,
-    GithubPullRequestReview, GithubPullRequestReviewComment, GithubWorkflowRun,
-    MergePullRequestBody, MergePullRequestResult, NotificationPage, SearchIssuePage,
-    SearchPullRequestPage, UpdatePullRequestBody,
+use forge_core::dto::{AccountProfile, CreateRepositoryBody, CreatedRepository};
+use forge_core::{
+    AuthChallenge, AuthPoll, Capabilities, ForgeAccounts, ForgeFuture, ForgeProvider,
+    ForgeRegistry, MemoryTokenStore,
 };
-use git_backend::github::api::{GithubApi, GithubFuture};
-use git_backend::github::device_flow::{DeviceCodeResponse, TokenPoll};
-use git_backend::github::{CreateRepoBody, CreatedRepository, GitHubAuth, MemoryTokenStore};
+use git_backend::Backend;
 
 mod common;
 use common::TestRepo;
 
-struct FakeApi {
+struct FakeProvider {
     created: Mutex<Option<CreatedRepository>>,
     bare_remote: PathBuf,
 }
 
-impl FakeApi {
+impl FakeProvider {
     fn new(bare_remote: PathBuf) -> Self {
         Self {
             created: Mutex::new(None),
@@ -33,41 +28,57 @@ impl FakeApi {
     }
 }
 
-fn start_response() -> DeviceFlowStart {
-    DeviceFlowStart {
-        user_code: "ABCD-1234".into(),
-        verification_uri: "https://github.com/login/device".into(),
-        expires_in_secs: 900,
+impl ForgeProvider for FakeProvider {
+    fn id(&self) -> &'static str {
+        "github"
     }
-}
 
-impl GithubApi for FakeApi {
+    fn label(&self) -> &'static str {
+        "GitHub"
+    }
+
+    fn capabilities(&self) -> Capabilities {
+        Capabilities {
+            publish: true,
+            ..Default::default()
+        }
+    }
+
+    fn hosts(&self) -> &'static [&'static str] {
+        &["github.com"]
+    }
+
+    fn parse_remote(&self, _url: &str) -> Option<(String, String, String)> {
+        None
+    }
+
     fn request_device_code(
         &self,
         _client_id: &str,
         _scopes: &str,
-    ) -> GithubFuture<DeviceCodeResponse> {
+    ) -> ForgeFuture<(AuthChallenge, String)> {
         Box::pin(async {
-            Ok(DeviceCodeResponse {
-                device_code: "dev-1".into(),
-                user_code: start_response().user_code,
-                verification_uri: start_response().verification_uri,
-                expires_in_secs: 900,
-                interval_secs: 1,
-            })
+            Ok((
+                AuthChallenge {
+                    user_code: "ABCD-1234".into(),
+                    verification_uri: "https://github.com/login/device".into(),
+                    expires_in_secs: 900,
+                },
+                "dev-1".into(),
+            ))
         })
     }
 
-    fn poll_token(&self, _client_id: &str, _device_code: &str) -> GithubFuture<TokenPoll> {
+    fn poll_token(&self, _client_id: &str, _device_code: &str) -> ForgeFuture<AuthPoll> {
         Box::pin(async {
-            Ok(TokenPoll::Authorized {
-                access_token: "tok-123".into(),
+            Ok(AuthPoll::Authorized {
+                token: "tok-123".into(),
                 scopes: vec!["repo".into(), "read:user".into(), "workflow".into()],
             })
         })
     }
 
-    fn authenticated_user(&self, _token: &str) -> GithubFuture<AccountProfile> {
+    fn authenticated_user(&self, _token: &str) -> ForgeFuture<AccountProfile> {
         Box::pin(async {
             Ok(AccountProfile {
                 login: "octocat".into(),
@@ -80,21 +91,12 @@ impl GithubApi for FakeApi {
         })
     }
 
-    fn list_orgs(&self, _token: &str) -> GithubFuture<Vec<GithubOrg>> {
-        Box::pin(async {
-            Ok(vec![GithubOrg {
-                login: "acme".into(),
-                avatar_url: None,
-            }])
-        })
-    }
-
     fn create_repository(
         &self,
         token: &str,
         owner: Option<&str>,
-        body: &CreateRepoBody,
-    ) -> GithubFuture<CreatedRepository> {
+        body: &CreateRepositoryBody,
+    ) -> ForgeFuture<CreatedRepository> {
         assert_eq!(token, "tok-123");
         let full_name = format!("{}/{}", owner.unwrap_or("octocat"), body.name);
         let created = CreatedRepository {
@@ -107,358 +109,15 @@ impl GithubApi for FakeApi {
         *self.created.lock().unwrap() = Some(created.clone());
         Box::pin(async move { Ok(created) })
     }
-
-    fn list_notifications(&self, _token: &str, page: u32) -> GithubFuture<NotificationPage> {
-        Box::pin(async move {
-            Ok(NotificationPage {
-                notifications: vec![],
-                page,
-                has_more: false,
-            })
-        })
-    }
-
-    fn mark_notification_read(&self, _token: &str, _thread_id: &str) -> GithubFuture<()> {
-        Box::pin(async { Ok(()) })
-    }
-
-    fn mark_all_notifications_read(&self, _token: &str) -> GithubFuture<()> {
-        Box::pin(async { Ok(()) })
-    }
-
-    fn fetch_subject_html_url(
-        &self,
-        _token: &str,
-        _subject_url: &str,
-    ) -> GithubFuture<Option<String>> {
-        Box::pin(async { Ok(None) })
-    }
-
-    fn list_issues(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-        _state: &str,
-        _labels: &[String],
-        _page: u32,
-    ) -> GithubFuture<SearchIssuePage> {
-        Box::pin(async {
-            Ok(SearchIssuePage {
-                items: vec![],
-                page: 1,
-                has_more: false,
-            })
-        })
-    }
-
-    fn search_issues(&self, _token: &str, _page: u32) -> GithubFuture<SearchIssuePage> {
-        Box::pin(async {
-            Ok(SearchIssuePage {
-                items: vec![],
-                page: 1,
-                has_more: false,
-            })
-        })
-    }
-
-    fn search_pull_requests(
-        &self,
-        _token: &str,
-        _page: u32,
-    ) -> GithubFuture<SearchPullRequestPage> {
-        Box::pin(async {
-            Ok(SearchPullRequestPage {
-                items: vec![],
-                page: 1,
-                has_more: false,
-            })
-        })
-    }
-
-    fn list_pull_requests(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-        _state: &str,
-        _labels: &[String],
-        _page: u32,
-    ) -> GithubFuture<SearchPullRequestPage> {
-        Box::pin(async {
-            Ok(SearchPullRequestPage {
-                items: vec![],
-                page: 1,
-                has_more: false,
-            })
-        })
-    }
-
-    fn get_pull(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-        _number: u64,
-    ) -> GithubFuture<GithubPullRequestDetail> {
-        Box::pin(async {
-            Err(git_backend::github::GitHubError::NotFound {
-                message: "not implemented in fake".into(),
-            })
-        })
-    }
-
-    fn list_commit_statuses(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-        _sha: &str,
-    ) -> GithubFuture<Vec<GithubCommitStatus>> {
-        Box::pin(async { Ok(vec![]) })
-    }
-
-    fn list_pull_reviews(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-        _number: u64,
-    ) -> GithubFuture<Vec<GithubPullRequestReview>> {
-        Box::pin(async { Ok(vec![]) })
-    }
-
-    fn list_pull_commits(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-        _number: u64,
-    ) -> GithubFuture<Vec<GithubPullRequestCommit>> {
-        Box::pin(async { Ok(vec![]) })
-    }
-
-    fn list_pull_review_comments(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-        _number: u64,
-    ) -> GithubFuture<Vec<GithubPullRequestReviewComment>> {
-        Box::pin(async { Ok(vec![]) })
-    }
-
-    fn update_pull(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-        _number: u64,
-        _body: &UpdatePullRequestBody,
-    ) -> GithubFuture<GithubPullRequestDetail> {
-        Box::pin(async {
-            Err(git_backend::github::GitHubError::NotFound {
-                message: "not implemented in fake".into(),
-            })
-        })
-    }
-
-    fn merge_pull(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-        _number: u64,
-        _body: &MergePullRequestBody,
-    ) -> GithubFuture<MergePullRequestResult> {
-        Box::pin(async {
-            Err(git_backend::github::GitHubError::NotFound {
-                message: "not implemented in fake".into(),
-            })
-        })
-    }
-
-    fn list_check_runs(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-        _sha: &str,
-    ) -> GithubFuture<Vec<GithubCheckRun>> {
-        Box::pin(async { Ok(vec![]) })
-    }
-
-    fn get_check_run(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-        _check_run_id: u64,
-    ) -> GithubFuture<GithubCheckRunDetail> {
-        Box::pin(async {
-            Err(git_backend::github::GitHubError::NotFound {
-                message: "not implemented in fake".into(),
-            })
-        })
-    }
-
-    fn get_check_run_log(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-        _check_run_id: u64,
-    ) -> GithubFuture<GithubCheckRunLog> {
-        Box::pin(async {
-            Err(git_backend::github::GitHubError::NotFound {
-                message: "not implemented in fake".into(),
-            })
-        })
-    }
-
-    fn list_workflow_runs(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-        _sha: &str,
-    ) -> GithubFuture<Vec<GithubWorkflowRun>> {
-        Box::pin(async { Ok(vec![]) })
-    }
-
-    fn get_issue(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-        _number: u64,
-    ) -> GithubFuture<git_backend::api::github::GithubIssueDetail> {
-        Box::pin(async {
-            Err(git_backend::github::GitHubError::NotFound {
-                message: "not implemented in fake".into(),
-            })
-        })
-    }
-
-    fn list_issue_comments(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-        _number: u64,
-    ) -> GithubFuture<Vec<git_backend::api::github::GithubIssueComment>> {
-        Box::pin(async { Ok(vec![]) })
-    }
-
-    fn list_issue_events(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-        _number: u64,
-    ) -> GithubFuture<Vec<git_backend::api::github::GithubIssueEvent>> {
-        Box::pin(async { Ok(vec![]) })
-    }
-
-    fn create_issue_comment(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-        _number: u64,
-        _body: &str,
-    ) -> GithubFuture<git_backend::api::github::GithubIssueComment> {
-        Box::pin(async {
-            Err(git_backend::github::GitHubError::Internal {
-                message: "not implemented in fake".into(),
-            })
-        })
-    }
-
-    fn update_issue(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-        _number: u64,
-        _body: &git_backend::api::github::UpdateIssueBody,
-    ) -> GithubFuture<git_backend::api::github::GithubIssueDetail> {
-        Box::pin(async {
-            Err(git_backend::github::GitHubError::Internal {
-                message: "not implemented in fake".into(),
-            })
-        })
-    }
-
-    fn create_issue(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-        _title: &str,
-        _body: Option<&str>,
-        _labels: &[String],
-    ) -> GithubFuture<git_backend::api::github::GithubIssueDetail> {
-        Box::pin(async {
-            Err(git_backend::github::GitHubError::Internal {
-                message: "not implemented in fake".into(),
-            })
-        })
-    }
-
-    fn update_issue_comment(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-        _comment_id: u64,
-        _body: &str,
-    ) -> GithubFuture<git_backend::api::github::GithubIssueComment> {
-        Box::pin(async {
-            Err(git_backend::github::GitHubError::Internal {
-                message: "not implemented in fake".into(),
-            })
-        })
-    }
-
-    fn delete_issue_comment(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-        _comment_id: u64,
-    ) -> GithubFuture<()> {
-        Box::pin(async {
-            Err(git_backend::github::GitHubError::Internal {
-                message: "not implemented in fake".into(),
-            })
-        })
-    }
-
-    fn repo_permissions(
-        &self,
-        _token: &str,
-        _owner: &str,
-        _repo: &str,
-    ) -> GithubFuture<git_backend::api::github::GithubRepoPermissions> {
-        Box::pin(async {
-            Ok(git_backend::api::github::GithubRepoPermissions {
-                push: false,
-                admin: false,
-            })
-        })
-    }
 }
 
-fn backend_with_fake(bare_remote: &Path) -> (Backend, Arc<FakeApi>) {
-    let api = Arc::new(FakeApi::new(bare_remote.to_path_buf()));
-    let auth = Arc::new(GitHubAuth::with_client_id(
-        api.clone(),
-        Box::new(MemoryTokenStore::default()),
-        "test-client-id".into(),
-    ));
-    let backend = Backend::with_github(Default::default(), auth);
-    (backend, api)
+fn backend_with_fake(bare_remote: &Path) -> (Backend, Arc<FakeProvider>) {
+    let provider = Arc::new(FakeProvider::new(bare_remote.to_path_buf()));
+    let registry = Arc::new(ForgeRegistry::new(vec![provider.clone()]));
+    let mut accounts = ForgeAccounts::new(registry, Box::new(MemoryTokenStore::default()));
+    accounts.set_client_id("github", "test-client-id");
+    let backend = Backend::with_accounts(Default::default(), Arc::new(accounts));
+    (backend, provider)
 }
 
 fn open(backend: &Backend, repo: &TestRepo) -> u64 {
@@ -484,9 +143,12 @@ fn publish_creates_repo_wires_origin_and_pushes_upstream() {
     // Sign in first: publish refuses to run without a stored token.
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
-        backend.github_begin_sign_in().await.unwrap();
-        let profile = backend.github_complete_sign_in().await.unwrap();
-        assert_eq!(profile.login, "octocat");
+        backend
+            .forge_begin_sign_in("github".into(), "github.com".into())
+            .await
+            .unwrap();
+        let connection = backend.forge_complete_sign_in().await.unwrap();
+        assert_eq!(connection.account.login, "octocat");
     });
 
     let result = rt

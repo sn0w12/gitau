@@ -18,11 +18,13 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import type { VisibleSettingDefinition } from "@/hooks/settings/use-setting";
 import { useSetting } from "@/hooks/settings/use-setting";
+import { FONT_SETTINGS } from "@/lib/fonts";
+import type { VisibleSettingDefinition } from "@/lib/settings/schema";
 import type { SettingKey } from "@/lib/settings/settings.generated";
 import { cn } from "@/lib/utils";
 
+import { FontControl } from "./font-control";
 import { ShortcutControl } from "./shortcut-control";
 
 export function SettingField({
@@ -35,11 +37,11 @@ export function SettingField({
     const { value, setValue } = useSetting(definition.key as SettingKey);
 
     return (
-        <div
-            className="flex items-center justify-between gap-8"
+        <Field
+            className="flex-row items-center justify-between gap-8"
             data-slot="setting-field"
         >
-            <Field className="min-w-0 gap-0">
+            <div className="flex min-w-0 flex-col gap-0">
                 <FieldLabel className="cursor-text">
                     {definition.label}
                 </FieldLabel>
@@ -48,7 +50,7 @@ export function SettingField({
                         {definition.description}
                     </FieldDescription>
                 )}
-            </Field>
+            </div>
             <div
                 className="flex shrink-0 justify-end"
                 data-slot="setting-control"
@@ -59,7 +61,7 @@ export function SettingField({
                     onChange={(next) => setValue(next)}
                 />
             </div>
-        </div>
+        </Field>
     );
 }
 
@@ -152,6 +154,19 @@ function SettingControl({
                     onChange={(next) => onChange(next)}
                 />
             );
+
+        case "font": {
+            const spec = FONT_SETTINGS.find(
+                (setting) => setting.key === definition.key
+            );
+            return (
+                <FontControl
+                    value={String(value)}
+                    fallback={spec?.fallback ?? "sans-serif"}
+                    onChange={(next) => onChange(next)}
+                />
+            );
+        }
     }
 }
 

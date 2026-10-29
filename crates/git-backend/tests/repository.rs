@@ -373,6 +373,33 @@ async fn history_summaries_carry_stats_tags_and_time() {
 }
 
 #[tokio::test]
+async fn history_stats_are_exact_for_a_wide_commit() {
+    let repo = TestRepo::init("history-wide-stats");
+    repo.initial_commit(&[("base.txt", "one\ntwo\nthree\n")]);
+
+    // 20 new files plus one edited line take the commit past the intra-commit
+    // parallel threshold, so the fan-out path has to total to the same counts.
+    for i in 0..20 {
+        repo.write(&format!("f{i}.txt"), "x\ny\nz\n");
+    }
+    repo.write("base.txt", "one\ntwo\nthree\nfour\n");
+    repo.commit_all("wide");
+
+    let backend = Backend::new(BackendConfig::default());
+    let opened = backend.open_repository(&repo.root).await.unwrap();
+    let page = backend
+        .history_page(opened.id, HistoryPageQuery::default(), Default::default())
+        .await
+        .unwrap();
+
+    let newest = &page.commits[0];
+    assert_eq!(newest.summary_line, "wide");
+    assert_eq!(newest.files_changed, 21);
+    assert_eq!(newest.additions, 20 * 3 + 1);
+    assert_eq!(newest.deletions, 0);
+}
+
+#[tokio::test]
 async fn remove_without_trash_closes_session_and_keeps_working_copy() {
     let repo = TestRepo::init("remove-list-only");
     repo.initial_commit(&[("README.md", "# hello")]);

@@ -11,7 +11,7 @@ import {
     DialogPopup,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+import { Field, FieldLabel } from "@/components/ui/field";
 
 export type ConfirmVariant = "default" | "destructive";
 
@@ -170,7 +170,6 @@ function ConfirmDialogBody({
     const [checked, setChecked] = React.useState(
         checkbox?.defaultChecked ?? false
     );
-    const checkboxId = React.useId();
     const resolvedDescription =
         typeof description === "function" ? description(checked) : description;
 
@@ -190,16 +189,17 @@ function ConfirmDialogBody({
             </DialogHeader>
             {checkbox && (
                 <DialogPanel>
-                    <Label htmlFor={checkboxId}>
-                        <Checkbox
-                            id={checkboxId}
-                            checked={checked}
-                            onCheckedChange={(next) =>
-                                setChecked(next === true)
-                            }
-                        />
-                        {checkbox.label}
-                    </Label>
+                    <Field>
+                        <FieldLabel>
+                            <Checkbox
+                                checked={checked}
+                                onCheckedChange={(next) =>
+                                    setChecked(next === true)
+                                }
+                            />
+                            {checkbox.label}
+                        </FieldLabel>
+                    </Field>
                 </DialogPanel>
             )}
             <DialogFooter>

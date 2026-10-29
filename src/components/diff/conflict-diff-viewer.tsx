@@ -88,6 +88,8 @@ function StagePane({
                             mode={mode}
                             styles={file.data.styles}
                             section={sectionMeta(file.data)}
+                            canExpand={false}
+                            onExpand={() => {}}
                         />
                     </>
                 )}

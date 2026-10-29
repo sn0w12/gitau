@@ -214,6 +214,42 @@ fn root_commit_diff_lists_every_file_against_empty_tree() {
 }
 
 #[test]
+fn image_sections_carry_base64_data_urls() {
+    use base64::Engine as _;
+
+    let repo = TestRepo::init("diff-image");
+    let old: [u8; 10] = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00];
+    let new: [u8; 10] = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01];
+    std::fs::write(repo.root.join("pic.png"), old).unwrap();
+    repo.commit_all("base");
+    std::fs::write(repo.root.join("pic.png"), new).unwrap();
+
+    let (op, events) = run_pipeline_to_events(&repo, DiffRequest::default());
+    assert!(matches!(events.last(), Some(DiffEvent::Completed { .. })));
+
+    let section_id = match &events[0] {
+        DiffEvent::Started { sections, .. } => {
+            assert_eq!(sections.len(), 1);
+            assert!(sections[0].image);
+            sections[0].section_id
+        }
+        other => panic!("first event must be Started, got {other:?}"),
+    };
+
+    let image = op.read_image(section_id).unwrap().expect("image payload");
+    let decode = |url: &str| {
+        let encoded = url
+            .strip_prefix("data:image/png;base64,")
+            .expect("png data url");
+        base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .unwrap()
+    };
+    assert_eq!(decode(&image.old.expect("old side").data_url), old.to_vec());
+    assert_eq!(decode(&image.new.expect("new side").data_url), new.to_vec());
+}
+
+#[test]
 fn range_reads_reconstruct_streamed_content() {
     let repo = TestRepo::init("diff-range");
     let lines: String = (0..500).map(|i| format!("line {i}\n")).collect();

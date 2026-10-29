@@ -173,23 +173,21 @@ pub fn run() {
                 });
             }
 
-            // GitHub account profile cache beside settings; the access
-            // token itself lives in the OS keychain, never on this path.
-            let github_span = boot_trace::span("rust.github.init");
+            // Forge connection profile cache beside settings; access tokens
+            // themselves live in the OS keychain, never on this path.
+            let forge_span = boot_trace::span("rust.forge.init");
             match handle.path().app_config_dir() {
                 Ok(config_dir) => {
                     state
                         .backend
-                        .github()
-                        .initialize(config_dir.join("github-account.json"));
+                        .forge_accounts()
+                        .initialize(config_dir.join("forge"));
                 }
                 Err(error) => {
-                    log::warn!(
-                        "app config dir unavailable; github account stays in memory: {error}"
-                    );
+                    log::warn!("app config dir unavailable; forge accounts stay in memory: {error}");
                 }
             }
-            github_span.end();
+            forge_span.end();
 
             // Periodically revalidate stale owner/org avatars in the
             // background for as long as the process lives. Setup runs on the
@@ -284,6 +282,7 @@ pub fn run() {
             commands::queries::git_list_branches_and_tags,
             commands::queries::git_read_diff_image,
             commands::queries::git_read_diff_range,
+            commands::queries::git_read_diff_context,
             commands::queries::git_cancel_operation,
             commands::changes::git_status,
             commands::changes::git_stage_paths,
@@ -326,44 +325,49 @@ pub fn run() {
             commands::remotes::git_push,
             commands::remotes::git_pull,
             commands::remotes::git_clone,
-            commands::github::github_account,
-            commands::github::github_begin_sign_in,
-            commands::github::github_complete_sign_in,
-            commands::github::github_cancel_sign_in,
-            commands::github::github_sign_out,
-            commands::github::github_list_orgs,
-            commands::github::github_publish_repository,
-            commands::github::github_list_notifications,
-            commands::github::github_mark_notification_read,
-            commands::github::github_mark_all_notifications_read,
-            commands::github::github_resolve_subject_url,
-            commands::github::github_list_issues,
-            commands::github::github_list_pull_requests,
-            commands::github::github_get_pull,
-            commands::github::github_list_pull_reviews,
-            commands::github::github_list_pull_commits,
-            commands::github::github_list_pull_review_comments,
-            commands::github::github_update_pull,
-            commands::github::github_merge_pull,
-            commands::github::github_list_check_runs,
-            commands::github::github_get_check_run,
-            commands::github::github_get_check_run_log,
-            commands::github::github_list_workflow_runs,
-            commands::github::github_list_commit_statuses,
-            commands::github::github_search_issues,
-            commands::github::github_search_pull_requests,
-            commands::github::github_get_issue,
-            commands::github::github_list_issue_comments,
-            commands::github::github_list_issue_events,
-            commands::github::github_create_issue_comment,
-            commands::github::github_update_issue,
-            commands::github::github_create_issue,
-            commands::github::github_update_issue_comment,
-            commands::github::github_delete_issue_comment,
-            commands::github::github_repo_permissions,
+            commands::forge::forge_providers,
+            commands::forge::forge_connections,
+            commands::forge::forge_account,
+            commands::forge::forge_begin_sign_in,
+            commands::forge::forge_complete_sign_in,
+            commands::forge::forge_cancel_sign_in,
+            commands::forge::forge_sign_out,
+            commands::forge::forge_list_orgs,
+            commands::forge::forge_publish_repository,
+            commands::forge::forge_list_notifications,
+            commands::forge::forge_mark_notification_read,
+            commands::forge::forge_mark_all_notifications_read,
+            commands::forge::forge_resolve_subject_url,
+            commands::forge::forge_list_issues,
+            commands::forge::forge_list_pull_requests,
+            commands::forge::forge_get_pull,
+            commands::forge::forge_list_pull_reviews,
+            commands::forge::forge_list_pull_commits,
+            commands::forge::forge_list_pull_review_comments,
+            commands::forge::forge_list_labels,
+            commands::forge::forge_create_pull,
+            commands::forge::forge_update_pull,
+            commands::forge::forge_merge_pull,
+            commands::forge::forge_list_check_runs,
+            commands::forge::forge_get_check_run,
+            commands::forge::forge_get_check_run_log,
+            commands::forge::forge_list_workflow_runs,
+            commands::forge::forge_list_commit_statuses,
+            commands::forge::forge_search_issues,
+            commands::forge::forge_search_pull_requests,
+            commands::forge::forge_get_issue,
+            commands::forge::forge_list_issue_comments,
+            commands::forge::forge_list_issue_events,
+            commands::forge::forge_create_issue_comment,
+            commands::forge::forge_update_issue,
+            commands::forge::forge_create_issue,
+            commands::forge::forge_update_issue_comment,
+            commands::forge::forge_delete_issue_comment,
+            commands::forge::forge_repo_permissions,
             commands::highlight::highlight_code,
             commands::settings::settings_load,
             commands::settings::settings_set,
+            commands::fonts::fonts_list,
             commands::editor::open_in_editor,
             commands::terminal::open_in_terminal,
             commands::file_manager::reveal_in_file_manager,

@@ -1,11 +1,11 @@
-import { GitPullRequest } from "lucide-react";
-import { useEffect, useMemo, useRef } from "react";
+import { GitPullRequest, Plus } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { LabelBadge } from "@/components/github/label-badge";
+import { LabelBadge } from "@/components/forge/label-badge";
 import {
     pullRequestStatusOf,
     StatusBadge,
-} from "@/components/github/status-badge";
+} from "@/components/forge/status-badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,7 +15,6 @@ import {
     EmptyMedia,
     EmptyTitle,
 } from "@/components/ui/empty";
-import { Frame } from "@/components/ui/frame";
 import {
     Select,
     SelectItem,
@@ -34,15 +33,20 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
-import { useGithubAccount } from "@/hooks/github/use-github-account";
-import { useGithubCoords } from "@/hooks/github/use-github-issues";
-import { useRepoPullRequests } from "@/hooks/github/use-github-pull-requests";
-import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
-import type {
-    GithubLabel,
-    GithubPullRequestListItem,
-} from "@/lib/backend/protocol";
+import {
+    useForgeAccount,
+    capabilityAllows,
+} from "@/hooks/forge/use-forge-account";
+import {
+    useRepoCapabilities,
+    useRepoCoords,
+} from "@/hooks/forge/use-forge-issues";
+import { useRepoPullRequests } from "@/hooks/forge/use-forge-pull-requests";
+import { useInternalLink } from "@/hooks/tabs/use-internal-link";
+import type { Label, PullRequestListItem } from "@/lib/backend/protocol";
 import type { ListTab } from "@/lib/routing/repo-search";
+
+import { CreatePullDialog } from "./create-pull-dialog";
 
 export function PullRequestsView({
     repoId,
@@ -57,12 +61,14 @@ export function PullRequestsView({
     label: string;
     onLabelChange: (label: string) => void;
 }) {
-    const account = useGithubAccount();
-    const { coords, isLoading: coordsLoading } = useGithubCoords(repoId);
+    const { coords, isLoading: coordsLoading } = useRepoCoords(repoId);
+    const account = useForgeAccount(coords?.provider ?? null);
+    const capabilities = useRepoCapabilities(repoId);
     const pulls = useRepoPullRequests(repoId, tab);
+    const [createOpen, setCreateOpen] = useState(false);
 
     const labels = useMemo(() => {
-        const seen = new Map<string, GithubLabel>();
+        const seen = new Map<string, Label>();
         for (const pull of pulls.pulls) {
             for (const item of pull.labels) {
                 if (!seen.has(item.name)) seen.set(item.name, item);
@@ -111,6 +117,21 @@ export function PullRequestsView({
                         <TabsTab value="closed">Closed</TabsTab>
                     </TabsList>
                     <div className="flex gap-1">
+                        {coords != null ? (
+                            <Button
+                                variant="outline"
+                                disabled={
+                                    !capabilityAllows(
+                                        capabilities,
+                                        "pullRequestsWrite"
+                                    )
+                                }
+                                onClick={() => setCreateOpen(true)}
+                            >
+                                <Plus />
+                                New pull request
+                            </Button>
+                        ) : null}
                         <Select
                             aria-label="Select label"
                             value={label}
@@ -153,7 +174,7 @@ export function PullRequestsView({
                         </Select>
                     </div>
                 </div>
-                <Frame className="min-h-0 w-full flex-1">
+                <div className="relative flex min-h-0 w-full flex-1 flex-col">
                     {(["open", "closed"] as const).map((value) => (
                         <TabsPanel
                             key={value}
@@ -163,8 +184,13 @@ export function PullRequestsView({
                             <PullsTable {...shared} state={tab} />
                         </TabsPanel>
                     ))}
-                </Frame>
+                </div>
             </Tabs>
+            <CreatePullDialog
+                repoId={repoId}
+                open={createOpen}
+                onClose={() => setCreateOpen(false)}
+            />
         </div>
     );
 }
@@ -199,7 +225,7 @@ function PullsTable({
 }: {
     repoId: number;
     state: ListTab;
-    rows: GithubPullRequestListItem[];
+    rows: PullRequestListItem[];
     isLoading: boolean;
     isError: boolean;
     errorMessage: string;
@@ -226,26 +252,10 @@ function PullsTable({
         return () => observer.disconnect();
     }, [hasNextPage, isFetchingNextPage, onLoadMore]);
 
-    const router = useActiveTabRouter();
+    const link = useInternalLink();
 
     if (isLoading) {
         return <PullsTableSkeleton />;
-    }
-
-    if (!signedIn) {
-        return (
-            <Empty>
-                <EmptyMedia variant="icon">
-                    <GitPullRequest />
-                </EmptyMedia>
-                <EmptyHeader>
-                    <EmptyTitle>Connect GitHub</EmptyTitle>
-                    <EmptyDescription>
-                        Sign in on the Account page to read pull requests.
-                    </EmptyDescription>
-                </EmptyHeader>
-            </Empty>
-        );
     }
 
     if (!hasCoords) {
@@ -255,10 +265,26 @@ function PullsTable({
                     <GitPullRequest />
                 </EmptyMedia>
                 <EmptyHeader>
-                    <EmptyTitle>No GitHub remote</EmptyTitle>
+                    <EmptyTitle>No provider remote</EmptyTitle>
                     <EmptyDescription>
-                        This repository has no github.com remote, so there are
-                        no pull requests to show.
+                        No remote of this repository points at a provider this
+                        build knows, so there are no pull requests to show.
+                    </EmptyDescription>
+                </EmptyHeader>
+            </Empty>
+        );
+    }
+
+    if (!signedIn) {
+        return (
+            <Empty>
+                <EmptyMedia variant="icon">
+                    <GitPullRequest />
+                </EmptyMedia>
+                <EmptyHeader>
+                    <EmptyTitle>Connect an account</EmptyTitle>
+                    <EmptyDescription>
+                        Sign in on the Account page to read pull requests.
                     </EmptyDescription>
                 </EmptyHeader>
             </Empty>
@@ -305,11 +331,10 @@ function PullsTable({
                         <TableRow
                             key={pull.number}
                             className="cursor-pointer"
-                            onClick={() => {
-                                router?.navigate({
-                                    to: `/repo/${repoId}/pull/${pull.number}`,
-                                });
-                            }}
+                            {...link({
+                                title: pull.title,
+                                href: `/repo/${repoId}/pull/${pull.number}`,
+                            })}
                         >
                             <TableCell className="font-medium">
                                 {pull.title}

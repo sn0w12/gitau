@@ -1,7 +1,30 @@
 use crate::domain::history::FileContent;
-use crate::domain::{ObjectId, RelativePath};
+use crate::domain::{CommitMessage, ObjectId, RelativePath};
 use crate::engines::gix::session::GixSession;
 use crate::error::{GitError, Result};
+
+pub fn commit_message(session: &GixSession, revision: &str) -> Result<CommitMessage> {
+    let repo = session.handle();
+    let resolved = repo
+        .rev_parse_single(revision)
+        .map_err(|_| GitError::InvalidRevision {
+            spec: revision.to_owned(),
+        })?
+        .detach();
+    let commit = repo
+        .find_commit(resolved)
+        .map_err(|_| GitError::ObjectNotFound {
+            oid: resolved.to_string(),
+        })?;
+    let raw = commit.message_raw().map_err(|e| GitError::Internal {
+        message: e.to_string(),
+    })?;
+    let full = String::from_utf8_lossy(raw).into_owned();
+    Ok(CommitMessage {
+        summary_line: full.lines().next().unwrap_or("").to_owned(),
+        message: full.trim_end_matches('\n').to_owned(),
+    })
+}
 
 pub fn blob_at(
     session: &GixSession,

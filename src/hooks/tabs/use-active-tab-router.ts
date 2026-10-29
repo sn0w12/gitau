@@ -1,38 +1,46 @@
-"use no memo";
-
 import { useSelector } from "@tanstack/react-store";
-import { useEffect, useReducer } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 import type { TabRouter } from "@/lib/routing/tab-router-factory";
 import { selectActiveTab, appStore } from "@/stores/app-store";
 import { getRuntime, runtimeVersionStore } from "@/stores/tab-runtime";
 
+function routerSnapshot(tabId: string): TabRouter | null {
+    return getRuntime(tabId)?.router ?? null;
+}
+
+function historyIndex(router: TabRouter | null): number {
+    return router?.history.location.state.__TSR_index ?? 0;
+}
+
+function historyLength(router: TabRouter | null): number {
+    return router?.history.length ?? 1;
+}
+
 /** Read-only view of the active tab's router; runtime creation belongs to
  * ActiveTabHost (a store update during render here would break React). */
 export function useActiveTabRouter(): TabRouter | null {
-    useSelector(runtimeVersionStore(), (version) => version);
-    const activeTab = useSelector(appStore, selectActiveTab);
+    const tabId = useSelector(
+        appStore,
+        (state) => selectActiveTab(state)?.tabId
+    );
 
-    if (!activeTab) return null;
-    return getRuntime(activeTab.tabId)?.router ?? null;
-}
+    const subscribe = useCallback(
+        (onStoreChange: () => void) =>
+            runtimeVersionStore().subscribe(onStoreChange).unsubscribe,
+        []
+    );
+    const getSnapshot = useCallback(
+        () => (tabId === undefined ? null : routerSnapshot(tabId)),
+        [tabId]
+    );
 
-interface HistorySnapshot {
-    index: number;
-    length: number;
-}
-
-function readHistorySnapshot(router: TabRouter): HistorySnapshot {
-    return {
-        index: router.history.location.state.__TSR_index,
-        length: router.history.length,
-    };
+    return useSyncExternalStore(subscribe, getSnapshot);
 }
 
 /** Reactive view over the active tab's memory history: memory histories
  * truncate forward entries on push, so forward availability is exactly
- * "entries ahead of us". Snapshot values are read live during render and a
- * history subscription only forces the rerender. */
+ * "entries ahead of us". */
 export function useActiveTabHistory(): {
     canGoBack: boolean;
     canGoForward: boolean;
@@ -40,20 +48,18 @@ export function useActiveTabHistory(): {
     forward: () => void;
 } {
     const router = useActiveTabRouter();
-    const [, requestRerender] = useReducer((count: number) => count + 1, 0);
 
-    useEffect(() => {
-        if (!router) return undefined;
-        return router.history.subscribe(requestRerender);
-    }, [router]);
-
-    const snapshot = router
-        ? readHistorySnapshot(router)
-        : { index: 0, length: 1 };
+    const subscribe = useCallback(
+        (onStoreChange: () => void) =>
+            router ? router.history.subscribe(onStoreChange) : () => {},
+        [router]
+    );
+    const index = useSyncExternalStore(subscribe, () => historyIndex(router));
+    const length = useSyncExternalStore(subscribe, () => historyLength(router));
 
     return {
-        canGoBack: snapshot.index > 0,
-        canGoForward: snapshot.index < snapshot.length - 1,
+        canGoBack: index > 0,
+        canGoForward: index < length - 1,
         back: () => router?.history.back(),
         forward: () => router?.history.forward(),
     };

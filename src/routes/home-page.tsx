@@ -1,5 +1,3 @@
-"use no memo";
-
 import { DragDropProvider } from "@dnd-kit/react";
 import { isSortable, useSortable } from "@dnd-kit/react/sortable";
 import { useSelector } from "@tanstack/react-store";
@@ -16,10 +14,10 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useOpenRepository } from "@/hooks/repositories/use-open-repository";
 import { useRepoAvatarByPath } from "@/hooks/repositories/use-repo-avatar";
 import { useRemoteRepoInfoByPath } from "@/hooks/repositories/use-repository-queries";
 import { useSettingValue } from "@/hooks/settings/use-setting";
+import { useInternalLink } from "@/hooks/tabs/use-internal-link";
 import type { LanguageShare } from "@/lib/backend/protocol";
 import { EASE_SNAPPY } from "@/lib/motion";
 import type { RepositoryEntry } from "@/stores/repository-store";
@@ -113,7 +111,7 @@ export function HomePage() {
 
 function RepoCard({ repo, index }: { repo: RepositoryEntry; index: number }) {
     const avatar = useRepoAvatarByPath(repo.path);
-    const openRepo = useOpenRepository();
+    const link = useInternalLink();
     const infoQuery = useRemoteRepoInfoByPath(repo.path);
     const { ref } = useSortable({ id: repo.path, index });
     const info = infoQuery.data ?? {};
@@ -132,9 +130,7 @@ function RepoCard({ repo, index }: { repo: RepositoryEntry; index: number }) {
                 <Frame
                     ref={ref}
                     className="group grid h-full cursor-pointer grid-rows-[1fr_auto] text-sm"
-                    onClick={() => {
-                        void openRepo(repo.path);
-                    }}
+                    {...link({ title: avatar.name, repoPath: repo.path })}
                 >
                     <FramePanel className="p-3">
                         <div className="flex items-center gap-1">

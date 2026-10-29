@@ -4,6 +4,7 @@ import { isSortable, useSortable } from "@dnd-kit/react/sortable";
 import { useSelector } from "@tanstack/react-store";
 import {
     CircleDot,
+    CornerUpRight,
     Download,
     FlaskConical,
     Folder,
@@ -11,27 +12,38 @@ import {
     Inbox,
     Plus,
     Settings,
+    SquareArrowOutUpRight,
     User,
 } from "lucide-react";
 import { LayoutGroup, motion } from "motion/react";
 import type { ComponentType } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 
 import { CloneRepoDialog } from "@/components/repo/dialogs/clone-dialog";
 import { NewRepoDialog } from "@/components/repo/dialogs/new-repo-dialog";
 import { RepoContextMenu } from "@/components/repo/repo-context-menu";
 import { useAppCommands } from "@/contexts/app-command-context";
-import { useGithubAccount } from "@/hooks/github/use-github-account";
-import { useGithubUnreadCount } from "@/hooks/github/use-github-inbox";
+import {
+    capabilityAllows,
+    useActiveCapabilities,
+    useActiveConnection,
+    useForgeConnections,
+} from "@/hooks/forge/use-forge-account";
+import { useForgeUnreadCount } from "@/hooks/forge/use-forge-inbox";
 import { useOpenRepository } from "@/hooks/repositories/use-open-repository";
 import { useRepoAvatarByPath } from "@/hooks/repositories/use-repo-avatar";
 import { useRemoteIcon } from "@/hooks/repositories/use-repository-queries";
 import { useSettingValue } from "@/hooks/settings/use-setting";
+import { useActiveTabPathname } from "@/hooks/tabs/use-active-tab-pathname";
 import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
+import { useInternalLink } from "@/hooks/tabs/use-internal-link";
+import { useOpenInNewTab } from "@/hooks/tabs/use-open-in-new-tab";
 import { EASE_SNAPPY } from "@/lib/motion";
 import { addExistingRepositoryFromDisk } from "@/lib/repositories/add-repository";
+import { isRepoPathname } from "@/lib/routing/active-route";
 import { toastError } from "@/lib/toast-error";
 import { appStore, selectActiveTab } from "@/stores/app-store";
+import { connectionKey, setActiveConnection } from "@/stores/connection-store";
 import {
     moveRepo,
     reorderPinnedRepos,
@@ -45,8 +57,24 @@ import { RestrictToList } from "./dnd/restrict-to-list";
 import { RepoLabel } from "./repo/repo-label";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Badge } from "./ui/badge";
-import { ContextMenuShortcut } from "./ui/context-menu";
-import { Menu, MenuGroup, MenuItem, MenuPopup, MenuTrigger } from "./ui/menu";
+import {
+    ContextMenu,
+    ContextMenuItem,
+    ContextMenuPopup,
+    ContextMenuShortcut,
+    ContextMenuTrigger,
+} from "./ui/context-menu";
+import {
+    Menu,
+    MenuGroup,
+    MenuGroupLabel,
+    MenuItem,
+    MenuPopup,
+    MenuRadioGroup,
+    MenuRadioItem,
+    MenuSeparator,
+    MenuTrigger,
+} from "./ui/menu";
 import { ScrollArea } from "./ui/scroll-area";
 import {
     Sidebar,
@@ -65,6 +93,7 @@ import {
 } from "./ui/tooltip";
 
 const handle = TooltipCreateHandle<ComponentType>();
+const ACTIVE_NAV_ITEM_CLASS = "bg-foreground/10 hover:bg-foreground/10";
 const REPO_TRANSITION = { duration: 0.2, ease: EASE_SNAPPY } as const;
 // Built at drag time: reads live bounds so resize/scroll stay correct.
 const restrictToRepoList = (slot: string) =>
@@ -92,14 +121,25 @@ const accountPayload = () => {
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+    const capabilities = useActiveCapabilities();
     return (
         <Sidebar variant="inset" collapsible="icon" {...props}>
             <TooltipProvider>
                 <SidebarContent className="group-data-[collapsible=icon]:overflow-visible">
                     <SidebarGroup className="gap-1">
-                        <InboxSidebarItem />
-                        <PullRequestsSidebarItem />
-                        <IssuesSidebarItem />
+                        <InboxSidebarItem
+                            disabled={
+                                !capabilityAllows(capabilities, "notifications")
+                            }
+                        />
+                        <PullRequestsSidebarItem
+                            disabled={
+                                !capabilityAllows(capabilities, "pullRequests")
+                            }
+                        />
+                        <IssuesSidebarItem
+                            disabled={!capabilityAllows(capabilities, "issues")}
+                        />
                     </SidebarGroup>
                     <SidebarSeparator className="data-[orientation=horizontal]:w-auto" />
                     <SidebarGroup className="min-h-0 flex-1 gap-1">
@@ -124,31 +164,83 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     );
 }
 
+function SidebarNavContextMenu({
+    title,
+    to,
+    disabled = false,
+    children,
+}: {
+    title: string;
+    to: "/inbox" | "/pulls" | "/issues";
+    disabled?: boolean;
+    children: React.ReactElement;
+}) {
+    const router = useActiveTabRouter();
+    const openInNewTab = useOpenInNewTab();
+
+    return (
+        <ContextMenu>
+            <ContextMenuTrigger render={children} />
+            <ContextMenuPopup side="right">
+                <ContextMenuItem
+                    disabled={disabled}
+                    onClick={() => void router?.navigate({ to })}
+                >
+                    <CornerUpRight />
+                    Open
+                </ContextMenuItem>
+                <ContextMenuItem
+                    disabled={disabled}
+                    onClick={() => void openInNewTab({ title, href: to })}
+                >
+                    <SquareArrowOutUpRight />
+                    Open in new tab
+                </ContextMenuItem>
+            </ContextMenuPopup>
+        </ContextMenu>
+    );
+}
+
 /**
  * Sidebar entry for the inbox: navigates to the page and overlays the
  * unread count from the shared notifications cache. The badge lives
  * outside the menu button so the button keeps exactly its icon and
- * label children; it stays hidden while signed out or fully read.
+ * label children; it stays hidden while signed out, fully read, or while
+ * the provider has no inbox.
  */
-function InboxSidebarItem() {
-    const router = useActiveTabRouter();
-    const { unread, exact } = useGithubUnreadCount();
+function InboxSidebarItem({ disabled = false }: { disabled?: boolean }) {
+    const link = useInternalLink();
+    const { unread, exact } = useForgeUnreadCount();
+    const isActive = useActiveTabPathname() === "/inbox";
     return (
         <SidebarMenuItem>
-            <TooltipTrigger
-                handle={handle}
-                payload={inboxPayload}
-                render={
-                    <SidebarMenuButton
-                        variant="ghost"
-                        onClick={() => void router?.navigate({ to: "/inbox" })}
-                    >
-                        <Inbox />
-                        <span>Inbox</span>
-                    </SidebarMenuButton>
-                }
-            />
-            {unread > 0 ? (
+            <SidebarNavContextMenu
+                title="Inbox"
+                to="/inbox"
+                disabled={disabled}
+            >
+                <TooltipTrigger
+                    handle={handle}
+                    payload={inboxPayload}
+                    render={
+                        <SidebarMenuButton
+                            variant="ghost"
+                            aria-disabled={disabled || undefined}
+                            aria-current={isActive ? "page" : undefined}
+                            className={
+                                isActive ? ACTIVE_NAV_ITEM_CLASS : undefined
+                            }
+                            {...(disabled
+                                ? {}
+                                : link({ title: "Inbox", href: "/inbox" }))}
+                        >
+                            <Inbox />
+                            <span>Inbox</span>
+                        </SidebarMenuButton>
+                    }
+                />
+            </SidebarNavContextMenu>
+            {!disabled && unread > 0 ? (
                 <Badge
                     size="sm"
                     variant="infoFull"
@@ -161,49 +253,80 @@ function InboxSidebarItem() {
     );
 }
 
-function PullRequestsSidebarItem() {
-    const router = useActiveTabRouter();
+function PullRequestsSidebarItem({ disabled = false }: { disabled?: boolean }) {
+    const link = useInternalLink();
+    const isActive = useActiveTabPathname() === "/pulls";
     return (
         <SidebarMenuItem>
-            <TooltipTrigger
-                handle={handle}
-                payload={pullRequestsPayload}
-                render={
-                    <SidebarMenuButton
-                        variant="ghost"
-                        onClick={() => void router?.navigate({ to: "/pulls" })}
-                    >
-                        <GitPullRequestArrow />
-                        <span>Pull Requests</span>
-                    </SidebarMenuButton>
-                }
-            />
+            <SidebarNavContextMenu
+                title="Pull Requests"
+                to="/pulls"
+                disabled={disabled}
+            >
+                <TooltipTrigger
+                    handle={handle}
+                    payload={pullRequestsPayload}
+                    render={
+                        <SidebarMenuButton
+                            variant="ghost"
+                            aria-disabled={disabled || undefined}
+                            aria-current={isActive ? "page" : undefined}
+                            className={
+                                isActive ? ACTIVE_NAV_ITEM_CLASS : undefined
+                            }
+                            {...(disabled
+                                ? {}
+                                : link({
+                                      title: "Pull Requests",
+                                      href: "/pulls",
+                                  }))}
+                        >
+                            <GitPullRequestArrow />
+                            <span>Pull Requests</span>
+                        </SidebarMenuButton>
+                    }
+                />
+            </SidebarNavContextMenu>
         </SidebarMenuItem>
     );
 }
 
-function IssuesSidebarItem() {
-    const router = useActiveTabRouter();
+function IssuesSidebarItem({ disabled = false }: { disabled?: boolean }) {
+    const link = useInternalLink();
+    const isActive = useActiveTabPathname() === "/issues";
     return (
         <SidebarMenuItem>
-            <TooltipTrigger
-                handle={handle}
-                payload={issuesPayload}
-                render={
-                    <SidebarMenuButton
-                        variant="ghost"
-                        onClick={() => void router?.navigate({ to: "/issues" })}
-                    >
-                        <CircleDot />
-                        <span>Issues</span>
-                    </SidebarMenuButton>
-                }
-            />
+            <SidebarNavContextMenu
+                title="Issues"
+                to="/issues"
+                disabled={disabled}
+            >
+                <TooltipTrigger
+                    handle={handle}
+                    payload={issuesPayload}
+                    render={
+                        <SidebarMenuButton
+                            variant="ghost"
+                            aria-disabled={disabled || undefined}
+                            aria-current={isActive ? "page" : undefined}
+                            className={
+                                isActive ? ACTIVE_NAV_ITEM_CLASS : undefined
+                            }
+                            {...(disabled
+                                ? {}
+                                : link({ title: "Issues", href: "/issues" }))}
+                        >
+                            <CircleDot />
+                            <span>Issues</span>
+                        </SidebarMenuButton>
+                    }
+                />
+            </SidebarNavContextMenu>
         </SidebarMenuItem>
     );
 }
 
-function RepoButton({
+const RepoButton = memo(function RepoButton({
     repoPath,
     repoId: _repoId,
     index,
@@ -217,7 +340,7 @@ function RepoButton({
     isSelected: boolean;
 }) {
     const avatar = useRepoAvatarByPath(repoPath);
-    const openRepo = useOpenRepository();
+    const link = useInternalLink();
     const { ref } = useSortable({ id: repoPath, index, modifiers });
     const [hovered, setHovered] = useState(false);
     const repoNamePayload = () => {
@@ -264,7 +387,10 @@ function RepoButton({
                                 aria-label={avatar.name}
                                 onPointerEnter={() => setHovered(true)}
                                 onPointerLeave={() => setHovered(false)}
-                                onClick={() => void openRepo(repoPath)}
+                                {...link({
+                                    title: avatar.name,
+                                    repoPath,
+                                })}
                                 render={
                                     <Avatar>
                                         <AvatarImage
@@ -286,7 +412,7 @@ function RepoButton({
             </SidebarMenuItem>
         </motion.div>
     );
-}
+});
 
 function RegisteredRepoButtons() {
     const pinnedRepos = useSettingValue("pinnedRepos");
@@ -300,13 +426,20 @@ function RegisteredRepoButtons() {
         appStore,
         (state) => selectActiveTab(state)?.repoPath ?? null
     );
+    const pathname = useActiveTabPathname();
+    const onRepoRoute = pathname !== null && isRepoPathname(pathname);
     const isSelected = (path: string) =>
-        activeRepoPath?.toLowerCase() === path.toLowerCase();
+        onRepoRoute && activeRepoPath?.toLowerCase() === path.toLowerCase();
     const restrictPinnedToList = useMemo(
         () => restrictToRepoList("pinned-repo-list"),
         []
     );
     const restrictToList = useMemo(() => restrictToRepoList("repo-list"), []);
+    const pinnedModifiers = useMemo(
+        () => [restrictPinnedToList],
+        [restrictPinnedToList]
+    );
+    const listModifiers = useMemo(() => [restrictToList], [restrictToList]);
 
     return (
         <LayoutGroup id="sidebar-repos">
@@ -341,7 +474,7 @@ function RegisteredRepoButtons() {
                                 repoId={entry.repoId}
                                 repoPath={entry.path}
                                 index={index}
-                                modifiers={[restrictPinnedToList]}
+                                modifiers={pinnedModifiers}
                                 isSelected={isSelected(entry.path)}
                             />
                         ))}
@@ -378,7 +511,7 @@ function RegisteredRepoButtons() {
                                 repoId={entry.repoId}
                                 repoPath={entry.path}
                                 index={index}
-                                modifiers={[restrictToList]}
+                                modifiers={listModifiers}
                                 isSelected={isSelected(entry.path)}
                             />
                         ))}
@@ -472,15 +605,61 @@ function NewRepoButton() {
     );
 }
 
+/**
+ * Picks which connection the account-scoped pages follow. Hidden for a
+ * single connection, where the choice is not a choice.
+ */
+function ConnectionMenuGroup() {
+    const connections = useForgeConnections();
+    const connection = useActiveConnection();
+    const list = connections.data ?? [];
+    if (list.length <= 1) return null;
+    const activeKey = connection
+        ? connectionKey(connection.provider, connection.host)
+        : "";
+    return (
+        <>
+            <MenuGroup>
+                <MenuGroupLabel>Connection</MenuGroupLabel>
+                <MenuRadioGroup value={activeKey}>
+                    {list.map((entry) => {
+                        const key = connectionKey(entry.provider, entry.host);
+                        return (
+                            <MenuRadioItem
+                                key={key}
+                                value={key}
+                                onClick={() =>
+                                    setActiveConnection(
+                                        entry.provider,
+                                        entry.host
+                                    )
+                                }
+                            >
+                                {entry.account.login}
+                                <span className="text-muted-foreground">
+                                    {entry.host}
+                                </span>
+                            </MenuRadioItem>
+                        );
+                    })}
+                </MenuRadioGroup>
+            </MenuGroup>
+            <MenuSeparator />
+        </>
+    );
+}
+
 function AccountButton() {
     const router = useActiveTabRouter();
-    const account = useGithubAccount();
-    const profile = account.data;
+    const connection = useActiveConnection();
+    const profile = connection?.account;
 
     // Resolve through the icon pipeline so the avatar is a cached data URL
     // rather than a webview network load.
     const avatar = useRemoteIcon(
-        profile ? `https://github.com/${profile.login}` : undefined
+        profile && connection
+            ? `https://${connection.host}/${profile.login}`
+            : undefined
     );
 
     return (
@@ -510,6 +689,7 @@ function AccountButton() {
                     />
                 </MenuTrigger>
                 <MenuPopup side="right" align="end">
+                    <ConnectionMenuGroup />
                     <MenuGroup>
                         <MenuItem
                             onClick={() =>

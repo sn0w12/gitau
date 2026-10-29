@@ -13,7 +13,7 @@ import {
     useReducedMotion,
     type Variants,
 } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 
 import { ChangeIcon } from "@/components/diff/change-icon";
@@ -49,6 +49,12 @@ import { ScrollArea } from "../../ui/scroll-area";
 function changePath(changeId: string): string {
     const separator = changeId.indexOf(":");
     return separator === -1 ? changeId : changeId.slice(separator + 1);
+}
+
+// Conflicted files open in the 3-way viewer; everything else selects its
+// staged/unstaged row id for the worktree diff.
+function selectIdFor(entry: StatusEntry): string {
+    return entry.kind === "conflicted" ? `conflict:${entry.path}` : entry.id;
 }
 
 function stashRequestFor(targets: StatusEntry[]) {
@@ -121,16 +127,33 @@ export function ChangesPanel({
         [status.data?.entries]
     );
 
-    // Conflicted files open in the 3-way viewer; everything else selects
-    // its staged/unstaged row id for the worktree diff.
-    const selectIdFor = (entry: StatusEntry) =>
-        entry.kind === "conflicted" ? `conflict:${entry.path}` : entry.id;
+    // Stage or unstage rewrites the row id's side prefix (`worktree:p` to
+    // `index:p`), so the exact id stops matching and the moved row loses its
+    // highlight. Fall back to matching the path once the selected id leaves
+    // the report, which keeps a file selected on both sides distinct.
+    const selectedPath = selectedId ? changePath(selectedId) : null;
+    const selectedIdPresent =
+        selectedId !== null &&
+        entries.some(
+            (entry) =>
+                entry.id === selectedId || selectIdFor(entry) === selectedId
+        );
     const isSelected = (entry: StatusEntry) =>
-        selectedId === entry.id || selectedId === selectIdFor(entry);
-    const toggleSelect = (entry: StatusEntry) => {
+        selectedId === entry.id ||
+        selectedId === selectIdFor(entry) ||
+        (selectedPath !== null &&
+            !selectedIdPresent &&
+            entry.path === selectedPath);
+
+    // Row callbacks must keep identity across renders or the memoized rows
+    // re-render on every selection; refs carry the values that change and
+    // are refreshed after each render so an event handler reads the latest.
+    const selectedIdRef = useRef(selectedId);
+    const onSelectedChangeRef = useRef(onSelectedChange);
+    const selectChange = useCallback((entry: StatusEntry) => {
         const id = selectIdFor(entry);
-        onSelectedChange(selectedId === id ? null : id);
-    };
+        onSelectedChangeRef.current(selectedIdRef.current === id ? null : id);
+    }, []);
 
     // A ref, not state: motion callbacks resolve when an exit or enter
     // animation starts, which is after the render that removed the row.
@@ -176,15 +199,19 @@ export function ChangesPanel({
     );
     const checkedEntries = entries.filter((entry) => checkedIds.has(entry.id));
 
-    const openStashAll = () =>
-        setStashRequest({ defaultIncludeUntracked: false });
-    const openStashFor = (targets: StatusEntry[]) =>
-        setStashRequest(stashRequestFor(targets));
+    const openStashAll = useCallback(
+        () => setStashRequest({ defaultIncludeUntracked: false }),
+        []
+    );
+    const openStashFor = useCallback(
+        (targets: StatusEntry[]) => setStashRequest(stashRequestFor(targets)),
+        []
+    );
     const stashLabel = stashLabelFor(checkedEntries.length);
     const stashProps: { paths?: string[]; defaultIncludeUntracked: boolean } =
         stashRequest ?? { defaultIncludeUntracked: false };
 
-    const toggleChecked = (id: string) => {
+    const toggleChecked = useCallback((id: string) => {
         setCheckedIds((prev) => {
             const next = new Set(prev);
             if (next.has(id)) {
@@ -194,7 +221,7 @@ export function ChangesPanel({
             }
             return next;
         });
-    };
+    }, []);
 
     const setSectionChecked = (ids: string[], checked: boolean) => {
         setCheckedIds((prev) => {
@@ -210,7 +237,7 @@ export function ChangesPanel({
         });
     };
 
-    const uncheck = (ids: Iterable<string>) => {
+    const uncheck = useCallback((ids: Iterable<string>) => {
         setCheckedIds((prev) => {
             const next = new Set(prev);
             for (const id of ids) {
@@ -218,7 +245,53 @@ export function ChangesPanel({
             }
             return next;
         });
-    };
+    }, []);
+
+    const stageEntriesRef = useRef(stageEntries);
+    const unstageEntriesRef = useRef(unstageEntries);
+    const discardEntriesRef = useRef(discardEntries);
+    const checkedEntriesRef = useRef(checkedEntries);
+
+    // Latest-value refs for the memoized row callbacks; refreshed after each
+    // render so a click reads what the last render showed.
+    useEffect(() => {
+        selectedIdRef.current = selectedId;
+        onSelectedChangeRef.current = onSelectedChange;
+        stageEntriesRef.current = stageEntries;
+        unstageEntriesRef.current = unstageEntries;
+        discardEntriesRef.current = discardEntries;
+        checkedEntriesRef.current = checkedEntries;
+    });
+
+    const stageOne = useCallback(
+        (entry: StatusEntry) => {
+            animateOpRef.current = true;
+            uncheck([entry.id]);
+            void stageEntriesRef.current([entry]);
+        },
+        [uncheck]
+    );
+    const unstageOne = useCallback(
+        (entry: StatusEntry) => {
+            animateOpRef.current = true;
+            uncheck([entry.id]);
+            void unstageEntriesRef.current([entry]);
+        },
+        [uncheck]
+    );
+    const discardOne = useCallback(
+        (entry: StatusEntry) => {
+            animateOpRef.current = true;
+            uncheck([entry.id]);
+            void discardEntriesRef.current([entry]);
+        },
+        [uncheck]
+    );
+    const stashOne = useCallback(
+        (entry: StatusEntry) =>
+            openStashFor(stashTargetsFor(checkedEntriesRef.current, entry)),
+        [openStashFor]
+    );
 
     const stagedIds = stagedEntries.map((entry) => entry.id);
     const unstagedIds = unstagedEntries.map((entry) => entry.id);
@@ -318,34 +391,19 @@ export function ChangesPanel({
                                     key={entry.id}
                                     entry={entry}
                                     checked={checkedIds.has(entry.id)}
-                                    onCheckedChange={() =>
-                                        toggleChecked(entry.id)
-                                    }
+                                    side="index"
+                                    onCheckedChange={toggleChecked}
                                     selected={isSelected(entry)}
-                                    onSelect={() => toggleSelect(entry)}
+                                    onSelect={selectChange}
                                     busy={
                                         stage.isPending ||
                                         unstage.isPending ||
                                         discard.isPending
                                     }
-                                    onStage={() => {
-                                        animateOpRef.current = true;
-                                        uncheck([entry.id]);
-                                        void stageEntries([entry]);
-                                    }}
-                                    onUnstage={() => {
-                                        animateOpRef.current = true;
-                                        uncheck([entry.id]);
-                                        void unstageEntries([entry]);
-                                    }}
-                                    onStash={() =>
-                                        openStashFor(
-                                            stashTargetsFor(
-                                                checkedEntries,
-                                                entry
-                                            )
-                                        )
-                                    }
+                                    onStage={stageOne}
+                                    onUnstage={unstageOne}
+                                    onDiscard={discardOne}
+                                    onStash={stashOne}
                                     stashLabel={stashLabel}
                                     repoPath={repoPath}
                                     animateOpRef={animateOpRef}
@@ -450,35 +508,19 @@ export function ChangesPanel({
                                     key={entry.id}
                                     entry={entry}
                                     checked={checkedIds.has(entry.id)}
-                                    onCheckedChange={() =>
-                                        toggleChecked(entry.id)
-                                    }
+                                    side="worktree"
+                                    onCheckedChange={toggleChecked}
                                     selected={isSelected(entry)}
-                                    onSelect={() => toggleSelect(entry)}
+                                    onSelect={selectChange}
                                     busy={
                                         stage.isPending ||
                                         unstage.isPending ||
                                         discard.isPending
                                     }
-                                    side="worktree"
-                                    onStage={() => {
-                                        animateOpRef.current = true;
-                                        uncheck([entry.id]);
-                                        void stageEntries([entry]);
-                                    }}
-                                    onDiscard={() => {
-                                        animateOpRef.current = true;
-                                        uncheck([entry.id]);
-                                        void discardEntries([entry]);
-                                    }}
-                                    onStash={() =>
-                                        openStashFor(
-                                            stashTargetsFor(
-                                                checkedEntries,
-                                                entry
-                                            )
-                                        )
-                                    }
+                                    onStage={stageOne}
+                                    onUnstage={unstageOne}
+                                    onDiscard={discardOne}
+                                    onStash={stashOne}
                                     stashLabel={stashLabel}
                                     repoPath={repoPath}
                                     animateOpRef={animateOpRef}
@@ -537,7 +579,7 @@ function SectionHeader({
             data-disabled={disabled}
         >
             <CollapsibleTrigger
-                className="flex min-w-0 flex-1 items-center gap-1 border-transparent px-1.5 py-1 text-foreground data-panel-open:[&_svg]:rotate-180"
+                className="flex min-w-0 flex-1 items-center gap-1 border-transparent px-1.5 py-0.5 text-foreground data-panel-open:[&_svg]:rotate-180"
                 disabled={disabled}
             >
                 <ChevronUp className="mr-0.5 size-4 shrink-0 text-muted-foreground" />
@@ -565,14 +607,14 @@ function SectionHeader({
     );
 }
 
-function ChangeRow({
+const ChangeRow = memo(function ChangeRow({
     entry,
     checked,
     onCheckedChange,
     selected,
     onSelect,
     busy,
-    side = "index",
+    side,
     onStage,
     onUnstage,
     onDiscard,
@@ -583,16 +625,16 @@ function ChangeRow({
 }: {
     entry: StatusEntry;
     checked: boolean;
-    onCheckedChange: () => void;
+    onCheckedChange: (id: string) => void;
     selected: boolean;
-    onSelect: () => void;
+    onSelect: (entry: StatusEntry) => void;
     busy: boolean;
-    side?: "index" | "worktree";
-    onStage?: () => void;
-    onUnstage?: () => void;
-    onDiscard?: () => void;
-    onStash?: () => void;
-    stashLabel?: string;
+    side: "index" | "worktree";
+    onStage: (entry: StatusEntry) => void;
+    onUnstage: (entry: StatusEntry) => void;
+    onDiscard: (entry: StatusEntry) => void;
+    onStash: (entry: StatusEntry) => void;
+    stashLabel: string;
     repoPath: string;
     animateOpRef: RefObject<boolean>;
 }) {
@@ -605,7 +647,7 @@ function ChangeRow({
             role="option"
             aria-selected={selected}
             data-selected={selected || undefined}
-            onClick={onSelect}
+            onClick={() => onSelect(entry)}
             onPointerEnter={() => setHovered(true)}
             onPointerLeave={() => setHovered(false)}
             className="relative flex w-full cursor-pointer items-center justify-between px-1 py-0.5 hover:bg-accent data-selected:bg-accent/64"
@@ -629,7 +671,7 @@ function ChangeRow({
                 <ChangeIcon change={entry.kind} className="shrink-0" />
                 <Checkbox
                     checked={checked}
-                    onCheckedChange={onCheckedChange}
+                    onCheckedChange={() => onCheckedChange(entry.id)}
                     onClick={(e) => e.stopPropagation()}
                     aria-label={`Select ${entry.path}`}
                 />
@@ -640,50 +682,44 @@ function ChangeRow({
             <div className="flex gap-0.5 pr-2.5 pl-1">
                 {side === "worktree" ? (
                     <>
-                        {onDiscard && (
-                            <Button
-                                size="icon-2xs"
-                                variant="destructive"
-                                aria-label={`Discard changes in ${entry.path}`}
-                                disabled={busy}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onDiscard();
-                                }}
-                            >
-                                <Undo2 />
-                            </Button>
-                        )}
-                        {onStage && (
-                            <Button
-                                size="icon-2xs"
-                                variant="info"
-                                aria-label={`Stage ${entry.path}`}
-                                disabled={busy}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onStage();
-                                }}
-                            >
-                                <Plus />
-                            </Button>
-                        )}
-                    </>
-                ) : (
-                    onUnstage && (
                         <Button
                             size="icon-2xs"
-                            variant="default"
-                            aria-label={`Unstage ${entry.path}`}
+                            variant="destructive"
+                            aria-label={`Discard changes in ${entry.path}`}
                             disabled={busy}
                             onClick={(e) => {
                                 e.stopPropagation();
-                                onUnstage();
+                                onDiscard(entry);
                             }}
                         >
-                            <Minus />
+                            <Undo2 />
                         </Button>
-                    )
+                        <Button
+                            size="icon-2xs"
+                            variant="info"
+                            aria-label={`Stage ${entry.path}`}
+                            disabled={busy}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onStage(entry);
+                            }}
+                        >
+                            <Plus />
+                        </Button>
+                    </>
+                ) : (
+                    <Button
+                        size="icon-2xs"
+                        variant="default"
+                        aria-label={`Unstage ${entry.path}`}
+                        disabled={busy}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onUnstage(entry);
+                        }}
+                    >
+                        <Minus />
+                    </Button>
                 )}
             </div>
         </div>
@@ -701,51 +737,39 @@ function ChangeRow({
                 <ContextMenuPopup>
                     {side === "worktree" ? (
                         <>
-                            {onStage && (
-                                <ContextMenuItem
-                                    disabled={busy}
-                                    onClick={onStage}
-                                >
-                                    <Plus />
-                                    Stage
-                                </ContextMenuItem>
-                            )}
-                            {onDiscard && (
-                                <>
-                                    <ContextMenuItem
-                                        disabled={busy}
-                                        variant="destructive"
-                                        onClick={onDiscard}
-                                    >
-                                        <Undo2 />
-                                        Discard changes
-                                    </ContextMenuItem>
-                                </>
-                            )}
+                            <ContextMenuItem
+                                disabled={busy}
+                                onClick={() => onStage(entry)}
+                            >
+                                <Plus />
+                                Stage
+                            </ContextMenuItem>
+                            <ContextMenuItem
+                                disabled={busy}
+                                variant="destructive"
+                                onClick={() => onDiscard(entry)}
+                            >
+                                <Undo2 />
+                                Discard changes
+                            </ContextMenuItem>
                         </>
                     ) : (
-                        <>
-                            {onUnstage && (
-                                <ContextMenuItem
-                                    disabled={busy}
-                                    onClick={onUnstage}
-                                >
-                                    <Minus />
-                                    Unstage
-                                </ContextMenuItem>
-                            )}
-                        </>
-                    )}
-                    {onStash && (
                         <ContextMenuItem
                             disabled={busy}
-                            onClick={onStash}
-                            data-testid="change-menu-stash"
+                            onClick={() => onUnstage(entry)}
                         >
-                            <Archive />
-                            {stashLabel ?? "Stash this change"}
+                            <Minus />
+                            Unstage
                         </ContextMenuItem>
                     )}
+                    <ContextMenuItem
+                        disabled={busy}
+                        onClick={() => onStash(entry)}
+                        data-testid="change-menu-stash"
+                    >
+                        <Archive />
+                        {stashLabel}
+                    </ContextMenuItem>
                     {repoPath && (
                         <>
                             <ContextMenuSeparator />
@@ -777,7 +801,7 @@ function ChangeRow({
             </ContextMenu>
         </motion.div>
     );
-}
+});
 
 function rowVariants(
     animateOpRef: RefObject<boolean>,

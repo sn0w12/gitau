@@ -75,57 +75,129 @@ export const repoPathKeys = {
     icon: (path: string) => ["repo-path", path, "icon"] as const,
 };
 
-export const githubKeys = {
-    all: ["github"] as const,
-    account: () => ["github", "account"] as const,
-    orgs: () => ["github", "orgs"] as const,
+export const forgeKeys = {
+    all: ["forge"] as const,
+    providers: () => ["forge", "providers"] as const,
+    connections: () => ["forge", "connections"] as const,
+    account: (provider: string) => ["forge", "account", provider] as const,
+    orgs: (provider: string) => ["forge", "orgs", provider] as const,
     /**
-     * Scoped by account login so threads cached for one account are never
-     * reused after sign-out or a different sign-in.
+     * Scoped by provider and account login so threads cached for one
+     * connection are never reused after sign-out or a different sign-in.
      */
-    notifications: (login: string) =>
-        ["github", "notifications", login] as const,
-    searchIssues: (login: string) =>
-        ["github", "search-issues", login] as const,
-    searchPullRequests: (login: string) =>
-        ["github", "search-pull-requests", login] as const,
-    issues: (owner: string, repo: string, state: string, labels: string) =>
-        ["github", "issues", owner, repo, state, labels] as const,
-    pulls: (owner: string, repo: string, state: string, labels: string) =>
-        ["github", "pulls", owner, repo, state, labels] as const,
-    pullRequest: (owner: string, repo: string, number: number) =>
-        ["github", "pull", owner, repo, number] as const,
-    pullReviews: (owner: string, repo: string, number: number) =>
-        ["github", "pull", owner, repo, number, "reviews"] as const,
-    pullCommits: (owner: string, repo: string, number: number) =>
-        ["github", "pull", owner, repo, number, "commits"] as const,
-    pullReviewComments: (owner: string, repo: string, number: number) =>
-        ["github", "pull", owner, repo, number, "review-comments"] as const,
+    notifications: (provider: string, login: string) =>
+        ["forge", "notifications", provider, login] as const,
+    searchIssues: (provider: string, login: string) =>
+        ["forge", "search-issues", provider, login] as const,
+    searchPullRequests: (provider: string, login: string) =>
+        ["forge", "search-pull-requests", provider, login] as const,
+    issues: (
+        provider: string,
+        owner: string,
+        repo: string,
+        state: string,
+        labels: string
+    ) => ["forge", "issues", provider, owner, repo, state, labels] as const,
+    pulls: (
+        provider: string,
+        owner: string,
+        repo: string,
+        state: string,
+        labels: string
+    ) => ["forge", "pulls", provider, owner, repo, state, labels] as const,
+    pullRequest: (
+        provider: string,
+        owner: string,
+        repo: string,
+        number: number
+    ) => ["forge", "pull", provider, owner, repo, number] as const,
+    labels: (provider: string, owner: string, repo: string) =>
+        ["forge", "labels", provider, owner, repo] as const,
+    pullReviews: (
+        provider: string,
+        owner: string,
+        repo: string,
+        number: number
+    ) => ["forge", "pull", provider, owner, repo, number, "reviews"] as const,
+    pullCommits: (
+        provider: string,
+        owner: string,
+        repo: string,
+        number: number
+    ) => ["forge", "pull", provider, owner, repo, number, "commits"] as const,
+    pullReviewComments: (
+        provider: string,
+        owner: string,
+        repo: string,
+        number: number
+    ) =>
+        [
+            "forge",
+            "pull",
+            provider,
+            owner,
+            repo,
+            number,
+            "review-comments",
+        ] as const,
     /** Keyed by the head commit, since that is what CI reports against. */
-    checkRuns: (owner: string, repo: string, sha: string) =>
-        ["github", "commit", owner, repo, sha, "checks"] as const,
+    checkRuns: (provider: string, owner: string, repo: string, sha: string) =>
+        ["forge", "commit", provider, owner, repo, sha, "checks"] as const,
     /** Same commit, same reason: reporters still on the statuses API. */
-    commitStatuses: (owner: string, repo: string, sha: string) =>
-        ["github", "commit", owner, repo, sha, "statuses"] as const,
-    checkRun: (owner: string, repo: string, checkRunId: number) =>
-        ["github", "check-run", owner, repo, checkRunId] as const,
-    checkRunLog: (owner: string, repo: string, checkRunId: number) =>
-        ["github", "check-run-log", owner, repo, checkRunId] as const,
-    workflowRuns: (owner: string, repo: string, sha: string) =>
-        ["github", "commit", owner, repo, sha, "workflows"] as const,
-    issueDetail: (owner: string, repo: string, number: number) =>
-        ["github", "issue", owner, repo, number] as const,
-    issueComments: (owner: string, repo: string, number: number) =>
-        ["github", "issue", owner, repo, number, "comments"] as const,
-    issueEvents: (owner: string, repo: string, number: number) =>
-        ["github", "issue", owner, repo, number, "events"] as const,
-    repoPermissions: (owner: string, repo: string) =>
-        ["github", "repo", owner, repo, "permissions"] as const,
+    commitStatuses: (
+        provider: string,
+        owner: string,
+        repo: string,
+        sha: string
+    ) => ["forge", "commit", provider, owner, repo, sha, "statuses"] as const,
+    checkRun: (
+        provider: string,
+        owner: string,
+        repo: string,
+        checkRunId: number
+    ) => ["forge", "check-run", provider, owner, repo, checkRunId] as const,
+    checkRunLog: (
+        provider: string,
+        owner: string,
+        repo: string,
+        checkRunId: number
+    ) => ["forge", "check-run-log", provider, owner, repo, checkRunId] as const,
+    workflowRuns: (
+        provider: string,
+        owner: string,
+        repo: string,
+        sha: string
+    ) => ["forge", "commit", provider, owner, repo, sha, "workflows"] as const,
+    issueDetail: (
+        provider: string,
+        owner: string,
+        repo: string,
+        number: number
+    ) => ["forge", "issue", provider, owner, repo, number] as const,
+    issueComments: (
+        provider: string,
+        owner: string,
+        repo: string,
+        number: number
+    ) => ["forge", "issue", provider, owner, repo, number, "comments"] as const,
+    issueEvents: (
+        provider: string,
+        owner: string,
+        repo: string,
+        number: number
+    ) => ["forge", "issue", provider, owner, repo, number, "events"] as const,
+    repoPermissions: (provider: string, owner: string, repo: string) =>
+        ["forge", "repo", provider, owner, repo, "permissions"] as const,
 };
 
 export const templateKeys = {
     gitignore: ["templates", "gitignore"] as const,
     licenses: ["templates", "licenses"] as const,
+};
+
+export const fontKeys = {
+    /** Installed families; invariant for the life of the process. */
+    system: ["fonts", "system"] as const,
 };
 
 export const highlightKeys = {

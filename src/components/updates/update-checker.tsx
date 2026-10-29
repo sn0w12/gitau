@@ -22,7 +22,7 @@ import {
     updaterController,
 } from "@/lib/updates/update-manager";
 
-import { CustomMarkdown } from "../github/markdown";
+import { CustomMarkdown } from "../forge/markdown";
 import { formatBytes } from "../repo/dialogs/clone-progress-panel";
 
 /**

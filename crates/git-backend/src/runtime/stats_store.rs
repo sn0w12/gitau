@@ -27,11 +27,11 @@ use crate::runtime::disk::{fnv1a64, sanitize_component, write_atomic};
 use crate::runtime::history_cache::CommitStatPoint;
 
 const POINTS_MAGIC: &[u8; 4] = b"GTCS";
-const POINTS_VERSION: u32 = 1;
+const POINTS_VERSION: u32 = 2;
 const POINTS_HEADER_LEN: usize = 48;
-const POINT_RECORD_LEN: usize = 37;
-/// `oid + time + additions + deletions + flags`.
-const POINT_BODY_LEN: usize = 20 + 8 + 4 + 4 + 1;
+const POINT_RECORD_LEN: usize = 41;
+/// `oid + time + additions + deletions + files_changed + flags`.
+const POINT_BODY_LEN: usize = 20 + 8 + 4 + 4 + 4 + 1;
 
 const CHART_MAGIC: &[u8; 4] = b"GTCH";
 const CHART_VERSION: u32 = 1;
@@ -216,13 +216,15 @@ pub fn load_points(path: &Path) -> Option<StoredPoints> {
         let time_seconds = read_i64(body, at + 20)?;
         let additions = read_u32(body, at + 28)?;
         let deletions = read_u32(body, at + 32)?;
-        let flags = *body.get(at + 36)?;
+        let files_changed = read_u32(body, at + 36)?;
+        let flags = *body.get(at + 40)?;
         records.push((
             oid,
             CommitStatPoint {
                 time_seconds,
                 additions: u64::from(additions),
                 deletions: u64::from(deletions),
+                files_changed,
                 is_merge: flags & 1 != 0,
             },
         ));
@@ -248,6 +250,7 @@ pub fn save_points(
             &mut body,
             point.deletions.min(u64::from(LINE_COUNT_MAX)) as u32,
         );
+        put_u32(&mut body, point.files_changed);
         body.push(u8::from(point.is_merge));
     }
 
@@ -395,6 +398,7 @@ mod tests {
             time_seconds: time,
             additions: adds,
             deletions: dels,
+            files_changed: (adds + dels) as u32,
             is_merge,
         }
     }

@@ -14,10 +14,10 @@ use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use ansi::LineStream;
 use git2::Repository;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::ansi::LineStream;
 use crate::api::hooks::{
     CommitHookEvent, HookContent, HookInfo, HookOutputChunk, HookOutputLine, HookRunResult,
 };

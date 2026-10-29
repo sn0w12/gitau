@@ -1,5 +1,3 @@
-"use no memo";
-
 import { useParams } from "@tanstack/react-router";
 import { useSelector } from "@tanstack/react-store";
 import { useEffect, useRef } from "react";
@@ -207,6 +205,7 @@ export function RepoPage() {
                                 repoPath={repoPath}
                             />
                             <RepoViewSwitcher
+                                repoId={repoId}
                                 view={view}
                                 onView={(next) =>
                                     dispatch({ type: "SET_VIEW", data: next })

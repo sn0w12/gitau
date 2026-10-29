@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 
 import { useAppServices } from "@/contexts/services-context";
+import { useActiveConnection } from "@/hooks/forge/use-forge-account";
 import { CloneSessionController } from "@/lib/repositories/clone-session";
 import { joinRepoPath } from "@/lib/repositories/create-repository";
 import {
@@ -22,6 +23,7 @@ import {
     DialogTitle,
 } from "../../ui/dialog";
 import { Field, FieldLabel } from "../../ui/field";
+import { Form } from "../../ui/form";
 import { Input } from "../../ui/input";
 import { CloneProgressPanel } from "./clone-progress-panel";
 import { DestinationInput } from "./destination-input";
@@ -43,6 +45,7 @@ export function CloneRepoDialog({
     onCloned: (repoPath: string) => void;
 }) {
     const { backend } = useAppServices();
+    const connection = useActiveConnection();
     const [controller] = useState(() => new CloneSessionController(backend));
     const session = useSelector(controller.store, (state) => state);
 
@@ -91,7 +94,7 @@ export function CloneRepoDialog({
         rememberRepositoryDirectory(parentDirectory);
         void controller
             .start({
-                url: normalizeUrl(trimmedUrl),
+                url: normalizeUrl(trimmedUrl, connection?.host),
                 destination: joinRepoPath(parentDirectory, trimmedFolder),
             })
             .then((outcome) => {
@@ -125,113 +128,129 @@ export function CloneRepoDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <DialogPanel className="p-0">
-                    <motion.div
-                        layout
-                        className="px-6 pb-4"
-                        transition={SWAP_SPRING}
-                    >
-                        <AnimatePresence mode="popLayout" initial={false}>
-                            {running ? (
-                                <motion.section
-                                    key="progress"
-                                    className="w-full py-2"
-                                    initial={{ opacity: 0, y: 8 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -8 }}
-                                    transition={{ duration: 0.16 }}
-                                >
-                                    <CloneProgressPanel
-                                        progress={session.progress}
-                                    />
-                                </motion.section>
-                            ) : (
-                                <motion.section
-                                    key="form"
-                                    className="flex w-full flex-col gap-3"
-                                    layout
-                                    initial={{ opacity: 0, y: -4 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -6 }}
-                                    transition={{ duration: 0.16 }}
-                                >
-                                    <Field>
-                                        <FieldLabel>Repository URL</FieldLabel>
-                                        <Input
-                                            type="text"
-                                            placeholder="https://github.com/owner/repo.git"
-                                            value={url}
-                                            onChange={(event) =>
-                                                handleChangeUrl(
-                                                    event.target.value
-                                                )
-                                            }
-                                            autoFocus
+                <Form
+                    className="contents"
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        handleClone();
+                    }}
+                >
+                    <DialogPanel className="p-0">
+                        <motion.div
+                            layout
+                            className="px-6 pb-4"
+                            transition={SWAP_SPRING}
+                        >
+                            <AnimatePresence mode="popLayout" initial={false}>
+                                {running ? (
+                                    <motion.section
+                                        key="progress"
+                                        className="w-full py-2"
+                                        initial={{ opacity: 0, y: 8 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -8 }}
+                                        transition={{ duration: 0.16 }}
+                                    >
+                                        <CloneProgressPanel
+                                            progress={session.progress}
                                         />
-                                    </Field>
-                                    <Field>
-                                        <FieldLabel>Destination</FieldLabel>
-                                        <DestinationInput
-                                            actionLabel="Will clone into"
-                                            folderPlaceholder="repo"
-                                            parentDirectory={parentDirectory}
-                                            folderName={folderName}
-                                            onChangeParentDirectory={
-                                                setParentDirectory
-                                            }
-                                            onChangeFolderName={(next) => {
-                                                setNameTouched(true);
-                                                setFolderName(next);
-                                            }}
-                                        />
-                                    </Field>
-                                    {lastError ? (
-                                        <p
-                                            className="text-sm text-destructive"
-                                            role="alert"
-                                        >
-                                            {lastError}
-                                        </p>
-                                    ) : wasCancelled ? (
-                                        <p
-                                            className="text-sm text-muted-foreground"
-                                            role="status"
-                                        >
-                                            The previous clone was cancelled.
-                                        </p>
-                                    ) : null}
-                                </motion.section>
-                            )}
-                        </AnimatePresence>
-                    </motion.div>
-                </DialogPanel>
+                                    </motion.section>
+                                ) : (
+                                    <motion.section
+                                        key="form"
+                                        className="flex w-full flex-col gap-3"
+                                        layout
+                                        initial={{ opacity: 0, y: -4 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -6 }}
+                                        transition={{ duration: 0.16 }}
+                                    >
+                                        <Field>
+                                            <FieldLabel>
+                                                Repository URL
+                                            </FieldLabel>
+                                            <Input
+                                                type="text"
+                                                data-testid="clone-url"
+                                                placeholder="https://git.example.com/owner/repo.git"
+                                                value={url}
+                                                onChange={(event) =>
+                                                    handleChangeUrl(
+                                                        event.target.value
+                                                    )
+                                                }
+                                                autoFocus
+                                            />
+                                        </Field>
+                                        <Field>
+                                            <FieldLabel>Destination</FieldLabel>
+                                            <DestinationInput
+                                                actionLabel="Will clone into"
+                                                folderPlaceholder="repo"
+                                                parentDirectory={
+                                                    parentDirectory
+                                                }
+                                                folderName={folderName}
+                                                onChangeParentDirectory={
+                                                    setParentDirectory
+                                                }
+                                                onChangeFolderName={(next) => {
+                                                    setNameTouched(true);
+                                                    setFolderName(next);
+                                                }}
+                                            />
+                                        </Field>
+                                        {lastError ? (
+                                            <p
+                                                className="text-sm text-destructive"
+                                                role="alert"
+                                            >
+                                                {lastError}
+                                            </p>
+                                        ) : wasCancelled ? (
+                                            <p
+                                                className="text-sm text-muted-foreground"
+                                                role="status"
+                                            >
+                                                The previous clone was
+                                                cancelled.
+                                            </p>
+                                        ) : null}
+                                    </motion.section>
+                                )}
+                            </AnimatePresence>
+                        </motion.div>
+                    </DialogPanel>
 
-                <DialogFooter>
-                    {running ? (
-                        <>
-                            <Button
-                                variant="outline"
-                                onClick={() => void controller.cancel()}
-                            >
-                                Cancel clone
-                            </Button>
-                        </>
-                    ) : (
-                        <>
-                            <DialogClose render={<Button variant="ghost" />}>
-                                Cancel
-                            </DialogClose>
-                            <Button
-                                disabled={!canClone}
-                                variant="info"
-                                data-testid="clone-submit"
-                                onClick={handleClone}
-                            >
-                                Clone
-                            </Button>
-                        </>
-                    )}
-                </DialogFooter>
+                    <DialogFooter>
+                        {running ? (
+                            <>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => void controller.cancel()}
+                                >
+                                    Cancel clone
+                                </Button>
+                            </>
+                        ) : (
+                            <>
+                                <DialogClose
+                                    render={<Button variant="ghost" />}
+                                >
+                                    Cancel
+                                </DialogClose>
+                                <Button
+                                    type="submit"
+                                    disabled={!canClone}
+                                    variant="info"
+                                    data-testid="clone-submit"
+                                >
+                                    Clone
+                                </Button>
+                            </>
+                        )}
+                    </DialogFooter>
+                </Form>
             </DialogPopup>
         </Dialog>
     );
@@ -266,8 +285,14 @@ function isLikelyUrl(value: string): boolean {
     }
 }
 
-function normalizeUrl(value: string): string {
+/**
+ * `owner/repo` is shorthand, not a URL: it is expanded against the host of
+ * the active connection, since that is the account the clone will use.
+ * GitHub stays the fallback for a signed-out or unknown host, because the
+ * shorthand is its own convention.
+ */
+function normalizeUrl(value: string, host: string | undefined): string {
     return /^[\w.-]+\/[\w.-]+$/.test(value)
-        ? `https://github.com/${value}.git`
+        ? `https://${host ?? "github.com"}/${value}.git`
         : value;
 }

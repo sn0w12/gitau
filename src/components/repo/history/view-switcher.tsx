@@ -1,4 +1,5 @@
 import { ChevronDown, LayoutGrid } from "lucide-react";
+import { useState } from "react";
 
 import { ToolbarTriggerFrame } from "@/components/repo/toolbar-trigger";
 import {
@@ -9,6 +10,7 @@ import {
     MenuShortcutBinding,
     MenuTrigger,
 } from "@/components/ui/menu";
+import { useRepoViewAccess } from "@/hooks/forge/use-forge-issues";
 import { REPO_TOOLBAR_TRIGGER_CLASS } from "@/lib/constants";
 import type { RepoView } from "@/lib/routing/repo-search";
 import { REPO_VIEW_SHORTCUTS } from "@/lib/shortcuts";
@@ -23,14 +25,19 @@ const VIEW_LABELS: Record<RepoView, string> = {
 /** The right-panel view menu: switches the main area between the available
  * views. */
 export function RepoViewSwitcher({
+    repoId,
     view,
     onView,
 }: {
+    repoId: number;
     view: RepoView;
     onView: (view: RepoView) => void;
 }) {
+    const [open, setOpen] = useState(false);
+    const access = useRepoViewAccess(repoId);
+
     return (
-        <Menu>
+        <Menu open={open} onOpenChange={setOpen}>
             <ToolbarTriggerFrame>
                 <MenuTrigger
                     className={REPO_TOOLBAR_TRIGGER_CLASS}
@@ -52,23 +59,29 @@ export function RepoViewSwitcher({
             </ToolbarTriggerFrame>
             <MenuPopup align="center">
                 <MenuRadioGroup value={view}>
-                    {Object.entries(VIEW_LABELS).map(([key, label]) => {
-                        const repoView = key as RepoView;
-
-                        return (
-                            <MenuRadioItem
-                                key={repoView}
-                                value={repoView}
-                                onClick={() => onView(repoView)}
-                                aria-selected={view === repoView || undefined}
-                            >
-                                {label}
-                                <MenuShortcutBinding
-                                    shortcut={REPO_VIEW_SHORTCUTS[repoView]}
-                                />
-                            </MenuRadioItem>
-                        );
-                    })}
+                    {(Object.entries(VIEW_LABELS) as [RepoView, string][]).map(
+                        ([repoView, label]) => {
+                            return (
+                                <MenuRadioItem
+                                    key={repoView}
+                                    value={repoView}
+                                    disabled={!access[repoView]}
+                                    onClick={() => {
+                                        onView(repoView);
+                                        setOpen(false);
+                                    }}
+                                    aria-selected={
+                                        view === repoView || undefined
+                                    }
+                                >
+                                    {label}
+                                    <MenuShortcutBinding
+                                        shortcut={REPO_VIEW_SHORTCUTS[repoView]}
+                                    />
+                                </MenuRadioItem>
+                            );
+                        }
+                    )}
                 </MenuRadioGroup>
             </MenuPopup>
         </Menu>

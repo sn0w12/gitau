@@ -9,7 +9,10 @@ import { PullRequestsView } from "@/components/repo/pulls/pulls-view";
 import { AppServicesContext } from "@/contexts/services-context";
 import type {
     AccountProfile,
-    GithubPullRequestListItem,
+    Capabilities,
+    ConnectionProfile,
+    ProviderDescriptor,
+    PullRequestListItem,
     RemoteInfo,
     SearchPullRequestPage,
 } from "@/lib/backend/protocol";
@@ -35,9 +38,37 @@ const ORIGIN: RemoteInfo[] = [
     { name: "origin", url: "https://github.com/octocat/repo.git" },
 ];
 
+const CAPABILITIES: Capabilities = {
+    issues: true,
+    pullRequests: true,
+    reviews: true,
+    notifications: true,
+    checks: true,
+    commitStatuses: true,
+    workflowRuns: true,
+    issuesWrite: true,
+    pullRequestsWrite: true,
+    publish: true,
+    orgs: true,
+};
+
+const PROVIDER: ProviderDescriptor = {
+    id: "github",
+    label: "GitHub",
+    hosts: ["github.com"],
+    imageHosts: [],
+    capabilities: CAPABILITIES,
+};
+
+const CONNECTION: ConnectionProfile = {
+    provider: "github",
+    host: "github.com",
+    account: PROFILE,
+};
+
 function pull(
-    overrides: Partial<GithubPullRequestListItem> = {}
-): GithubPullRequestListItem {
+    overrides: Partial<PullRequestListItem> = {}
+): PullRequestListItem {
     return {
         number: 42,
         title: "Add a thing",
@@ -63,24 +94,34 @@ interface FakeOptions {
 
 function backendWith({ signedIn = true, remotes = ORIGIN, page }: FakeOptions) {
     const calls: {
+        provider: string;
         owner: string;
         repo: string;
         state?: string;
         labels?: string[];
     }[] = [];
     const backend = {
-        github: {
+        forge: {
+            providers: async (): Promise<Result<ProviderDescriptor[]>> => ({
+                ok: true,
+                value: [PROVIDER],
+            }),
+            connections: async (): Promise<Result<ConnectionProfile[]>> => ({
+                ok: true,
+                value: signedIn ? [CONNECTION] : [],
+            }),
             account: async (): Promise<Result<AccountProfile | null>> => ({
                 ok: true,
                 value: signedIn ? PROFILE : null,
             }),
             listPullRequests: async (
+                provider: string,
                 owner: string,
                 repo: string,
                 pullState?: string,
                 labels?: string[]
             ): Promise<Result<SearchPullRequestPage>> => {
-                calls.push({ owner, repo, state: pullState, labels });
+                calls.push({ provider, owner, repo, state: pullState, labels });
                 return {
                     ok: true,
                     value: page ?? {
@@ -176,20 +217,20 @@ describe("PullRequestsView", () => {
         await flush();
 
         const shown = await waitFor(() =>
-            view.container.textContent!.includes("Connect GitHub")
+            view.container.textContent!.includes("Connect an account")
         );
         expect(shown).toBe(true);
         expect(services.calls).toEqual([]);
         view.unmount();
     });
 
-    it("explains a missing github remote instead of calling the backend", async () => {
+    it("explains a missing provider remote instead of calling the backend", async () => {
         const services = backendWith({ remotes: [] });
         const view = renderPulls(services, "open");
         await flush();
 
         const shown = await waitFor(() =>
-            view.container.textContent!.includes("No GitHub remote")
+            view.container.textContent!.includes("No provider remote")
         );
         expect(shown).toBe(true);
         expect(services.calls).toEqual([]);
@@ -213,6 +254,7 @@ describe("PullRequestsView", () => {
         expect(shown).toBe(true);
         expect(services.calls).toEqual([
             {
+                provider: "github",
                 owner: "octocat",
                 repo: "repo",
                 state: "open",

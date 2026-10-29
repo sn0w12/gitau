@@ -5,9 +5,17 @@ use tokio::sync::Notify;
 
 use serde::Serialize;
 
-use crate::domain::{Generation, OperationId, RelativePath, RepoId};
+use crate::domain::{Generation, ObjectId, OperationId, RelativePath, RepoId};
 use crate::error::{GitError, Result};
 use crate::streaming::model::{DiffRow, SectionMeta};
+
+/// Enough to re-read a section's old-side lines on demand for context
+/// expansion: the grammar path and the blob the old side came from.
+#[derive(Debug, Clone)]
+pub struct SectionSource {
+    pub path: String,
+    pub old_id: Option<ObjectId>,
+}
 
 /// Fully materialized state of one diff operation, safe to read from any thread.
 #[derive(Debug)]
@@ -42,6 +50,8 @@ struct SectionData {
     /// One allocation per streamed chunk; highlighted progressively by the
     /// emitter so storage never runs ahead of what has been delivered.
     chunks: Vec<Arc<[DiffRow]>>,
+    /// Populated at materialization so context windows can be re-read.
+    source: Option<SectionSource>,
 }
 
 /// Chunk size used for both storage ranges and streamed events.
@@ -79,6 +89,7 @@ impl DiffOperation {
                 declared_rows: None,
                 row_count: 0,
                 chunks: Vec::new(),
+                source: None,
             })
             .collect();
         guard.started_sections = sections;
@@ -90,6 +101,23 @@ impl DiffOperation {
         let section = section_mut(&mut guard, section_id)?;
         section.image = Some(image);
         Ok(())
+    }
+
+    pub fn set_section_source(&self, section_id: u32, source: SectionSource) -> Result<()> {
+        let mut guard = self.inner.lock().unwrap();
+        let section = section_mut(&mut guard, section_id)?;
+        section.source = Some(source);
+        Ok(())
+    }
+
+    pub fn section_source(&self, section_id: u32) -> Result<Option<SectionSource>> {
+        let guard = self.inner.lock().unwrap();
+        let section = guard
+            .sections
+            .get(section_id as usize)
+            .filter(|section| section.meta.section_id == section_id)
+            .ok_or_else(|| GitError::invalid_input(format!("unknown section id {section_id}")))?;
+        Ok(section.source.clone())
     }
 
     pub fn read_image(&self, section_id: u32) -> Result<Option<DiffImage>> {
@@ -263,8 +291,9 @@ fn section_mut(inner: &mut Inner, section_id: u32) -> Result<&mut SectionData> {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiffImageSide {
-    pub data: Vec<u8>,
-    pub mime_type: String,
+    /// `data:<mime>;base64,...`; a byte array would cross IPC as a JSON
+    /// number array, several times larger and parsed element by element.
+    pub data_url: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

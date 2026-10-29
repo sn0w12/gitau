@@ -2,10 +2,14 @@ import { useSelector } from "@tanstack/react-store";
 import { useCallback } from "react";
 
 import type {
+    SelectOption,
     SettingDefinition,
     SettingsSchema,
-    SettingsSection,
 } from "@/lib/backend/protocol";
+import {
+    findSettingDefinition,
+    getSettingOptions,
+} from "@/lib/settings/schema";
 import type {
     SettingKey,
     SettingsValues,
@@ -49,26 +53,30 @@ export function useSettingsSchema(): SettingsSchema {
     return useSelector(settingsStore, (state) => state.schema);
 }
 
-export type VisibleSettingDefinition = Extract<
-    SettingDefinition,
-    {
-        kind:
-            | "boolean"
-            | "select"
-            | "number"
-            | "string"
-            | "multilineString"
-            | "shortcut";
-    }
->;
+/** The schema entry for one setting, or undefined before/without it. */
+export function useSettingDefinition<TKey extends SettingKey>(
+    key: TKey
+): SettingDefinition | undefined {
+    return useSelector(settingsStore, (state) =>
+        findSettingDefinition(state.schema, key)
+    );
+}
 
-/** Filters out hidden definitions and kinds the UI cannot render. */
-export function visibleSettings(
-    section: SettingsSection
-): VisibleSettingDefinition[] {
-    return section.settings.filter(
-        (definition): definition is VisibleSettingDefinition =>
-            !definition.hidden && definition.kind !== "stringList"
+export function useSettingsValues(): SettingsValues {
+    return useSelector(settingsStore, (state) => {
+        if (!state.ready) {
+            throw new Error("settings read before settings were initialized");
+        }
+        return state.values;
+    });
+}
+
+/** A select setting's options, straight from the schema. */
+export function useSettingOptions<TKey extends SettingKey>(
+    key: TKey
+): SelectOption[] {
+    return useSelector(settingsStore, (state) =>
+        getSettingOptions(state.schema, key)
     );
 }
 

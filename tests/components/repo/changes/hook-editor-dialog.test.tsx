@@ -172,6 +172,15 @@ async function waitFor(predicate: () => boolean): Promise<boolean> {
     return predicate();
 }
 
+/** Resolves the control a FieldLabel points at through its `htmlFor`. */
+function labeledControl<T extends HTMLElement>(labelText: string): T | null {
+    const label = [...document.querySelectorAll("label")].find(
+        (candidate) => candidate.textContent?.trim() === labelText
+    );
+    const id = label?.getAttribute("for");
+    return id ? (document.getElementById(id) as T | null) : null;
+}
+
 /** The dialog is reached through the checker, so these tests need a runner
  * to render. Running hooks is not what is under test here. */
 function idleRunner(): HookRunner {
@@ -225,9 +234,8 @@ describe("HookEditorDialog", () => {
         expect(opened).toBe(true);
         await flush();
 
-        const textarea = document.querySelector<HTMLTextAreaElement>(
-            "#hook-editor-content"
-        );
+        const textarea =
+            labeledControl<HTMLTextAreaElement>("pre-commit script");
         expect(textarea?.value).toBe("#!/bin/sh\necho lint\n");
         // All standard hooks are read up front so switching never reloads.
         expect(fixture.readCalls()).toEqual([
@@ -258,8 +266,7 @@ describe("HookEditorDialog", () => {
         );
         await flush();
         expect(
-            document.querySelector<HTMLTextAreaElement>("#hook-editor-content")
-                ?.value
+            labeledControl<HTMLTextAreaElement>("pre-commit script")?.value
         ).toBe("#!/bin/sh\necho lint\n");
 
         await click(
@@ -269,9 +276,8 @@ describe("HookEditorDialog", () => {
         );
         // Content is already cached from the open-time batch read, so the
         // textarea stays mounted and switching never flashes a loader.
-        const afterSwitch = document.querySelector<HTMLTextAreaElement>(
-            "#hook-editor-content"
-        );
+        const afterSwitch =
+            labeledControl<HTMLTextAreaElement>("commit-msg script");
         expect(afterSwitch?.value).toBe("#!/bin/sh\necho check message\n");
         expect(fixture.readCalls()).toEqual([
             "pre-commit",
@@ -310,9 +316,7 @@ describe("HookEditorDialog", () => {
         );
         await waitFor(
             () =>
-                document.querySelector<HTMLTextAreaElement>(
-                    "#hook-editor-content"
-                ) != null
+                labeledControl<HTMLTextAreaElement>("pre-commit script") != null
         );
 
         const save = document.querySelector<HTMLButtonElement>(
@@ -320,9 +324,8 @@ describe("HookEditorDialog", () => {
         );
         expect(save?.hasAttribute("disabled")).toBe(true);
 
-        const textarea = document.querySelector<HTMLTextAreaElement>(
-            "#hook-editor-content"
-        );
+        const textarea =
+            labeledControl<HTMLTextAreaElement>("pre-commit script");
         await act(async () => {
             // React tracks controlled values; assign through the native
             // setter so the change is observed like real typing.

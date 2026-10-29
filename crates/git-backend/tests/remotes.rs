@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use common::TestRepo;
 use git_backend::api::changes::StatusOptions;
 use git_backend::api::remotes::{
-    CloneEvent, CloneRequest, PullRequest, PushRequest, RemoteAddRequest,
+    CloneEvent, CloneRequest, GitPullRequest, PushRequest, RemoteAddRequest,
 };
 use git_backend::{Backend, BackendConfig};
 
@@ -154,7 +154,7 @@ fn local_remote_push_clone_and_pull_round_trip() {
     let stale_opened = futures_block(backend.open_repository(stale_root.as_path())).unwrap();
     let pulled = futures_block(backend.pull(
         stale_opened.id,
-        PullRequest {
+        GitPullRequest {
             remote: "origin".into(),
             branch: Some(branch),
             fast_forward_only: true,

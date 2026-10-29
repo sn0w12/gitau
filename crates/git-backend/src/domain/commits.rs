@@ -77,6 +77,13 @@ pub struct FileChangeStat {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CommitMessage {
+    pub summary_line: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CommitDetail {
     pub summary: CommitSummary,
     /// Stats against the first parent; empty for root commits' convenience only.

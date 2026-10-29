@@ -8,7 +8,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { ToastProvider } from "@/components/ui/toast";
 import { ConfirmProvider } from "@/contexts/confirm-context";
 import { AppServicesContext } from "@/contexts/services-context";
-import type { AccountProfile, DeviceFlowStart } from "@/lib/backend/protocol";
+import type {
+    AccountProfile,
+    AuthChallenge,
+    Capabilities,
+    ConnectionProfile,
+    ProviderDescriptor,
+} from "@/lib/backend/protocol";
 import type { BackendClient } from "@/lib/backend/transport/client";
 import type { Result } from "@/lib/backend/transport/result";
 import { AccountPage } from "@/routes/account-page";
@@ -30,18 +36,53 @@ function profile(overrides: Partial<AccountProfile> = {}): AccountProfile {
     };
 }
 
-const START: DeviceFlowStart = {
+const START: AuthChallenge = {
     userCode: "ABCD-1234",
     verificationUri: "https://github.com/login/device",
     expiresInSecs: 900,
 };
 
-function backendWith() {
+const CAPABILITIES: Capabilities = {
+    issues: true,
+    pullRequests: true,
+    reviews: true,
+    notifications: true,
+    checks: true,
+    commitStatuses: true,
+    workflowRuns: true,
+    issuesWrite: true,
+    pullRequestsWrite: true,
+    publish: true,
+    orgs: true,
+};
+
+const PROVIDER: ProviderDescriptor = {
+    id: "github",
+    label: "GitHub",
+    hosts: ["github.com"],
+    imageHosts: [],
+    capabilities: CAPABILITIES,
+};
+
+const SECOND_PROVIDER: ProviderDescriptor = {
+    id: "gitlab",
+    label: "GitLab",
+    hosts: ["gitlab.com"],
+    imageHosts: [],
+    capabilities: CAPABILITIES,
+};
+
+function connection(): ConnectionProfile {
+    return { provider: "github", host: "github.com", account: profile() };
+}
+
+function backendWith(options: { providers?: ProviderDescriptor[] } = {}) {
+    const providers = options.providers ?? [PROVIDER];
     let accountValue: Result<AccountProfile | null> = {
         ok: true,
         value: null,
     };
-    let completeOutcome: Result<AccountProfile> = {
+    let completeOutcome: Result<ConnectionProfile> = {
         ok: false,
         error: new Error("not finished") as never,
     };
@@ -49,18 +90,26 @@ function backendWith() {
     let cancelCalls = 0;
     let signOutCalls = 0;
     let holdComplete = false;
-    let releaseComplete: ((outcome: Result<AccountProfile>) => void) | null =
+    let releaseComplete: ((outcome: Result<ConnectionProfile>) => void) | null =
         null;
 
     const backend = {
-        github: {
+        forge: {
+            providers: async (): Promise<Result<ProviderDescriptor[]>> => ({
+                ok: true,
+                value: providers,
+            }),
+            connections: async (): Promise<Result<ConnectionProfile[]>> =>
+                accountValue.ok && accountValue.value
+                    ? { ok: true, value: [connection()] }
+                    : { ok: true, value: [] },
             account: async (): Promise<Result<AccountProfile | null>> =>
                 accountValue,
-            beginSignIn: async (): Promise<Result<DeviceFlowStart>> => {
+            beginSignIn: async (): Promise<Result<AuthChallenge>> => {
                 beginCalls += 1;
                 return { ok: true, value: START };
             },
-            completeSignIn: async (): Promise<Result<AccountProfile>> => {
+            completeSignIn: async (): Promise<Result<ConnectionProfile>> => {
                 if (!holdComplete) return completeOutcome;
                 return await new Promise((resolve) => {
                     releaseComplete = resolve;
@@ -101,7 +150,7 @@ function backendWith() {
         setAccount(next: Result<AccountProfile | null>) {
             accountValue = next;
         },
-        setCompleteOutcome(next: Result<AccountProfile>) {
+        setCompleteOutcome(next: Result<ConnectionProfile>) {
             completeOutcome = next;
         },
         beginCalls: () => beginCalls,
@@ -110,7 +159,7 @@ function backendWith() {
         holdNextComplete() {
             holdComplete = true;
         },
-        release(outcome: Result<AccountProfile>) {
+        release(outcome: Result<ConnectionProfile>) {
             completeOutcome = outcome;
             releaseComplete?.(outcome);
             releaseComplete = null;
@@ -168,6 +217,22 @@ async function waitFor(predicate: () => boolean): Promise<boolean> {
     return predicate();
 }
 
+async function waitForButton(
+    container: HTMLElement,
+    text: string
+): Promise<HTMLButtonElement> {
+    await waitFor(() =>
+        [...container.querySelectorAll("button")].some((candidate) =>
+            candidate.textContent?.includes(text)
+        )
+    );
+    const button = [...container.querySelectorAll("button")].find((candidate) =>
+        candidate.textContent?.includes(text)
+    );
+    if (!button) throw new Error(`button not found: ${text}`);
+    return button as HTMLButtonElement;
+}
+
 describe("AccountPage", () => {
     beforeEach(() => {
         seedSettingsForTests({});
@@ -179,7 +244,30 @@ describe("AccountPage", () => {
         const view = renderWith(services, <AccountPage />);
         await flush();
 
-        expect(view.container.textContent).toContain("Sign in with GitHub");
+        const shown = await waitFor(() =>
+            view.container.textContent!.includes("Sign in with GitHub")
+        );
+        expect(shown).toBe(true);
+        view.unmount();
+    });
+
+    it("renders a card per provider this build supports", async () => {
+        const services = backendWith({
+            providers: [PROVIDER, SECOND_PROVIDER],
+        });
+        const view = renderWith(services, <AccountPage />);
+        await flush();
+
+        const shown = await waitFor(
+            () =>
+                view.container.querySelector(
+                    '[data-testid="provider-card-gitlab"]'
+                ) != null
+        );
+        expect(shown).toBe(true);
+        expect(
+            view.container.querySelector('[data-testid="provider-card-github"]')
+        ).not.toBeNull();
         view.unmount();
     });
 
@@ -189,11 +277,7 @@ describe("AccountPage", () => {
         const view = renderWith(services, <AccountPage />);
         await flush();
 
-        await click(
-            view.container.querySelector<HTMLButtonElement>(
-                '[data-testid="account-panel"] button'
-            )!
-        );
+        await click(await waitForButton(view.container, "Sign in with GitHub"));
 
         const codeShown = await waitFor(() =>
             view.container.textContent!.includes("ABCD-1234")
@@ -205,13 +289,13 @@ describe("AccountPage", () => {
         act(() => {
             services.release({
                 ok: true,
-                value: profile(),
+                value: connection(),
             });
         });
 
         const connected = await waitFor(() => {
             const el = view.container.querySelector(
-                '[data-testid="github-account-connected"]'
+                '[data-testid="forge-account-connected"]'
             );
             return el != null && el.textContent!.includes("octocat");
         });
@@ -225,8 +309,15 @@ describe("AccountPage", () => {
         const view = renderWith(services, <AccountPage />);
         await flush();
 
+        const shown = await waitFor(
+            () =>
+                view.container.querySelector(
+                    '[data-testid="forge-account-connected"]'
+                ) != null
+        );
+        expect(shown).toBe(true);
         const card = view.container.querySelector(
-            '[data-testid="github-account-connected"]'
+            '[data-testid="forge-account-connected"]'
         );
         expect(card).not.toBeNull();
         expect(card!.textContent).toContain("The Octocat");
@@ -243,17 +334,11 @@ describe("AccountPage", () => {
         const view = renderWith(services, <AccountPage />);
         await flush();
 
-        await click(
-            view.container.querySelector<HTMLButtonElement>(
-                '[data-testid="account-panel"] button'
-            )!
-        );
+        await click(await waitForButton(view.container, "Sign in with GitHub"));
         await waitFor(() => view.container.textContent!.includes("ABCD-1234"));
 
         await click(
-            view.container.querySelector(
-                '[data-testid="github-cancel-signin"]'
-            )!
+            view.container.querySelector('[data-testid="forge-cancel-signin"]')!
         );
 
         const cancelled = await waitFor(() => services.cancelCalls() === 1);

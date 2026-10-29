@@ -53,3 +53,15 @@ export function InsetInputInput({
         </div>
     );
 }
+
+export function InsetInputValue({
+    ...props
+}: React.ComponentProps<"span">): React.ReactElement {
+    return (
+        <div className="size-full px-0.5">
+            <div className="inline-flex size-full items-center rounded-md bg-background text-foreground">
+                <span {...props} />
+            </div>
+        </div>
+    );
+}

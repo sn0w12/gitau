@@ -131,7 +131,7 @@ export function StashedChanges({
                                                 render={
                                                     <Button
                                                         size="icon-2xs"
-                                                        variant="ghost"
+                                                        variant="default"
                                                         disabled={pop.isPending}
                                                         aria-label={`Restore stash ${entry.index}`}
                                                         onClick={() =>
@@ -148,7 +148,7 @@ export function StashedChanges({
                                                 render={
                                                     <Button
                                                         size="icon-2xs"
-                                                        variant="ghost"
+                                                        variant="destructive"
                                                         disabled={pop.isPending}
                                                         aria-label={`Drop stash ${entry.index}`}
                                                         onClick={() =>

@@ -34,7 +34,7 @@ export function AttributionsCard() {
                     {ATTRIBUTIONS.map((entry) => (
                         <div key={entry.name} className="space-y-1 text-sm">
                             <div className="font-medium">{entry.name}</div>
-                            <div className="text-muted-foreground">
+                            <div className="flex items-center text-muted-foreground">
                                 by{" "}
                                 {entry.sourceUrl ? (
                                     <ExternalLink href={entry.sourceUrl}>
@@ -43,12 +43,22 @@ export function AttributionsCard() {
                                 ) : (
                                     entry.author
                                 )}
-                            </div>
-                            <div className="text-muted-foreground">
+                                <span
+                                    aria-hidden="true"
+                                    className="mx-1 inline-block size-0.5 shrink-0 rounded-full bg-muted-foreground"
+                                />
                                 <ExternalLink href={entry.licenseUrl}>
                                     {entry.license}
                                 </ExternalLink>
-                                {entry.usage ? ` · ${entry.usage}` : ""}
+                                {entry.usage ? (
+                                    <>
+                                        <span
+                                            aria-hidden="true"
+                                            className="mx-1 inline-block size-0.5 shrink-0 rounded-full bg-muted-foreground"
+                                        />
+                                        {entry.usage}
+                                    </>
+                                ) : null}
                             </div>
                         </div>
                     ))}

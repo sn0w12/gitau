@@ -47,10 +47,15 @@ function commit(overrides: Partial<CommitSummary> = {}): CommitSummary {
     };
 }
 
-const page = (commits: CommitSummary[], hasMore = false): HistoryPage => ({
+const page = (
+    commits: CommitSummary[],
+    hasMore = false,
+    total = commits.length
+): HistoryPage => ({
     snapshotId: 1,
     generation: 1,
     commits,
+    total,
     hasMore,
     unpushed: [],
 });
@@ -192,7 +197,8 @@ describe("HistoryPanel", () => {
                 ok: true,
                 value: page(
                     [commit({ summaryLine: "First page commit" })],
-                    true
+                    true,
+                    2
                 ),
             },
             {
@@ -204,7 +210,8 @@ describe("HistoryPanel", () => {
                             summaryLine: "Second page commit",
                         }),
                     ],
-                    false
+                    false,
+                    2
                 ),
             },
         ]);

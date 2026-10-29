@@ -21,13 +21,16 @@ lint-fix:
     cargo clippy --fix --workspace --all-targets -- -D warnings
 
 dev:
-    npm run tauri dev
+    npm run tauri dev -- --config crates/tauri/tauri.dev.conf.json
 
 dev-workspace:
-    npm run tauri dev -- -- -- --session "{{ justfile_directory() }}/.dev-workspace/session.json"
+    npm run tauri dev -- --config crates/tauri/tauri.dev.conf.json -- -- --session "{{ justfile_directory() }}/.dev-workspace/session.json"
 
 build:
     npm run tauri build
+
+build-scan:
+    npm run tauri build -- --config crates/tauri/tauri.scan.conf.json
 
 bench *args="":
     cargo bench -p git-backend{{ if args == "" { "" } else { " " + args } }}
@@ -38,6 +41,6 @@ trace *args="release":
 settings:
     cargo run -p gitau --bin export_settings --features devtools
 
-# Bump the version, commit it, and tag it: just bump [patch|minor|major|x.y.z] [--dry-run] [--push] [--no-commit] [--no-tag]
+# Bump the version, commit it, and tag it: just bump [patch|minor|major|preview|x.y.z] [--dry-run] [--push] [--no-commit] [--no-tag]
 bump *args="":
     node scripts/version.mjs {{ if args == "" { "patch" } else { args } }}

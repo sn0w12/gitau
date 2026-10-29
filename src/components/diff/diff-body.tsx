@@ -2,7 +2,15 @@ import * as React from "react";
 
 import type { ImageDiffViewMode } from "@/hooks/changes/use-image-diff-view-mode";
 import type { SectionMeta, SyntaxStyle } from "@/lib/backend/protocol";
-import type { SectionRows } from "@/lib/backend/streams/diff-session";
+import type {
+    SectionGapExpansions,
+    SectionRows,
+} from "@/lib/backend/streams/diff-session";
+import {
+    buildDisplayItems,
+    computeDiffGaps,
+    type ExpandWindow,
+} from "@/lib/diff/context-gaps";
 import {
     diffCharWidth,
     subscribeDiffCharWidth,
@@ -10,6 +18,7 @@ import {
 } from "@/lib/diff/measure";
 import { materializeSectionRows } from "@/lib/diff/split-rows";
 
+import { DelayedSpinner } from "./delayed-spinner";
 import { BinaryDiffView, ImageDiffView } from "./image-diff";
 import { SplitRows } from "./split-rows";
 import { UnifiedRows } from "./unified-rows";
@@ -35,6 +44,10 @@ export function DiffBody({
     imageMode,
     image,
     onLoadImage,
+    expansions,
+    oldLineCount,
+    canExpand,
+    onExpand,
 }: {
     rowsBySection: SectionRows | undefined;
     sectionId: number;
@@ -45,6 +58,14 @@ export function DiffBody({
     imageMode?: ImageDiffViewMode;
     image?: import("@/lib/backend/protocol").DiffImage;
     onLoadImage?: (sectionId: number) => void;
+    expansions?: SectionGapExpansions;
+    oldLineCount?: number;
+    canExpand: boolean;
+    onExpand: (
+        gapKey: number,
+        direction: "up" | "down",
+        window: ExpandWindow
+    ) => void;
 }) {
     // The section bar already shows path/kind/oldPath, so the wire-format
     // file-header rows carry nothing new here - drop them from the body.
@@ -75,37 +96,68 @@ export function DiffBody({
         return Math.ceil(maxChars * charWidth);
     }, [mode, rows, charWidth]);
 
-    if (section?.image) {
-        if (!imageMode) return <BinaryDiffView path={section.path} />;
-        if (!image)
-            return (
-                <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
-                    Loading image diff...
-                </div>
-            );
+    const displayItems = React.useMemo(
+        () =>
+            buildDisplayItems(
+                rows,
+                computeDiffGaps(rows, oldLineCount),
+                expansions,
+                canExpand
+            ),
+        [rows, oldLineCount, expansions, canExpand]
+    );
+
+    /* oxlint-disable react/refs */
+    // Keep the last painted body until an image section's bytes arrive, so
+    // switching files swaps content in place instead of blanking the pane.
+    const lastBodyRef = React.useRef<React.ReactNode>(null);
+    const pendingImage =
+        Boolean(section?.image) && Boolean(imageMode) && !image;
+    if (pendingImage) {
         return (
-            <ImageDiffView
-                mode={imageMode}
-                oldImage={image.old}
-                newImage={image.new}
-            />
+            lastBodyRef.current ?? (
+                <div className="flex flex-1 items-center justify-center">
+                    <DelayedSpinner className="size-5" />
+                </div>
+            )
         );
     }
-    if (section?.binary) return <BinaryDiffView path={section.path} />;
 
-    return mode === "split" ? (
-        <SplitRows
-            rows={rows}
-            charWidth={charWidth}
-            styles={styles}
-            key={`split-${sectionId}`}
-        />
-    ) : (
-        <UnifiedRows
-            rows={rows}
-            contentMinWidthPx={contentMinWidthPx}
-            styles={styles}
-            key={`unified-${sectionId}`}
-        />
-    );
+    let body: React.ReactNode = null;
+    if (section?.image) {
+        if (!imageMode) {
+            body = <BinaryDiffView path={section.path} />;
+        } else if (image) {
+            body = (
+                <ImageDiffView
+                    mode={imageMode}
+                    oldImage={image.old}
+                    newImage={image.new}
+                />
+            );
+        }
+    } else if (section?.binary) {
+        body = <BinaryDiffView path={section.path} />;
+    } else {
+        body =
+            mode === "split" ? (
+                <SplitRows
+                    items={displayItems}
+                    charWidth={charWidth}
+                    styles={styles}
+                    onExpand={onExpand}
+                    key={`split-${sectionId}`}
+                />
+            ) : (
+                <UnifiedRows
+                    items={displayItems}
+                    contentMinWidthPx={contentMinWidthPx}
+                    styles={styles}
+                    onExpand={onExpand}
+                    key={`unified-${sectionId}`}
+                />
+            );
+    }
+    lastBodyRef.current = body;
+    return body;
 }

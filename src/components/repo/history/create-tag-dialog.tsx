@@ -11,8 +11,9 @@ import {
     DialogPopup,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { TagFormInput } from "@/hooks/repositories/use-commit-actions";
 import type { CommitSummary } from "@/lib/backend/protocol";
@@ -87,42 +88,46 @@ function CreateTagDialogBody({
                     Leave the annotation empty for a lightweight tag.
                 </DialogDescription>
             </DialogHeader>
-            <DialogPanel className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="create-tag-name">Name</Label>
-                    <Input
-                        id="create-tag-name"
-                        value={name}
-                        onChange={(event) => setName(event.target.value)}
-                        placeholder="v1.2.0"
-                        autoFocus
-                    />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="create-tag-message">
-                        Annotation (optional)
-                    </Label>
-                    <Textarea
-                        id="create-tag-message"
-                        value={message}
-                        onChange={(event) => setMessage(event.target.value)}
-                        rows={3}
-                        placeholder="Release notes"
-                    />
-                </div>
-            </DialogPanel>
-            <DialogFooter>
-                <DialogClose render={<Button variant="ghost" />}>
-                    Cancel
-                </DialogClose>
-                <Button
-                    disabled={!canSubmit}
-                    loading={submitting}
-                    onClick={() => void handleSubmit()}
-                >
-                    Create tag
-                </Button>
-            </DialogFooter>
+            <Form
+                className="contents"
+                onSubmit={(event) => {
+                    event.preventDefault();
+                    void handleSubmit();
+                }}
+            >
+                <DialogPanel className="flex flex-col gap-3">
+                    <Field>
+                        <FieldLabel>Name</FieldLabel>
+                        <Input
+                            value={name}
+                            onChange={(event) => setName(event.target.value)}
+                            placeholder="v1.2.0"
+                            autoFocus
+                        />
+                    </Field>
+                    <Field>
+                        <FieldLabel>Annotation (optional)</FieldLabel>
+                        <Textarea
+                            value={message}
+                            onChange={(event) => setMessage(event.target.value)}
+                            rows={3}
+                            placeholder="Release notes"
+                        />
+                    </Field>
+                </DialogPanel>
+                <DialogFooter>
+                    <DialogClose render={<Button variant="ghost" />}>
+                        Cancel
+                    </DialogClose>
+                    <Button
+                        type="submit"
+                        disabled={!canSubmit}
+                        loading={submitting}
+                    >
+                        Create tag
+                    </Button>
+                </DialogFooter>
+            </Form>
         </>
     );
 }

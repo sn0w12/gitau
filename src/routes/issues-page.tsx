@@ -1,14 +1,12 @@
-"use no memo";
-
 import { CircleDot, Inbox, RotateCw } from "lucide-react";
 import { useMemo } from "react";
 
 import { ExternalLink } from "@/components/external-link";
-import { LabelBadge } from "@/components/github/label-badge";
+import { LabelBadge } from "@/components/forge/label-badge";
 import {
     issueStatusOf,
     ThreadStatusIcon,
-} from "@/components/github/status-badge";
+} from "@/components/forge/status-badge";
 import { Button } from "@/components/ui/button";
 import {
     Empty,
@@ -29,27 +27,26 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import { useGithubAccount } from "@/hooks/github/use-github-account";
+import { useForgeConnections } from "@/hooks/forge/use-forge-account";
 import {
-    useGithubSearchIssues,
+    useForgeSearchIssues,
     useLocalRepoMap,
-} from "@/hooks/github/use-github-issues";
-import { useOpenThread } from "@/hooks/github/use-open-thread";
-import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
+} from "@/hooks/forge/use-forge-issues";
+import { useInternalLink } from "@/hooks/tabs/use-internal-link";
 import type { SearchIssueItem } from "@/lib/backend/protocol";
 import { GitBackendError } from "@/lib/backend/transport/invoke";
-import { parseIssueUrl } from "@/lib/github/repo-coords";
+import { parseIssueUrl } from "@/lib/forge/repo-coords";
 import { formatRelativeDate } from "@/lib/utils";
 
 /**
- * Signed-in GitHub issues matching `is:issue involves:@me
+ * Signed-in issues matching `is:issue involves:@me
  * sort:updated-desc`, newest first, paged from the backend 100 items
  * at a time. Styled like the inbox page.
  */
 export function IssuesPage() {
-    const router = useActiveTabRouter();
-    const account = useGithubAccount();
-    const search = useGithubSearchIssues();
+    const link = useInternalLink();
+    const account = useForgeConnections();
+    const search = useForgeSearchIssues();
     const localRepos = useLocalRepoMap();
 
     const issues = search.issues;
@@ -102,8 +99,7 @@ export function IssuesPage() {
                         </div>
                     </div>
                     <FrameDescription className="text-sm text-muted-foreground">
-                        GitHub issues involving you, sorted by most recently
-                        updated.
+                        Issues involving you, sorted by most recently updated.
                     </FrameDescription>
                 </FrameHeader>
                 <FramePanel data-testid="issues-panel" className="min-h-0 p-2">
@@ -113,24 +109,23 @@ export function IssuesPage() {
                                 <Spinner className="size-4" />
                                 Checking connection...
                             </div>
-                        ) : !account.data ? (
+                        ) : !account.data?.length ? (
                             <Empty>
                                 <EmptyMedia variant="icon">
                                     <Inbox />
                                 </EmptyMedia>
                                 <EmptyHeader>
-                                    <EmptyTitle>Connect GitHub</EmptyTitle>
+                                    <EmptyTitle>Connect an account</EmptyTitle>
                                     <EmptyDescription>
                                         Sign in to see issues that involve you.
                                     </EmptyDescription>
                                 </EmptyHeader>
                                 <EmptyContent>
                                     <Button
-                                        onClick={() =>
-                                            void router?.navigate({
-                                                to: "/account",
-                                            })
-                                        }
+                                        {...link({
+                                            title: "Account",
+                                            href: "/account",
+                                        })}
                                     >
                                         Go to Account
                                     </Button>
@@ -175,11 +170,10 @@ export function IssuesPage() {
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() =>
-                                                void router?.navigate({
-                                                    to: "/account",
-                                                })
-                                            }
+                                            {...link({
+                                                title: "Account",
+                                                href: "/account",
+                                            })}
                                         >
                                             Go to Account
                                         </Button>
@@ -241,7 +235,7 @@ function IssuesRow({
     issue: SearchIssueItem;
     localRepos: Map<string, string>;
 }) {
-    const openThread = useOpenThread();
+    const link = useInternalLink();
 
     const issueTarget = parseIssueUrl(issue.htmlUrl);
     const repoPath = issueTarget
@@ -254,9 +248,11 @@ function IssuesRow({
         repoPath !== undefined && issueTarget ? (
             <button
                 type="button"
-                onClick={() =>
-                    void openThread(repoPath, "issue", issueTarget.number)
-                }
+                {...link({
+                    title: issue.title || "(no title)",
+                    repoPath,
+                    thread: { kind: "issue", number: issueTarget.number },
+                })}
                 className="flex min-w-0 cursor-pointer items-center gap-1 text-left font-medium hover:underline"
             >
                 <span className="min-w-0 truncate">

@@ -1,6 +1,7 @@
 import { beginOperation, finishOperation } from "@/stores/operation-store";
 
 import type {
+    CommitMessage,
     DiffEvent,
     DiffImage,
     DiffRequest,
@@ -21,10 +22,27 @@ import { StreamSessionController, streamError } from "./stream-session";
 export interface SectionLayout {
     startRow: number;
     rowCount: number;
+    oldLineCount: number;
+    newLineCount: number;
 }
 
 /** Sparse, chunk-indexed rows for one section: localStart -> rows. */
 export type SectionRows = Map<number, Array<DiffRow | undefined>>;
+
+/**
+ * Revealed context for one gap between hunks: a contiguous block that grows
+ * from either edge. `rows` stay in ascending line order; `oldStart`/`oldEnd`
+ * are the old-side line numbers of the block, null while empty.
+ */
+export interface GapExpansion {
+    rows: DiffRow[];
+    oldStart: number | null;
+    oldEnd: number | null;
+    pendingDown: boolean;
+    pendingUp: boolean;
+}
+
+export type SectionGapExpansions = Map<number, GapExpansion>;
 
 export interface DiffSessionState {
     sessionId: string;
@@ -36,8 +54,11 @@ export interface DiffSessionState {
     rowsBySection: Map<number, SectionRows>;
     /** Per-section resolved style tables; spans index into these. */
     stylesBySection: Map<number, SyntaxStyle[]>;
+    /** Revealed context windows per section, keyed by gap. */
+    expansionsBySection: Map<number, SectionGapExpansions>;
     imagesBySection: Map<number, DiffImage>;
     imageErrorsBySection: Map<number, GitBackendError>;
+    commitMessage?: CommitMessage;
     estimatedTotalRows: number;
     totalRows: number | null;
     additions: number;
@@ -59,6 +80,7 @@ function initialState(config: DiffSessionConfig): DiffSessionState {
         layoutBySection: new Map(),
         rowsBySection: new Map(),
         stylesBySection: new Map(),
+        expansionsBySection: new Map(),
         imagesBySection: new Map(),
         imageErrorsBySection: new Map(),
         estimatedTotalRows: 0,
@@ -235,8 +257,10 @@ class DiffStreamSpec implements StreamSessionSpec<
                     layoutBySection: new Map(),
                     rowsBySection: new Map(),
                     stylesBySection: new Map(),
+                    expansionsBySection: new Map(),
                     imagesBySection: new Map(),
                     imageErrorsBySection: new Map(),
+                    commitMessage: event.commitMessage,
                     estimatedTotalRows: event.estimatedTotalRows,
                     totalRows: null,
                 }));
@@ -249,6 +273,8 @@ class DiffStreamSpec implements StreamSessionSpec<
                     layoutBySection.set(event.sectionId, {
                         startRow: event.startRow,
                         rowCount: event.rowCount,
+                        oldLineCount: event.oldLineCount,
+                        newLineCount: event.newLineCount,
                     });
                     return { ...s, layoutBySection };
                 });
@@ -389,4 +415,174 @@ export class DiffSessionController extends StreamSessionController<
             return { ...state, imagesBySection: images };
         });
     }
+
+    /**
+     * Reveals a window of hidden context for one gap. "up" extends the
+     * revealed block toward the gap's start, "down" toward its end; the
+     * caller computes the window from the hunk geometry it renders.
+     */
+    async expandContext(
+        sectionId: number,
+        gapKey: number,
+        direction: "up" | "down",
+        window: { oldStart: number; newStart: number; count: number }
+    ): Promise<void> {
+        if (this.isDisposed() || this.operationId === null) return;
+        if (window.count <= 0) return;
+        const existing = this.store.state.expansionsBySection
+            .get(sectionId)
+            ?.get(gapKey);
+        if (
+            direction === "down" ? existing?.pendingDown : existing?.pendingUp
+        ) {
+            return;
+        }
+        this.setGapPending(sectionId, gapKey, direction, true);
+        const result = await this.backend.diff.readContext(
+            this.operationId,
+            sectionId,
+            window.oldStart,
+            window.newStart,
+            window.count
+        );
+        if (this.isDisposed()) return;
+        if (!result.ok) {
+            this.setGapPending(sectionId, gapKey, direction, false);
+            return;
+        }
+        const base =
+            this.store.state.stylesBySection.get(sectionId)?.length ?? 0;
+        this.applyContext(
+            sectionId,
+            gapKey,
+            direction,
+            window,
+            rebaseSpans(result.value.rows, base),
+            result.value.styles
+        );
+    }
+
+    private applyContext(
+        sectionId: number,
+        gapKey: number,
+        direction: "up" | "down",
+        window: { oldStart: number; count: number },
+        rows: DiffRow[],
+        styles: SyntaxStyle[]
+    ): void {
+        const blockEnd = window.oldStart + window.count - 1;
+        this.store.setState((state) => ({
+            ...state,
+            stylesBySection: appendStyles(
+                state.stylesBySection,
+                sectionId,
+                styles
+            ),
+            expansionsBySection: setExpansion(
+                state.expansionsBySection,
+                sectionId,
+                gapKey,
+                mergeExpansion(
+                    state.expansionsBySection.get(sectionId)?.get(gapKey),
+                    direction,
+                    window,
+                    blockEnd,
+                    rows
+                )
+            ),
+        }));
+    }
+
+    private setGapPending(
+        sectionId: number,
+        gapKey: number,
+        direction: "up" | "down",
+        pending: boolean
+    ): void {
+        this.store.setState((state) => {
+            const previous = state.expansionsBySection
+                .get(sectionId)
+                ?.get(gapKey);
+            return {
+                ...state,
+                expansionsBySection: setExpansion(
+                    state.expansionsBySection,
+                    sectionId,
+                    gapKey,
+                    {
+                        rows: previous?.rows ?? [],
+                        oldStart: previous?.oldStart ?? null,
+                        oldEnd: previous?.oldEnd ?? null,
+                        pendingDown:
+                            direction === "down"
+                                ? pending
+                                : (previous?.pendingDown ?? false),
+                        pendingUp:
+                            direction === "up"
+                                ? pending
+                                : (previous?.pendingUp ?? false),
+                    }
+                ),
+            };
+        });
+    }
+}
+
+function appendStyles(
+    map: Map<number, SyntaxStyle[]>,
+    sectionId: number,
+    styles: SyntaxStyle[]
+): Map<number, SyntaxStyle[]> {
+    if (styles.length === 0) return map;
+    const next = new Map(map);
+    next.set(sectionId, [...(map.get(sectionId) ?? []), ...styles]);
+    return next;
+}
+
+function setExpansion(
+    map: Map<number, SectionGapExpansions>,
+    sectionId: number,
+    gapKey: number,
+    expansion: GapExpansion
+): Map<number, SectionGapExpansions> {
+    const next = new Map(map);
+    const section = new Map(map.get(sectionId) ?? []);
+    section.set(gapKey, expansion);
+    next.set(sectionId, section);
+    return next;
+}
+
+function mergeExpansion(
+    previous: GapExpansion | undefined,
+    direction: "up" | "down",
+    window: { oldStart: number; count: number },
+    blockEnd: number,
+    rows: DiffRow[]
+): GapExpansion {
+    const previousRows = previous?.rows ?? [];
+    const down = direction === "down";
+    return {
+        rows: down ? [...previousRows, ...rows] : [...rows, ...previousRows],
+        oldStart: down
+            ? (previous?.oldStart ?? window.oldStart)
+            : window.oldStart,
+        oldEnd: down
+            ? blockEnd
+            : Math.max(previous?.oldEnd ?? blockEnd, blockEnd),
+        pendingDown: down ? false : (previous?.pendingDown ?? false),
+        pendingUp: down ? (previous?.pendingUp ?? false) : false,
+    };
+}
+
+/** Re points span ids at a style table that already holds `base` entries. */
+function rebaseSpans(rows: DiffRow[], base: number): DiffRow[] {
+    if (base === 0) return rows;
+    return rows.map((row) => {
+        if (!row.spans || row.spans.length === 0) return row;
+        const spans = row.spans.slice();
+        for (let i = 2; i < spans.length; i += 3) {
+            spans[i] += base;
+        }
+        return { ...row, spans };
+    });
 }

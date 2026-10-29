@@ -49,6 +49,7 @@ function describe(update: Update): UpdateInfo {
  */
 export class UpdateController {
     readonly store: Store<UpdateState>;
+    readonly checkedAtStore: Store<number | null>;
 
     private update: Update | null = null;
     private info: UpdateInfo | null = null;
@@ -56,6 +57,7 @@ export class UpdateController {
 
     constructor(private runtime: UpdaterRuntime) {
         this.store = createStore<UpdateState>(initialState());
+        this.checkedAtStore = createStore<number | null>(null);
     }
 
     /** Whether the controller has already polled the update endpoint. */
@@ -83,6 +85,8 @@ export class UpdateController {
                 message: error instanceof Error ? error.message : String(error),
             }));
             return;
+        } finally {
+            this.checkedAtStore.setState(() => Date.now());
         }
 
         if (!update) {

@@ -10,8 +10,13 @@ import { ToastProvider } from "@/components/ui/toast";
 import { ConfirmProvider } from "@/contexts/confirm-context";
 import { AppServicesContext } from "@/contexts/services-context";
 import type {
+    AccountProfile,
     BranchInfo,
+    Capabilities,
+    Label,
     OperationState,
+    ProviderDescriptor,
+    RemoteInfo,
     RepoListing,
     RepoSnapshot,
     WorkflowOutcome,
@@ -47,6 +52,37 @@ const attachedHead: RepoSnapshot["head"] = {
     state: "attached",
     branch: "main",
     target: "abc",
+};
+
+const CAPABILITIES: Capabilities = {
+    issues: true,
+    pullRequests: true,
+    reviews: true,
+    notifications: true,
+    checks: true,
+    commitStatuses: true,
+    workflowRuns: true,
+    issuesWrite: true,
+    pullRequestsWrite: true,
+    publish: true,
+    orgs: true,
+};
+
+const GITHUB: ProviderDescriptor = {
+    id: "github",
+    label: "GitHub",
+    hosts: ["github.com"],
+    imageHosts: [],
+    capabilities: CAPABILITIES,
+};
+
+const PROFILE: AccountProfile = {
+    login: "octocat",
+    name: null,
+    avatarUrl: "",
+    htmlUrl: "",
+    scopes: ["repo"],
+    connectedAtMs: 1,
 };
 
 function listingBackend(
@@ -119,6 +155,28 @@ function listingBackend(
                 checkoutCalls.push(target);
                 return Promise.resolve({ ok: true, value: undefined });
             },
+        },
+        remotes: {
+            list: async (): Promise<Result<RemoteInfo[]>> => ({
+                ok: true,
+                value: [
+                    { name: "origin", url: "https://github.com/octo/repo.git" },
+                ],
+            }),
+        },
+        forge: {
+            providers: async (): Promise<Result<ProviderDescriptor[]>> => ({
+                ok: true,
+                value: [GITHUB],
+            }),
+            account: async (): Promise<Result<AccountProfile | null>> => ({
+                ok: true,
+                value: PROFILE,
+            }),
+            listLabels: async (): Promise<Result<Label[]>> => ({
+                ok: true,
+                value: [],
+            }),
         },
         workflows: {
             operationState: async (): Promise<Result<OperationState>> =>
@@ -305,6 +363,25 @@ function dialogButton(label: string): HTMLButtonElement {
     )!;
 }
 
+/** Resolves the control a FieldLabel points at through its `htmlFor`. */
+function labeledControl<T extends HTMLElement>(
+    root: ParentNode,
+    labelText: string
+): T | null {
+    const label = [...root.querySelectorAll("label")].find(
+        (candidate) => candidate.textContent?.trim() === labelText
+    );
+    const id = label?.getAttribute("for");
+    return id ? (document.getElementById(id) as T | null) : null;
+}
+
+function checkoutNameInput(): HTMLInputElement {
+    const dialog = document.querySelector(
+        '[data-testid="create-checkout-dialog"]'
+    )!;
+    return labeledControl<HTMLInputElement>(dialog, "Name")!;
+}
+
 describe("BranchSelector", () => {
     it("groups branches into default and other", async () => {
         const services = listingBackend(listing);
@@ -409,9 +486,7 @@ describe("BranchSelector", () => {
         const view = await openSelector(services);
 
         await openCreateDialog(services);
-        const nameInput = document.querySelector<HTMLInputElement>(
-            '[data-testid="create-checkout-dialog"] [aria-label="Name"]'
-        )!;
+        const nameInput = checkoutNameInput();
         await typeInto(nameInput, "feature/new-thing");
         await flush();
 
@@ -434,9 +509,7 @@ describe("BranchSelector", () => {
         await click(dialogButton("Worktree"));
         await flush();
 
-        const nameInput = document.querySelector<HTMLInputElement>(
-            '[data-testid="create-checkout-dialog"] [aria-label="Name"]'
-        )!;
+        const nameInput = checkoutNameInput();
         await typeInto(nameInput, "scratch");
         await flush();
 
@@ -458,9 +531,7 @@ describe("BranchSelector", () => {
         const view = await openSelector(services);
 
         await openCreateDialog(services);
-        const nameInput = document.querySelector<HTMLInputElement>(
-            '[data-testid="create-checkout-dialog"] [aria-label="Name"]'
-        )!;
+        const nameInput = checkoutNameInput();
 
         for (const bad of ["has space", "main"]) {
             await typeInto(nameInput, bad);
@@ -693,6 +764,51 @@ describe("BranchSelector", () => {
         const settled = await waitFor(() => services.mergeCalls.length > 0);
         expect(settled).toBe(true);
         expect(services.mergeCalls[0]).toBe("develop");
+        expect(services.checkoutCalls).toHaveLength(0);
+        view.unmount();
+    });
+
+    it("opens a pull request dialog from the branch context menu", async () => {
+        const services = listingBackend(listing);
+        const view = await openSelector(services);
+
+        const developRow = Array.from(
+            document.querySelectorAll('[data-slot="command-item"]')
+        ).find((item) => item.textContent.includes("develop"))!;
+        await act(async () => {
+            developRow.dispatchEvent(
+                new MouseEvent("contextmenu", {
+                    bubbles: true,
+                    cancelable: true,
+                    clientX: 10,
+                    clientY: 10,
+                })
+            );
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        });
+
+        const offered = await waitFor(() =>
+            Array.from(
+                document.querySelectorAll('[data-slot="context-menu-item"]')
+            ).some((item) => item.textContent.includes("Create pull request"))
+        );
+        expect(offered).toBe(true);
+
+        const createItem = Array.from(
+            document.querySelectorAll('[data-slot="context-menu-item"]')
+        ).find((item) => item.textContent.includes("Create pull request"))!;
+        await click(createItem);
+
+        const opened = await waitFor(() =>
+            Boolean(
+                document.querySelector('[data-testid="create-pull-dialog"]')
+            )
+        );
+        expect(opened).toBe(true);
+        const dialog = document.querySelector(
+            '[data-testid="create-pull-dialog"]'
+        )!;
+        expect(dialog.textContent).toContain("octo/repo");
         expect(services.checkoutCalls).toHaveLength(0);
         view.unmount();
     });

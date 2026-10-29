@@ -1,5 +1,3 @@
-"use no memo";
-
 import {
     Bell,
     Check,
@@ -41,19 +39,21 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { useConfirm } from "@/contexts/confirm-context";
-import { useGithubAccount } from "@/hooks/github/use-github-account";
 import {
-    useGithubNotifications,
+    useActiveConnection,
+    useForgeConnections,
+} from "@/hooks/forge/use-forge-account";
+import {
+    useNotifications,
     useMarkAllNotificationsRead,
     useMarkNotificationRead,
     useResolveSubjectUrl,
-} from "@/hooks/github/use-github-inbox";
-import { useLocalRepoMap } from "@/hooks/github/use-github-issues";
-import { useOpenThread } from "@/hooks/github/use-open-thread";
-import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
-import type { GithubNotification } from "@/lib/backend/protocol";
+} from "@/hooks/forge/use-forge-inbox";
+import { useLocalRepoMap } from "@/hooks/forge/use-forge-issues";
+import { useInternalLink } from "@/hooks/tabs/use-internal-link";
+import type { Notification } from "@/lib/backend/protocol";
 import { GitBackendError } from "@/lib/backend/transport/invoke";
-import { parseIssueUrl, parsePullUrl } from "@/lib/github/repo-coords";
+import { parseIssueUrl, parsePullUrl } from "@/lib/forge/repo-coords";
 import { openExternal } from "@/lib/open-external";
 import { toastError } from "@/lib/toast-error";
 import { cn, formatRelativeDate } from "@/lib/utils";
@@ -68,10 +68,7 @@ const FILTER_OPTIONS: { value: InboxFilter; label: string }[] = [
     { value: "assign", label: "Assignments" },
 ];
 
-function matchesFilter(
-    thread: GithubNotification,
-    filter: InboxFilter
-): boolean {
+function matchesFilter(thread: Notification, filter: InboxFilter): boolean {
     switch (filter) {
         case "all":
             return true;
@@ -111,16 +108,20 @@ function formatSubjectType(type: string): string {
 }
 
 /**
- * Signed-in GitHub notifications, newest first, paged from the backend 100
+ * Signed-in notifications, newest first, paged from the backend 100
  * threads at a time. Unread state updates in place on mark-read; the
  * sidebar badge reads the same cache. Only the list scrolls; the header
  * stays pinned.
  */
 export function InboxPage() {
-    const router = useActiveTabRouter();
-    const account = useGithubAccount();
+    const link = useInternalLink();
+    const connections = useForgeConnections();
+    const account = {
+        isLoading: connections.isLoading,
+        data: connections.data?.[0]?.account ?? null,
+    };
     const [filter, setFilter] = useState<InboxFilter>("all");
-    const inbox = useGithubNotifications();
+    const inbox = useNotifications();
     const markRead = useMarkNotificationRead();
     const markAll = useMarkAllNotificationsRead();
     const [markingIds, setMarkingIds] = useState<ReadonlySet<string>>(
@@ -136,7 +137,7 @@ export function InboxPage() {
         [inbox.threads, filter]
     );
     const groups = useMemo(() => {
-        const byRepo = new Map<string, GithubNotification[]>();
+        const byRepo = new Map<string, Notification[]>();
         for (const thread of threads) {
             const key = thread.repoFullName || "Unknown repository";
             const list = byRepo.get(key);
@@ -156,7 +157,7 @@ export function InboxPage() {
         const result = await confirm({
             title: "Mark all notifications read?",
             description:
-                "Every GitHub notification is marked read, including threads on pages you have not loaded yet.",
+                "Every notification is marked read, including threads on pages you have not loaded yet.",
             confirmText: "Mark all read",
         });
         if (!result.confirmed) return;
@@ -249,7 +250,7 @@ export function InboxPage() {
                         </div>
                     </div>
                     <FrameDescription className="text-sm text-muted-foreground">
-                        GitHub notifications for the connected account.
+                        Notifications for the connected account.
                     </FrameDescription>
                 </FrameHeader>
                 <FramePanel data-testid="inbox-panel" className="min-h-0 p-2">
@@ -265,7 +266,7 @@ export function InboxPage() {
                                     <Inbox />
                                 </EmptyMedia>
                                 <EmptyHeader>
-                                    <EmptyTitle>Connect GitHub</EmptyTitle>
+                                    <EmptyTitle>Connect an account</EmptyTitle>
                                     <EmptyDescription>
                                         Sign in to read notifications, review
                                         requests, and mentions.
@@ -273,11 +274,10 @@ export function InboxPage() {
                                 </EmptyHeader>
                                 <EmptyContent>
                                     <Button
-                                        onClick={() =>
-                                            void router?.navigate({
-                                                to: "/account",
-                                            })
-                                        }
+                                        {...link({
+                                            title: "Account",
+                                            href: "/account",
+                                        })}
                                     >
                                         Go to Account
                                     </Button>
@@ -322,11 +322,10 @@ export function InboxPage() {
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() =>
-                                                void router?.navigate({
-                                                    to: "/account",
-                                                })
-                                            }
+                                            {...link({
+                                                title: "Account",
+                                                href: "/account",
+                                            })}
                                         >
                                             Go to Account
                                         </Button>
@@ -388,19 +387,83 @@ export function InboxPage() {
     );
 }
 
+function InboxSubjectTitle({
+    thread,
+    repoPath,
+    threadTarget,
+    resolving,
+    onMarkRead,
+    onOpenResolved,
+}: {
+    thread: Notification;
+    repoPath?: string;
+    threadTarget: { number: number } | null;
+    resolving: boolean;
+    onMarkRead: () => void;
+    onOpenResolved: () => void;
+}) {
+    const link = useInternalLink();
+    const label = (
+        <span className="min-w-0 truncate">
+            {thread.subjectTitle || "(no title)"}
+        </span>
+    );
+
+    if (repoPath !== undefined && threadTarget) {
+        const props = link({
+            title: thread.subjectTitle || "(no title)",
+            repoPath,
+            thread: {
+                kind: thread.subjectType === "PullRequest" ? "pull" : "issue",
+                number: threadTarget.number,
+            },
+        });
+        return (
+            <button
+                type="button"
+                {...props}
+                onClick={(event) => {
+                    if (thread.unread) onMarkRead();
+                    props.onClick(event);
+                }}
+                className="flex min-w-0 cursor-pointer items-center gap-1 text-left font-medium hover:underline"
+            >
+                {label}
+            </button>
+        );
+    }
+    if (thread.htmlUrl) {
+        return (
+            <ExternalLink href={thread.htmlUrl} className="min-w-0 font-medium">
+                {label}
+            </ExternalLink>
+        );
+    }
+    return (
+        <button
+            type="button"
+            disabled={resolving || !thread.subjectUrl}
+            onClick={onOpenResolved}
+            className="flex min-w-0 cursor-pointer items-center gap-1 text-left font-medium hover:underline disabled:pointer-events-none disabled:opacity-100"
+        >
+            {label}
+        </button>
+    );
+}
+
 function InboxRow({
     thread,
     marking,
     onMarkRead,
     localRepos,
 }: {
-    thread: GithubNotification;
+    thread: Notification;
     marking: boolean;
     onMarkRead: () => void;
     localRepos: Map<string, string>;
 }) {
     const resolve = useResolveSubjectUrl();
-    const openThread = useOpenThread();
+    const connection = useActiveConnection();
     const [resolving, setResolving] = useState(false);
 
     // Issue and pull request threads whose repo is in the app resolve to the
@@ -426,7 +489,7 @@ function InboxRow({
             const target =
                 url ??
                 (thread.repoFullName
-                    ? `https://github.com/${thread.repoFullName}`
+                    ? `https://${connection?.host ?? ""}/${thread.repoFullName}`
                     : null);
             if (target) await openExternal(target);
         } catch (error) {
@@ -436,42 +499,6 @@ function InboxRow({
         }
     };
 
-    const title =
-        repoPath !== undefined && threadTarget ? (
-            <button
-                type="button"
-                onClick={() => {
-                    if (thread.unread) onMarkRead();
-                    void openThread(
-                        repoPath,
-                        thread.subjectType === "PullRequest" ? "pull" : "issue",
-                        threadTarget.number
-                    );
-                }}
-                className="flex min-w-0 cursor-pointer items-center gap-1 text-left font-medium hover:underline"
-            >
-                <span className="min-w-0 truncate">
-                    {thread.subjectTitle || "(no title)"}
-                </span>
-            </button>
-        ) : thread.htmlUrl ? (
-            <ExternalLink href={thread.htmlUrl} className="min-w-0 font-medium">
-                <span className="min-w-0 truncate">
-                    {thread.subjectTitle || "(no title)"}
-                </span>
-            </ExternalLink>
-        ) : (
-            <button
-                type="button"
-                disabled={resolving || !thread.subjectUrl}
-                onClick={() => void openResolved()}
-                className="flex min-w-0 cursor-pointer items-center gap-1 text-left font-medium hover:underline disabled:pointer-events-none disabled:opacity-100"
-            >
-                <span className="min-w-0 truncate">
-                    {thread.subjectTitle || "(no title)"}
-                </span>
-            </button>
-        );
     return (
         <div className="flex items-center gap-2 px-2 py-2">
             <span
@@ -483,7 +510,16 @@ function InboxRow({
                 <SubjectIcon type={thread.subjectType} />
             </span>
             <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 text-sm">{title}</div>
+                <div className="flex min-w-0 text-sm">
+                    <InboxSubjectTitle
+                        thread={thread}
+                        repoPath={repoPath}
+                        threadTarget={threadTarget}
+                        resolving={resolving}
+                        onMarkRead={onMarkRead}
+                        onOpenResolved={() => void openResolved()}
+                    />
+                </div>
                 <p className="truncate text-xs text-muted-foreground">
                     {formatSubjectType(thread.subjectType)}
                     {thread.updatedAt

@@ -1,0 +1,139 @@
+name: Preview Build
+
+on:
+    workflow_dispatch:
+        inputs:
+            version:
+                description: "Prerelease version to publish (defaults to <package.json version>-preview.<run number>)"
+                required: false
+                type: string
+    push:
+        tags:
+            - "v*.*.*-*"
+
+concurrency:
+    group: preview-build
+    cancel-in-progress: false
+
+jobs:
+    version:
+        runs-on: ubuntu-latest
+        outputs:
+            version: ${{ steps.resolve.outputs.version }}
+        steps:
+            - uses: actions/checkout@v7
+
+            - name: Resolve preview version
+              id: resolve
+              shell: bash
+              env:
+                  INPUT_VERSION: ${{ inputs.version }}
+              run: |
+                  version="$INPUT_VERSION"
+                  if [ -z "$version" ]; then
+                      if [ "${{ github.event_name }}" = "push" ]; then
+                          version="${GITHUB_REF_NAME#v}"
+                      else
+                          base=$(node -p "require('./package.json').version")
+                          version="$base-preview.${{ github.run_number }}"
+                      fi
+                  fi
+                  case "$version" in
+                      *-*) ;;
+                      *)
+                          echo "preview version must be a prerelease like 0.2.1-preview.1, got '$version'" >&2
+                          exit 1
+                          ;;
+                  esac
+                  echo "version=$version" >> "$GITHUB_OUTPUT"
+                  echo "preview version: $version"
+
+    publish-tauri:
+        needs: version
+        permissions:
+            contents: write
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - platform: "windows-latest"
+                      args: "--bundles nsis"
+                    - platform: "macos-latest"
+                      args: "--target universal-apple-darwin --bundles dmg"
+                      targets: "aarch64-apple-darwin,x86_64-apple-darwin"
+                    - platform: "ubuntu-24.04"
+                      args: "--bundles appimage"
+                    - platform: "ubuntu-24.04-arm"
+                      args: "--bundles appimage"
+
+        runs-on: ${{ matrix.platform }}
+        env:
+            TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+            TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        steps:
+            - uses: actions/checkout@v7
+
+            - name: Setup Node
+              uses: actions/setup-node@v7
+              with:
+                  node-version: lts/*
+                  cache: "npm"
+
+            - name: Write preview version config
+              shell: bash
+              run: |
+                  printf '{"version":"%s"}\n' "${{ needs.version.outputs.version }}" > crates/tauri/tauri.preview-version.conf.json
+                  echo "preview version: ${{ needs.version.outputs.version }}"
+
+            - name: Install Rust stable
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: ${{ matrix.targets }}
+
+            - name: Rust cache
+              uses: Swatinem/rust-cache@v2
+
+            - name: Install Linux system dependencies
+              if: runner.os == 'Linux'
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev xdg-utils patchelf
+
+            - name: Install frontend dependencies
+              run: npm ci
+
+            - name: Build and publish
+              uses: tauri-apps/tauri-action@v1
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  tagName: v__VERSION__
+                  releaseName: "Preview v__VERSION__"
+                  releaseBody: "Preview channel build. It follows the preview channel only and never receives stable releases automatically."
+                  releaseDraft: false
+                  prerelease: true
+                  uploadUpdaterJson: true
+                  args: ${{ matrix.args }} --config crates/tauri/tauri.preview.conf.json --config crates/tauri/tauri.preview-version.conf.json
+
+    publish-updater:
+        needs: [version, publish-tauri]
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        env:
+            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            GH_REPO: ${{ github.repository }}
+        steps:
+            - name: Point the preview channel at the new release
+              shell: bash
+              run: |
+                  tag="v${{ needs.version.outputs.version }}"
+                  gh release download "$tag" --pattern latest.json --output latest.json --clobber
+                  if ! gh release view preview >/dev/null 2>&1; then
+                      gh release create preview \
+                          --prerelease \
+                          --title "Preview channel" \
+                          --notes "Rolling pointer for the preview update channel. The app's updater reads latest.json from here." \
+                          --target "$GITHUB_SHA"
+                  fi
+                  gh release upload preview latest.json --clobber

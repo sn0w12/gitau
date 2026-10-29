@@ -3,12 +3,6 @@ import * as React from "react";
 import { DelayedSpinner } from "@/components/diff/delayed-spinner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-    Empty,
-    EmptyDescription,
-    EmptyHeader,
-    EmptyTitle,
-} from "@/components/ui/empty";
 import { useDiffSession } from "@/hooks/changes/use-diff-session";
 import { useStreamWatchdog } from "@/hooks/changes/use-stream-watchdog";
 import type { DiffRequest } from "@/lib/backend/protocol";
@@ -16,27 +10,26 @@ import type { DiffSessionState } from "@/lib/backend/streams/diff-session";
 
 /**
  * Shared session lifecycle for streaming diff views: acquires the session,
- * arms the stuck-stream watchdog, and renders the failed / empty / loading
- * states so each view only supplies its content. `resetKey` participates in
- * the remount key, so a changed target (e.g. another commit) restarts clean.
+ * arms the stuck-stream watchdog, and renders the failed and loading states
+ * so each view only supplies its content. A completed session with no
+ * sections calls `onEmpty` instead of rendering an empty pane, letting the
+ * caller drop the selection back to the main view.
  */
 export function DiffSessionGate({
     repoId,
     request,
     generation,
-    resetKey,
     tabId,
-    emptyTitle,
-    emptyDescription,
+    pendingPath,
+    onEmpty,
     children,
 }: {
     repoId: number;
     request?: DiffRequest;
     generation?: number;
-    resetKey?: string;
     tabId?: string;
-    emptyTitle: string;
-    emptyDescription: string;
+    pendingPath?: string;
+    onEmpty: () => void;
     children: (
         state: DiffSessionState,
         retry: () => void,
@@ -50,13 +43,13 @@ export function DiffSessionGate({
 
     return (
         <GateSession
-            key={resetKey ? `${resetKey}:${retryKey}` : retryKey}
+            key={retryKey}
             repoId={repoId}
             request={request}
             generation={generation}
             tabId={tabId}
-            emptyTitle={emptyTitle}
-            emptyDescription={emptyDescription}
+            pendingPath={pendingPath}
+            onEmpty={onEmpty}
             onRetry={onRetry}
         >
             {children}
@@ -69,8 +62,8 @@ function GateSession({
     request,
     generation,
     tabId,
-    emptyTitle,
-    emptyDescription,
+    pendingPath,
+    onEmpty,
     onRetry,
     children,
 }: {
@@ -78,8 +71,8 @@ function GateSession({
     request?: DiffRequest;
     generation?: number;
     tabId?: string;
-    emptyTitle: string;
-    emptyDescription: string;
+    pendingPath?: string;
+    onEmpty: () => void;
     onRetry: () => void;
     children: (
         state: DiffSessionState,
@@ -94,36 +87,35 @@ function GateSession({
     const { controller } = session;
     const state = session;
 
-    // Keep the last painted content on screen while a re-stream runs so a
-    // refresh swaps rows in place instead of flashing the loader. Reset when
-    // the request (target file/commit) changes so an old diff never fills a
-    // fresh view. A completed-but-empty result is a real "no changes"
-    // outcome, not a reload, so it must show the empty state, not old rows.
+    // Keep the last fully rendered diff on screen until the next one has rows
+    // to paint, so switching files or commits swaps rows in place instead of
+    // blanking the pane between the new `started` event and its first folded
+    // chunk. The stale state always belongs to this same view, and the failed
+    // and completed-empty states below still win.
     /* oxlint-disable react/refs */
-    const contentKey = JSON.stringify(request ?? null);
-    const lastContentRef = React.useRef<{
-        contentKey: string;
-        state: DiffSessionState;
-    } | null>(null);
-    if (lastContentRef.current?.contentKey !== contentKey) {
-        lastContentRef.current = null;
-    }
-    if (state.sections.length > 0) {
-        lastContentRef.current = { contentKey, state };
+    const lastContentRef = React.useRef<DiffSessionState | null>(null);
+    const ready = state.sections.length > 0 && state.rowsBySection.size > 0;
+    if (ready) {
+        lastContentRef.current = state;
     }
     const showStale =
-        state.sections.length === 0 &&
-        state.status !== "completed" &&
-        lastContentRef.current !== null;
+        lastContentRef.current !== null &&
+        !ready &&
+        state.status !== "completed";
 
     useStreamWatchdog({
-        stuck:
-            state.status === "running" &&
-            state.sections.length === 0 &&
-            !showStale,
+        stuck: state.status === "running" && !ready,
         sessionKey: state.sessionId,
         onRestart: onRetry,
     });
+
+    const empty = state.sections.length === 0 && state.status === "completed";
+    const clearedRef = React.useRef(false);
+    React.useEffect(() => {
+        if (!empty || clearedRef.current) return;
+        clearedRef.current = true;
+        onEmpty();
+    }, [empty, onEmpty]);
 
     if (state.status === "failed") {
         return (
@@ -140,26 +132,24 @@ function GateSession({
     }
 
     if (showStale) {
-        return (
-            <>{children(lastContentRef.current!.state, onRetry, controller)}</>
-        );
+        return <>{children(lastContentRef.current!, onRetry, controller)}</>;
     }
 
-    if (state.sections.length === 0 && state.status === "completed") {
-        return (
-            <Empty className="ui-selectable size-full">
-                <EmptyHeader>
-                    <EmptyTitle>{emptyTitle}</EmptyTitle>
-                    <EmptyDescription>{emptyDescription}</EmptyDescription>
-                </EmptyHeader>
-            </Empty>
-        );
-    }
+    if (empty) return null;
 
-    if (state.sections.length === 0) {
+    if (!ready) {
         return (
-            <div className="flex size-full items-center justify-center">
-                <DelayedSpinner className="size-6" />
+            <div className="flex size-full min-h-0 min-w-0 flex-col">
+                {pendingPath && (
+                    <div className="flex h-8 shrink-0 items-center border-b px-2">
+                        <span className="truncate font-mono text-xs">
+                            {pendingPath}
+                        </span>
+                    </div>
+                )}
+                <div className="flex min-h-0 flex-1 items-center justify-center">
+                    <DelayedSpinner className="size-6" />
+                </div>
             </div>
         );
     }

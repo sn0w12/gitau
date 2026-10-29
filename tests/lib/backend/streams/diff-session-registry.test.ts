@@ -65,6 +65,8 @@ function fakeBackend() {
                 sectionId: 0,
                 startRow: 0,
                 rowCount: 1,
+                oldLineCount: 0,
+                newLineCount: 0,
             });
             listener({
                 event: "chunk",

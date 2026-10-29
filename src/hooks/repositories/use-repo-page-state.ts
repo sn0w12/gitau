@@ -1,4 +1,5 @@
 import { useSearch } from "@tanstack/react-router";
+import { useCallback } from "react";
 
 import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
 import {
@@ -27,21 +28,29 @@ export function useRepoPageState(
     const state = parseRepoSearch(search);
     const router = useActiveTabRouter();
 
-    const dispatch = (action: RepoStateAction) => {
-        // The reducer hands back the same object for a no-op action, so
-        // reselecting the current row never rewrites the href.
-        const next = repoStateReducer(state, action);
-        if (next === state) return;
-        // Replaced, not pushed: the href tracks the page rather than the
-        // click-by-click path taken to it, so back leaves the repo page
-        // instead of walking back through every row that was selected.
-        void router?.navigate({
-            to: "/repo/$repoId",
-            params: { repoId: String(repoId) },
-            search: repoSearchParams(next),
-            replace: true,
-        });
-    };
+    // Reads the live search off the router instead of closing over `state`, so
+    // the callback keeps one identity across renders and does not churn the
+    // props of every list and panel below the page.
+    const dispatch = useCallback(
+        (action: RepoStateAction) => {
+            if (!router) return;
+            const current = parseRepoSearch(router.state.location.search);
+            // The reducer hands back the same object for a no-op action, so
+            // reselecting the current row never rewrites the href.
+            const next = repoStateReducer(current, action);
+            if (next === current) return;
+            // Replaced, not pushed: the href tracks the page rather than the
+            // click-by-click path taken to it, so back leaves the repo page
+            // instead of walking back through every row that was selected.
+            void router.navigate({
+                to: "/repo/$repoId",
+                params: { repoId: String(repoId) },
+                search: repoSearchParams(next),
+                replace: true,
+            });
+        },
+        [router, repoId]
+    );
 
     return [state, dispatch];
 }

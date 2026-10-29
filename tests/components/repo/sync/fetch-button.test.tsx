@@ -62,6 +62,7 @@ function backendWith(overrides: {
 
     const fetchCalls: number[] = [];
     const pushOptions: Record<string, unknown>[] = [];
+    let fetchGate: Promise<void> | null = null;
     let pullOutcome: Result<WorkflowOutcome> = {
         ok: true,
         value: { outcome: "fastForwarded", head: "abc" },
@@ -88,6 +89,7 @@ function backendWith(overrides: {
             }),
             fetch: async (): Promise<Result<void>> => {
                 fetchCalls.push(Date.now());
+                if (fetchGate) await fetchGate;
                 return { ok: true, value: undefined };
             },
             pull: async (
@@ -122,6 +124,16 @@ function backendWith(overrides: {
         }),
         fetchCalls: () => fetchCalls.length,
         pushOptions,
+        holdFetch(): () => void {
+            let release!: () => void;
+            fetchGate = new Promise<void>((resolve) => {
+                release = resolve;
+            });
+            return () => {
+                fetchGate = null;
+                release();
+            };
+        },
         setPullOutcome(next: Result<WorkflowOutcome>) {
             pullOutcome = next;
         },
@@ -251,7 +263,56 @@ describe("RepoFetchButton", () => {
         view.unmount();
     });
 
-    it("publishes to GitHub directly without any configured remote", async () => {
+    it("promotes the spinner to a composited layer while spinning", async () => {
+        seedSettingsForTests({});
+        hydrateFetchTimestamps({});
+        const services = backendWith({
+            headBranchName: "main",
+            listing: [
+                branch({
+                    name: "main",
+                    isHead: true,
+                    upstream: {
+                        remote: "origin",
+                        branch: "main",
+                        ahead: 0,
+                        behind: 0,
+                    },
+                }),
+            ],
+        });
+
+        const view = renderWith(
+            services,
+            <RepoFetchButton repoId={5} repoPath={REPO_PATH} />
+        );
+        await flush(view, "Fetch Origin");
+
+        const slot = view.container.querySelector(
+            '[data-testid="fetch-button"] svg'
+        )!.parentElement!;
+        expect(slot.className).not.toContain("will-change-transform");
+
+        const release = services.holdFetch();
+        await click(
+            view.container.querySelector('[data-testid="fetch-button"]')!
+        );
+        await waitFor(
+            () =>
+                view.container.querySelector(
+                    '[data-testid="fetch-spinner"]'
+                ) !== null
+        );
+        expect(slot.className).toContain("will-change-transform");
+
+        await act(async () => {
+            release();
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        });
+        view.unmount();
+    });
+
+    it("publishes directly without any configured remote", async () => {
         seedSettingsForTests({});
         hydrateFetchTimestamps({});
         const services = backendWith({

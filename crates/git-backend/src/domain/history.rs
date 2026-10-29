@@ -12,6 +12,8 @@ pub struct HistoryPage {
     pub snapshot_id: SnapshotId,
     pub generation: Generation,
     pub commits: Vec<CommitSummary>,
+    /// Commits in the walk, independent of the page's `skip`/`limit`.
+    pub total: u32,
     pub has_more: bool,
     pub unpushed: Vec<ObjectId>,
 }

@@ -11,8 +11,9 @@ import {
     DialogPopup,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import type { CommitSummary } from "@/lib/backend/protocol";
 
 /**
@@ -81,30 +82,37 @@ function CreateBranchDialogBody({
                     Your current branch stays checked out.
                 </DialogDescription>
             </DialogHeader>
-            <DialogPanel className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="create-branch-name">Name</Label>
-                    <Input
-                        id="create-branch-name"
-                        value={name}
-                        onChange={(event) => setName(event.target.value)}
-                        placeholder="feature/thing"
-                        autoFocus
-                    />
-                </div>
-            </DialogPanel>
-            <DialogFooter>
-                <DialogClose render={<Button variant="ghost" />}>
-                    Cancel
-                </DialogClose>
-                <Button
-                    disabled={!canSubmit}
-                    loading={submitting}
-                    onClick={() => void handleSubmit()}
-                >
-                    Create branch
-                </Button>
-            </DialogFooter>
+            <Form
+                className="contents"
+                onSubmit={(event) => {
+                    event.preventDefault();
+                    void handleSubmit();
+                }}
+            >
+                <DialogPanel className="flex flex-col gap-3">
+                    <Field>
+                        <FieldLabel>Name</FieldLabel>
+                        <Input
+                            value={name}
+                            onChange={(event) => setName(event.target.value)}
+                            placeholder="feature/thing"
+                            autoFocus
+                        />
+                    </Field>
+                </DialogPanel>
+                <DialogFooter>
+                    <DialogClose render={<Button variant="ghost" />}>
+                        Cancel
+                    </DialogClose>
+                    <Button
+                        type="submit"
+                        disabled={!canSubmit}
+                        loading={submitting}
+                    >
+                        Create branch
+                    </Button>
+                </DialogFooter>
+            </Form>
         </>
     );
 }

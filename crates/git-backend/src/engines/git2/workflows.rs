@@ -50,6 +50,7 @@ fn conflicted_paths(repo: &Repository) -> Result<Vec<String>> {
 }
 
 pub fn merge(repo: &Repository, request: &MergeRequest) -> Result<WorkflowOutcome> {
+    let _gate = crate::engines::index_lock::gate();
     if merge_in_progress(repo)? {
         return Err(GitError::Conflict {
             details: "a merge is already in progress; continue or abort first".into(),
@@ -92,6 +93,7 @@ pub fn merge_continue(
     repo: &Repository,
     request: &MergeContinueRequest,
 ) -> Result<WorkflowOutcome> {
+    let _gate = crate::engines::index_lock::gate();
     if !merge_in_progress(repo)? {
         return Err(GitError::Conflict {
             details: "no merge is in progress".into(),
@@ -121,6 +123,7 @@ pub fn merge_continue(
 }
 
 pub fn merge_abort(repo: &Repository) -> Result<WorkflowOutcome> {
+    let _gate = crate::engines::index_lock::gate();
     if !merge_in_progress(repo)? {
         return Err(GitError::Conflict {
             details: "no merge is in progress".into(),
@@ -157,6 +160,7 @@ pub fn operation_state(repo: &Repository) -> Result<OperationState> {
 }
 
 pub fn resolve_conflict(repo: &Repository, request: &ResolveConflictRequest) -> Result<()> {
+    let _gate = crate::engines::index_lock::gate();
     let rel = RelativePath::parse(&request.path.replace('\\', "/"))?;
     let rel_buf = rel.to_path_buf();
     let mut index = repo.index()?;
@@ -439,6 +443,7 @@ pub fn cherry_pick(
     repo: &Repository,
     target: &crate::domain::RevisionSpec,
 ) -> Result<WorkflowOutcome> {
+    let _gate = crate::engines::index_lock::gate();
     let commit = crate::streaming::pipeline::resolve_commit(repo, target)?;
     repo.cherrypick(&commit, None)?;
 
@@ -454,6 +459,7 @@ pub fn cherry_pick(
 }
 
 pub fn revert(repo: &Repository, request: &RevertRequest) -> Result<WorkflowOutcome> {
+    let _gate = crate::engines::index_lock::gate();
     let commit = crate::streaming::pipeline::resolve_commit(repo, &request.target)?;
     let mut revert_options = git2::RevertOptions::new();
     if request.parent_index > 0 {
@@ -479,6 +485,7 @@ pub fn revert(repo: &Repository, request: &RevertRequest) -> Result<WorkflowOutc
 }
 
 pub fn pick_continue(repo: &Repository, state_file_name: &str) -> Result<WorkflowOutcome> {
+    let _gate = crate::engines::index_lock::gate();
     if has_conflicts(repo)? {
         return Ok(WorkflowOutcome::Conflicted {
             paths: conflicted_paths(repo)?,
@@ -491,6 +498,7 @@ pub fn pick_continue(repo: &Repository, state_file_name: &str) -> Result<Workflo
 }
 
 pub fn pick_abort(repo: &Repository) -> Result<WorkflowOutcome> {
+    let _gate = crate::engines::index_lock::gate();
     abort_with_hard_reset(repo)
 }
 
@@ -542,6 +550,7 @@ fn signature_from_parts(sig: &crate::domain::Signature) -> Result<git2::Signatur
 }
 
 pub fn stash_push(repo: &mut Repository, request: &StashPushRequest) -> Result<ObjectId> {
+    let _gate = crate::engines::index_lock::gate();
     if request.paths.is_empty() {
         let signature = resolve_signature(repo)?;
         let mut flags = StashFlags::empty();
@@ -724,6 +733,7 @@ pub fn stash_list(repo: &mut Repository) -> Result<Vec<StashEntry>> {
 }
 
 pub fn stash_pop(repo: &mut Repository, request: &StashPopRequest) -> Result<()> {
+    let _gate = crate::engines::index_lock::gate();
     let mut options = StashApplyOptions::default();
     match request.action {
         StashAction::Pop => repo.stash_pop(request.index, Some(&mut options))?,
@@ -743,6 +753,7 @@ pub fn start_rebase(
     upstream: &crate::domain::RevisionSpec,
     onto: Option<&crate::domain::RevisionSpec>,
 ) -> Result<WorkflowOutcome> {
+    let _gate = crate::engines::index_lock::gate();
     let upstream_annot = annotated(repo, upstream)?;
     let onto_annot = match onto {
         Some(spec) => Some(annotated(repo, spec)?),
@@ -762,6 +773,7 @@ pub fn start_rebase(
 }
 
 pub fn continue_rebase(repo: &Repository) -> Result<WorkflowOutcome> {
+    let _gate = crate::engines::index_lock::gate();
     if !rebase_in_progress(repo) {
         return Err(GitError::Conflict {
             details: "no rebase is in progress".into(),
@@ -776,6 +788,7 @@ pub fn continue_rebase(repo: &Repository) -> Result<WorkflowOutcome> {
 }
 
 pub fn abort_rebase(repo: &Repository) -> Result<WorkflowOutcome> {
+    let _gate = crate::engines::index_lock::gate();
     if !rebase_in_progress(repo) {
         return Err(GitError::Conflict {
             details: "no rebase is in progress".into(),

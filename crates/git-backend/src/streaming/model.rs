@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use crate::domain::{ChangeKind, Generation, OperationId, RelativePath, RevisionSpec, SnapshotId};
+use crate::domain::{
+    ChangeKind, CommitMessage, Generation, OperationId, RelativePath, RevisionSpec, SnapshotId,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -170,12 +172,18 @@ pub enum DiffEvent {
         generation: u64,
         sections: Vec<SectionMeta>,
         estimated_total_rows: u64,
+        /// Present for commit comparisons so the caller can label the diff
+        /// without a second read.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        commit_message: Option<CommitMessage>,
     },
     SectionLayout {
         operation_id: OperationId,
         section_id: u32,
         start_row: u64,
         row_count: u64,
+        old_line_count: u32,
+        new_line_count: u32,
     },
     Chunk {
         operation_id: OperationId,

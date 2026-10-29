@@ -1,0 +1,23 @@
+{
+    "$schema": "https://schema.tauri.app/config/2",
+    "app": {
+        "windows": [
+            {
+                "title": "gitau",
+                "width": 1400,
+                "height": 918,
+                "center": true,
+                "visible": false,
+                "decorations": true,
+                "titleBarStyle": "Overlay",
+                "hiddenTitle": true,
+                "trafficLightPosition": {
+                    "x": 12,
+                    "y": 16
+                },
+                "minWidth": 500,
+                "minHeight": 480
+            }
+        ]
+    }
+}

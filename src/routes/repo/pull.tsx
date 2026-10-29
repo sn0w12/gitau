@@ -3,29 +3,29 @@ import { useSelector } from "@tanstack/react-store";
 import { X } from "lucide-react";
 import { Fragment, useRef } from "react";
 
-import { ChecksSection } from "@/components/github/checks";
-import { TimelineCommit } from "@/components/github/commits";
-import { TimelineEvent } from "@/components/github/event";
+import { ChecksSection } from "@/components/forge/checks";
+import { TimelineCommit } from "@/components/forge/commits";
+import { TimelineEvent } from "@/components/forge/event";
 import {
     ConversationInput,
     type ConversationInputHandle,
-} from "@/components/github/input";
-import { MessageSpacer, TimelineMessage } from "@/components/github/message";
+} from "@/components/forge/input";
+import { MessageSpacer, TimelineMessage } from "@/components/forge/message";
 import {
-    MERGE_METHOD_LABEL,
+    MERGE_METHOD_TEXT,
     PullChangesBlock,
     PullHeaderActions,
-} from "@/components/github/pull-actions";
+} from "@/components/forge/pull-actions";
 import {
     ReviewSummary,
     TimelineReview,
     TimelineReviewComment,
-} from "@/components/github/review";
+} from "@/components/forge/review";
 import {
     isOpenThread,
     pullRequestStatusOf,
     StatusBadge,
-} from "@/components/github/status-badge";
+} from "@/components/forge/status-badge";
 import {
     AvatarStack,
     ComposerSkeleton,
@@ -34,7 +34,7 @@ import {
     MessageSkeleton,
     PullSidebarSkeleton,
     SidebarBlock,
-} from "@/components/github/thread-chrome";
+} from "@/components/forge/thread-chrome";
 import { Button } from "@/components/ui/button";
 import {
     Empty,
@@ -47,43 +47,44 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toastManager } from "@/components/ui/toast";
 import { useConfirm } from "@/contexts/confirm-context";
-import { useGithubAccount } from "@/hooks/github/use-github-account";
+import { useForgeAccount } from "@/hooks/forge/use-forge-account";
 import {
     useCreateIssueComment,
     useDeleteIssueComment,
-    useGithubCoords,
+    useRepoCoords,
     useRepoPermissions,
     useUpdateIssueComment,
-} from "@/hooks/github/use-github-issues";
+} from "@/hooks/forge/use-forge-issues";
 import {
     useMergePullRequest,
     usePullRequest,
     useUpdatePullRequest,
-} from "@/hooks/github/use-github-pull-requests";
+} from "@/hooks/forge/use-forge-pull-requests";
 import {
     useActiveTabHistory,
     useActiveTabRouter,
 } from "@/hooks/tabs/use-active-tab-router";
 import type {
-    GithubCheckRun,
-    GithubCommitStatus,
-    GithubIssueComment,
-    GithubIssueEvent,
-    GithubPullRequestCommit,
-    GithubPullRequestDetail,
-    GithubPullRequestReview,
-    GithubPullRequestReviewComment,
-    GithubWorkflowRun,
+    CheckRun,
+    CommitStatus,
+    IssueComment,
+    IssueEvent,
+    PullRequestCommit,
+    PullRequestDetail,
+    PullRequestReview,
+    PullRequestReviewComment,
+    WorkflowRun,
     MergePullRequestBody,
     PullRequestMergeMethod,
 } from "@/lib/backend/protocol";
+import type { RemoteCoords } from "@/lib/forge/repo-coords";
 import {
     buildPullTimeline,
     isTimelineMessage,
     timelineKey,
     timelineParticipants,
     type TimelineItem,
-} from "@/lib/github/timeline";
+} from "@/lib/forge/timeline";
 import { toastError } from "@/lib/toast-error";
 import { repositoryStore } from "@/stores/repository-store";
 
@@ -106,7 +107,7 @@ function TimelineRow({
 }: {
     item: TimelineItem;
     last: boolean;
-    pull: GithubPullRequestDetail;
+    pull: PullRequestDetail;
     owner: string;
     repo: string;
     actions: MessageActions;
@@ -191,6 +192,7 @@ function TimelineRow({
 }
 
 function PullSidebar({
+    provider,
     owner,
     repo,
     pull,
@@ -201,14 +203,15 @@ function PullSidebar({
     statuses,
     checksLoading,
 }: {
+    provider: string;
     owner: string;
     repo: string;
-    pull: GithubPullRequestDetail;
+    pull: PullRequestDetail;
     participants: ReturnType<typeof timelineParticipants>;
-    reviews: GithubPullRequestReview[];
-    checks: GithubCheckRun[];
-    workflows: GithubWorkflowRun[];
-    statuses: GithubCommitStatus[];
+    reviews: PullRequestReview[];
+    checks: CheckRun[];
+    workflows: WorkflowRun[];
+    statuses: CommitStatus[];
     checksLoading: boolean;
 }) {
     return (
@@ -218,6 +221,7 @@ function PullSidebar({
         >
             <PullChangesBlock pull={pull} />
             <ChecksSection
+                provider={provider}
                 owner={owner}
                 repo={repo}
                 checks={checks}
@@ -242,6 +246,7 @@ function PullSidebar({
 }
 
 function PullRequestContent({
+    provider,
     owner,
     repo,
     pull,
@@ -259,17 +264,18 @@ function PullRequestContent({
     canPush,
     goBack,
 }: {
+    provider: string;
     owner: string;
     repo: string;
-    pull: GithubPullRequestDetail;
-    commits: GithubPullRequestCommit[];
-    comments: GithubIssueComment[];
-    events: GithubIssueEvent[];
-    reviews: GithubPullRequestReview[];
-    reviewComments: GithubPullRequestReviewComment[];
-    checks?: GithubCheckRun[];
-    workflows?: GithubWorkflowRun[];
-    statuses?: GithubCommitStatus[];
+    pull: PullRequestDetail;
+    commits: PullRequestCommit[];
+    comments: IssueComment[];
+    events: IssueEvent[];
+    reviews: PullRequestReview[];
+    reviewComments: PullRequestReviewComment[];
+    checks?: CheckRun[];
+    workflows?: WorkflowRun[];
+    statuses?: CommitStatus[];
     checksLoading: boolean;
     signedIn: boolean;
     viewerLogin: string | null;
@@ -309,10 +315,13 @@ function PullRequestContent({
         onQuote: (text) => composerRef.current?.insertQuote(text),
         canEdit,
         onSaveBody: async (body) => {
-            await updatePull.updatePull(owner, repo, pull.number, { body });
+            await updatePull.updatePull(provider, owner, repo, pull.number, {
+                body,
+            });
         },
         onSaveComment: async (commentId, body) => {
             await updateComment.updateComment(
+                provider,
                 owner,
                 repo,
                 commentId,
@@ -322,6 +331,7 @@ function PullRequestContent({
         },
         onDeleteComment: async (commentId) => {
             await deleteComment.deleteComment(
+                provider,
                 owner,
                 repo,
                 commentId,
@@ -332,7 +342,13 @@ function PullRequestContent({
 
     const handleComment = async (body: string) => {
         try {
-            await createComment.createComment(owner, repo, pull.number, body);
+            await createComment.createComment(
+                provider,
+                owner,
+                repo,
+                pull.number,
+                body
+            );
         } catch (error) {
             toastError("Could not post comment", error);
             throw error;
@@ -341,7 +357,7 @@ function PullRequestContent({
 
     const handleToggleState = async () => {
         try {
-            await updatePull.updatePull(owner, repo, pull.number, {
+            await updatePull.updatePull(provider, owner, repo, pull.number, {
                 state: isOpen ? "closed" : "open",
             });
         } catch (error) {
@@ -356,7 +372,7 @@ function PullRequestContent({
 
     const handleToggleDraft = async () => {
         try {
-            await updatePull.updatePull(owner, repo, pull.number, {
+            await updatePull.updatePull(provider, owner, repo, pull.number, {
                 draft: !pull.draft,
             });
         } catch (error) {
@@ -367,13 +383,14 @@ function PullRequestContent({
     const handleMerge = async (method: PullRequestMergeMethod) => {
         const result = await confirm({
             title: `Merge pull request #${pull.number}?`,
-            description: `${MERGE_METHOD_LABEL[method]}: ${pull.head.ref} into ${pull.base.ref}. This writes to the remote and cannot be undone from here.`,
+            description: `${MERGE_METHOD_TEXT[method].label}: ${pull.head.ref} into ${pull.base.ref}. This writes to the remote and cannot be undone from here.`,
             confirmText: "Merge",
         });
         if (!result.confirmed) return;
         const body: MergePullRequestBody = { mergeMethod: method };
         try {
             const outcome = await merge.mergePull(
+                provider,
                 owner,
                 repo,
                 pull.number,
@@ -381,7 +398,7 @@ function PullRequestContent({
             );
             if (!outcome.merged) {
                 toastManager.add({
-                    title: "GitHub declined the merge",
+                    title: "The provider declined the merge",
                     description: outcome.message,
                     type: "error",
                 });
@@ -472,6 +489,7 @@ function PullRequestContent({
                 </div>
                 <div className="flex flex-col gap-1">
                     <PullSidebar
+                        provider={provider}
                         owner={owner}
                         repo={repo}
                         pull={pull}
@@ -508,19 +526,78 @@ function usePullRouteData(repoId: number, pullNumber: number, valid: boolean) {
         }
         return undefined;
     });
-    const account = useGithubAccount();
-    const { coords } = useGithubCoords(valid ? repoId : undefined);
+    const { coords } = useRepoCoords(valid ? repoId : undefined);
+    const account = useForgeAccount(coords?.provider ?? null);
     const number = valid ? pullNumber : null;
     const thread = usePullRequest(
+        coords?.provider ?? null,
         coords?.owner ?? null,
         coords?.repo ?? null,
         number
     );
     const permissions = useRepoPermissions(
+        coords?.provider ?? null,
         coords?.owner ?? null,
         coords?.repo ?? null
     );
     return { entry, account, coords, permissions, thread };
+}
+
+function RepositoryNotOpenNotice() {
+    return (
+        <div className="flex h-full items-center justify-center p-6">
+            <p className="text-sm text-muted-foreground">
+                Repository not open in this session.
+            </p>
+        </div>
+    );
+}
+
+function PullRequestSkeleton({ onBack }: { onBack: () => void }) {
+    return (
+        <div className="container flex h-full min-h-0 flex-col px-1 py-2">
+            <header className="ui-selectable flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <Skeleton className="h-8 w-72" />
+                </div>
+                <div className="flex items-center gap-2">
+                    <Skeleton className="h-8 w-28 rounded-lg" />
+                    <Skeleton className="h-8 w-24 rounded-lg" />
+                    <Button variant="outline" size="icon" onClick={onBack}>
+                        <X />
+                    </Button>
+                </div>
+            </header>
+            <div className="mt-2 grid min-h-0 flex-1 grid-cols-3">
+                <div className="col-span-2 flex min-h-0 w-full flex-col">
+                    <ScrollArea scrollFade scrollbarGutter className="pr-1">
+                        <MessageSkeleton lines={3} />
+                        <EventSkeleton />
+                        <MessageSkeleton lines={2} />
+                        <MessageSpacer />
+                        <ComposerSkeleton />
+                    </ScrollArea>
+                </div>
+                <div className="flex flex-col gap-1">
+                    <PullSidebarSkeleton />
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/** Flattens optional coordinates into the strings the content component
+ * expects, so the page body does not carry a branch per field. */
+function remoteCoordsOf(coords: RemoteCoords | null) {
+    return {
+        provider: coords?.provider ?? "",
+        owner: coords?.owner ?? "",
+        repo: coords?.repo ?? "",
+    };
+}
+
+function emptyIfNil<T>(value: T[] | undefined): T[] {
+    return value ?? [];
 }
 
 export function PullRequestPage() {
@@ -556,46 +633,11 @@ export function PullRequestPage() {
     };
 
     if (!valid || !entry) {
-        return (
-            <div className="flex h-full items-center justify-center p-6">
-                <p className="text-sm text-muted-foreground">
-                    Repository not open in this session.
-                </p>
-            </div>
-        );
+        return <RepositoryNotOpenNotice />;
     }
 
     if (account.isLoading || detail.isLoading) {
-        return (
-            <div className="container flex h-full min-h-0 flex-col px-1 py-2">
-                <header className="ui-selectable flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <Skeleton className="h-8 w-72" />
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Skeleton className="h-8 w-28 rounded-lg" />
-                        <Skeleton className="h-8 w-24 rounded-lg" />
-                        <Button variant="outline" size="icon" onClick={goBack}>
-                            <X />
-                        </Button>
-                    </div>
-                </header>
-                <div className="mt-2 grid min-h-0 flex-1 grid-cols-3">
-                    <div className="col-span-2 flex min-h-0 w-full flex-col">
-                        <ScrollArea scrollFade scrollbarGutter className="pr-1">
-                            <MessageSkeleton lines={3} />
-                            <EventSkeleton />
-                            <MessageSkeleton lines={2} />
-                            <MessageSpacer />
-                            <ComposerSkeleton />
-                        </ScrollArea>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                        <PullSidebarSkeleton />
-                    </div>
-                </div>
-            </div>
-        );
+        return <PullRequestSkeleton onBack={goBack} />;
     }
 
     if (detail.isError || !detail.data) {
@@ -618,16 +660,19 @@ export function PullRequestPage() {
         );
     }
 
+    const remote = remoteCoordsOf(coords);
+
     return (
         <PullRequestContent
-            owner={coords?.owner ?? ""}
-            repo={coords?.repo ?? ""}
+            provider={remote.provider}
+            owner={remote.owner}
+            repo={remote.repo}
             pull={detail.data}
-            commits={commits.data ?? []}
-            comments={comments.data ?? []}
-            events={events.data ?? []}
-            reviews={reviews.data ?? []}
-            reviewComments={reviewComments.data ?? []}
+            commits={emptyIfNil(commits.data)}
+            comments={emptyIfNil(comments.data)}
+            events={emptyIfNil(events.data)}
+            reviews={emptyIfNil(reviews.data)}
+            reviewComments={emptyIfNil(reviewComments.data)}
             checks={checks.data}
             workflows={workflows.data}
             statuses={statuses.data}

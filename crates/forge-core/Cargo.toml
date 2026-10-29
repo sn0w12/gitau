@@ -1,0 +1,19 @@
+[package]
+name = "forge-core"
+version.workspace = true
+edition = "2021"
+rust-version.workspace = true
+description = "Provider-neutral forge abstraction: traits, DTOs, registry, and account handling"
+
+[lib]
+name = "forge_core"
+path = "src/lib.rs"
+
+[dependencies]
+ansi.workspace = true
+keyring.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+tokio.workspace = true

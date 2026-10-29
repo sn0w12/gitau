@@ -39,8 +39,12 @@ pub enum GitError {
     AuthenticationRequired { remote: String },
     #[error("network failure: {message}")]
     Network { message: String },
-    #[error("github request failed ({status}): {message}")]
-    GitHub { status: u16, message: String },
+    #[error("{provider} request failed ({status}): {message}")]
+    Forge {
+        provider: String,
+        status: u16,
+        message: String,
+    },
     #[error("operation cancelled")]
     Cancelled,
     #[error("could not move to trash: {details}")]
@@ -83,7 +87,7 @@ impl GitError {
             GitError::HookFailed { .. } => "hookFailed",
             GitError::AuthenticationRequired { .. } => "authenticationRequired",
             GitError::Network { .. } => "network",
-            GitError::GitHub { .. } => "github",
+            GitError::Forge { .. } => "forge",
             GitError::Cancelled => "cancelled",
             GitError::Trash { .. } => "trashFailed",
             GitError::Unsupported { .. } => "unsupported",
@@ -95,8 +99,56 @@ impl GitError {
     pub fn retryable(&self) -> bool {
         match self {
             GitError::RepositoryLocked { .. } | GitError::Network { .. } => true,
-            GitError::GitHub { status, .. } => *status >= 500,
+            GitError::Forge { status, .. } => *status >= 500,
             _ => false,
+        }
+    }
+}
+
+impl From<forge_core::ProviderError> for GitError {
+    fn from(error: forge_core::ProviderError) -> Self {
+        use forge_core::ProviderError as P;
+        match error {
+            P::Network { message } => GitError::Network { message },
+            P::Unauthorized { provider, host } => GitError::AuthenticationRequired {
+                remote: if host.is_empty() { provider } else { host },
+            },
+            P::Forbidden { provider, message } => GitError::Forge {
+                provider,
+                status: 403,
+                message,
+            },
+            P::NotFound { provider, message } => GitError::Forge {
+                provider,
+                status: 404,
+                message,
+            },
+            P::Api {
+                provider,
+                status,
+                message,
+            } => GitError::Forge {
+                provider,
+                status,
+                message,
+            },
+            P::MalformedResponse { provider, message } => GitError::Forge {
+                provider,
+                status: 0,
+                message,
+            },
+            P::Unsupported => GitError::Unsupported {
+                capability: "forge".into(),
+            },
+            P::Cancelled => GitError::Cancelled,
+            P::Keyring { message } => {
+                GitError::internal(format!("token storage failure: {message}"))
+            }
+            P::UnknownProvider { provider } => GitError::Unsupported {
+                capability: provider,
+            },
+            P::Internal { message } => GitError::internal(message),
+            P::Io { message } => GitError::Io(std::io::Error::other(message)),
         }
     }
 }
@@ -165,7 +217,7 @@ fn detail_of(err: &GitError) -> Option<String> {
         GitError::Conflict { details } => Some(details.clone()),
         GitError::HookFailed { details, .. } => Some(details.clone()),
         GitError::AuthenticationRequired { remote } => Some(remote.clone()),
-        GitError::GitHub { message, .. } => Some(message.clone()),
+        GitError::Forge { message, .. } => Some(message.clone()),
         GitError::Trash { details } => Some(details.clone()),
         GitError::Unsupported { capability } => Some(capability.clone()),
         _ => None,
@@ -242,5 +294,68 @@ mod tests {
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "gone");
         let err: GitError = io_err.into();
         assert_eq!(err.code(), "io");
+    }
+
+    #[test]
+    fn forge_errors_carry_the_provider_status_and_message() {
+        let mapped: GitError = forge_core::ProviderError::Api {
+            provider: "github".into(),
+            status: 422,
+            message: "name already exists on this account".into(),
+        }
+        .into();
+
+        assert_eq!(mapped.code(), "forge");
+        assert!(!mapped.retryable());
+        let json = serde_json::to_value(&mapped).unwrap();
+        assert_eq!(json["code"], "forge");
+        assert_eq!(json["detail"], "name already exists on this account");
+    }
+
+    #[test]
+    fn forge_server_errors_stay_retryable() {
+        let mapped: GitError = forge_core::ProviderError::Api {
+            provider: "github".into(),
+            status: 503,
+            message: "unavailable".into(),
+        }
+        .into();
+
+        assert!(mapped.retryable());
+    }
+
+    #[test]
+    fn a_malformed_provider_response_is_not_retryable() {
+        let mapped: GitError = forge_core::ProviderError::MalformedResponse {
+            provider: "github".into(),
+            message: "expected value".into(),
+        }
+        .into();
+
+        assert_eq!(mapped.code(), "forge");
+        assert!(!mapped.retryable());
+    }
+
+    #[test]
+    fn an_expired_provider_token_asks_for_authentication() {
+        let mapped: GitError = forge_core::ProviderError::Unauthorized {
+            provider: "github".into(),
+            host: "github.com".into(),
+        }
+        .into();
+
+        assert_eq!(mapped.code(), "authenticationRequired");
+        assert!(!mapped.retryable());
+    }
+
+    #[test]
+    fn a_provider_network_failure_stays_retryable() {
+        let mapped: GitError = forge_core::ProviderError::Network {
+            message: "connection reset".into(),
+        }
+        .into();
+
+        assert_eq!(mapped.code(), "network");
+        assert!(mapped.retryable());
     }
 }

@@ -26,6 +26,7 @@ import {
     DialogTitle,
 } from "../../ui/dialog";
 import { Field, FieldLabel } from "../../ui/field";
+import { Form } from "../../ui/form";
 import {
     Select,
     SelectItem,
@@ -153,99 +154,110 @@ export function NewRepoDialog({
                         are never overwritten.
                     </DialogDescription>
                 </DialogHeader>
-                <DialogPanel className="flex flex-col gap-3">
-                    <Field>
-                        <FieldLabel>Location</FieldLabel>
-                        <DestinationInput
-                            actionLabel="Will create in"
-                            folderPlaceholder="my-project (optional)"
-                            nameOptional
-                            parentDirectory={parentDirectory}
-                            folderName={folderName}
-                            autoFocus
-                            onChangeParentDirectory={setParentDirectory}
-                            onChangeFolderName={setFolderName}
-                        />
-                    </Field>
-                    <Field>
-                        <FieldLabel>Git ignore</FieldLabel>
-                        <Select
-                            value={gitignore}
-                            onValueChange={(value) => {
-                                if (typeof value === "string")
-                                    setGitignore(value);
-                            }}
-                            items={gitignoreOptions}
-                        >
-                            <SelectTrigger
-                                className="w-full"
-                                aria-label="Git ignore template"
+                <Form
+                    className="contents"
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        void handleCreate();
+                    }}
+                >
+                    <DialogPanel className="flex flex-col gap-3">
+                        <Field>
+                            <FieldLabel>Location</FieldLabel>
+                            <DestinationInput
+                                actionLabel="Will create in"
+                                folderPlaceholder="my-project (optional)"
+                                nameOptional
+                                parentDirectory={parentDirectory}
+                                folderName={folderName}
+                                autoFocus
+                                onChangeParentDirectory={setParentDirectory}
+                                onChangeFolderName={setFolderName}
+                            />
+                        </Field>
+                        <Field>
+                            <FieldLabel>Git ignore</FieldLabel>
+                            <Select
+                                value={gitignore}
+                                onValueChange={(value) => {
+                                    if (typeof value === "string")
+                                        setGitignore(value);
+                                }}
+                                items={gitignoreOptions}
                             >
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectPopup>
-                                {gitignoreOptions.map(({ label, value }) => (
-                                    <SelectItem key={value} value={value}>
-                                        {label}
-                                    </SelectItem>
-                                ))}
-                            </SelectPopup>
-                        </Select>
-                    </Field>
-                    <Field>
-                        <FieldLabel>License</FieldLabel>
-                        <Select
-                            aria-label="Select license"
-                            value={license}
-                            onValueChange={(value) => {
-                                if (typeof value === "string")
-                                    setLicense(value);
-                            }}
-                            items={licenseItems}
-                        >
-                            <SelectTrigger
-                                className="w-full py-1"
-                                aria-label="License"
+                                <SelectTrigger className="w-full">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectPopup>
+                                    {gitignoreOptions.map(
+                                        ({ label, value }) => (
+                                            <SelectItem
+                                                key={value}
+                                                value={value}
+                                            >
+                                                {label}
+                                            </SelectItem>
+                                        )
+                                    )}
+                                </SelectPopup>
+                            </Select>
+                        </Field>
+                        <Field>
+                            <FieldLabel>License</FieldLabel>
+                            <Select
+                                value={license}
+                                onValueChange={(value) => {
+                                    if (typeof value === "string")
+                                        setLicense(value);
+                                }}
+                                items={licenseItems}
                             >
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectPopup>
-                                {licenseItems.map(({ label, value }) => (
-                                    <SelectItem key={value} value={value}>
-                                        {label}
-                                    </SelectItem>
-                                ))}
-                            </SelectPopup>
-                        </Select>
-                    </Field>
-                    <label className="flex cursor-pointer items-center gap-2 text-sm">
-                        <Checkbox
-                            checked={readme}
-                            onCheckedChange={(checked) =>
-                                setReadme(checked === true)
-                            }
-                        />
-                        Add a README
-                    </label>
-                    {error ? (
-                        <p className="text-sm text-destructive" role="alert">
-                            {error}
-                        </p>
-                    ) : null}
-                </DialogPanel>
-                <DialogFooter>
-                    <DialogClose render={<Button variant="ghost" />}>
-                        Cancel
-                    </DialogClose>
-                    <Button
-                        disabled={!canCreate}
-                        loading={submitting}
-                        data-testid="new-repo-submit"
-                        onClick={() => void handleCreate()}
-                    >
-                        Create
-                    </Button>
-                </DialogFooter>
+                                <SelectTrigger className="w-full py-1">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectPopup>
+                                    {licenseItems.map(({ label, value }) => (
+                                        <SelectItem key={value} value={value}>
+                                            {label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectPopup>
+                            </Select>
+                        </Field>
+                        <Field>
+                            <FieldLabel>
+                                <Checkbox
+                                    checked={readme}
+                                    onCheckedChange={(checked) =>
+                                        setReadme(checked === true)
+                                    }
+                                />
+                                Add a README
+                            </FieldLabel>
+                        </Field>
+                        {error ? (
+                            <p
+                                className="text-sm text-destructive"
+                                role="alert"
+                            >
+                                {error}
+                            </p>
+                        ) : null}
+                    </DialogPanel>
+                    <DialogFooter>
+                        <DialogClose render={<Button variant="ghost" />}>
+                            Cancel
+                        </DialogClose>
+                        <Button
+                            type="submit"
+                            disabled={!canCreate}
+                            loading={submitting}
+                            data-testid="new-repo-submit"
+                        >
+                            Create
+                        </Button>
+                    </DialogFooter>
+                </Form>
             </DialogPopup>
         </Dialog>
     );

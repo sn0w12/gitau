@@ -13,7 +13,7 @@ pub mod snapshots;
 pub mod templates;
 
 pub use changes::{ChangeKind, ChangeSide, ConflictEntry, ConflictSide, StatusEntry, StatusReport};
-pub use commits::{CommitDetail, CommitSummary, FileChangeStat, Signature};
+pub use commits::{CommitDetail, CommitMessage, CommitSummary, FileChangeStat, Signature};
 pub use graph::{GraphEdge, GraphRow, GraphRowKind};
 pub use history::{BlameLine, BlameResult, FileContent, HistoryPage, RepoListing};
 pub use ids::{Generation, ObjectId, OperationId, RepoId, RowIndex, ShaKind, SnapshotId};

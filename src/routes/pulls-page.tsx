@@ -1,14 +1,12 @@
-"use no memo";
-
 import { GitPullRequestArrow, RotateCw } from "lucide-react";
 import { useMemo } from "react";
 
 import { ExternalLink } from "@/components/external-link";
-import { LabelBadge } from "@/components/github/label-badge";
+import { LabelBadge } from "@/components/forge/label-badge";
 import {
     pullRequestStatusOf,
     ThreadStatusIcon,
-} from "@/components/github/status-badge";
+} from "@/components/forge/status-badge";
 import { Button } from "@/components/ui/button";
 import {
     Empty,
@@ -29,30 +27,29 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import { useGithubAccount } from "@/hooks/github/use-github-account";
-import { useLocalRepoMap } from "@/hooks/github/use-github-issues";
-import { useGithubSearchPullRequests } from "@/hooks/github/use-github-pull-requests";
-import { useOpenThread } from "@/hooks/github/use-open-thread";
-import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
-import type { GithubPullRequestListItem } from "@/lib/backend/protocol";
+import { useForgeConnections } from "@/hooks/forge/use-forge-account";
+import { useLocalRepoMap } from "@/hooks/forge/use-forge-issues";
+import { useForgeSearchPullRequests } from "@/hooks/forge/use-forge-pull-requests";
+import { useInternalLink } from "@/hooks/tabs/use-internal-link";
+import type { PullRequestListItem } from "@/lib/backend/protocol";
 import { GitBackendError } from "@/lib/backend/transport/invoke";
-import { parsePullUrl } from "@/lib/github/repo-coords";
+import { parsePullUrl } from "@/lib/forge/repo-coords";
 import { formatRelativeDate } from "@/lib/utils";
 
 /**
- * Signed-in GitHub pull requests matching `is:pr involves:@me
+ * Signed-in pull requests matching `is:pr involves:@me
  * sort:updated-desc`, newest first, paged from the backend 100 items at a
  * time. Styled like the inbox and issues pages.
  */
 export function PullsPage() {
-    const router = useActiveTabRouter();
-    const account = useGithubAccount();
-    const search = useGithubSearchPullRequests();
+    const link = useInternalLink();
+    const account = useForgeConnections();
+    const search = useForgeSearchPullRequests();
     const localRepos = useLocalRepoMap();
 
     const pulls = search.pulls;
     const groups = useMemo(() => {
-        const byRepo = new Map<string, GithubPullRequestListItem[]>();
+        const byRepo = new Map<string, PullRequestListItem[]>();
         for (const pull of pulls) {
             const key = pull.repoFullName || "Unknown repository";
             const list = byRepo.get(key);
@@ -100,8 +97,8 @@ export function PullsPage() {
                         </div>
                     </div>
                     <FrameDescription className="text-sm text-muted-foreground">
-                        GitHub pull requests involving you, sorted by most
-                        recently updated.
+                        Pull requests involving you, sorted by most recently
+                        updated.
                     </FrameDescription>
                 </FrameHeader>
                 <FramePanel data-testid="pulls-panel" className="min-h-0 p-2">
@@ -111,13 +108,13 @@ export function PullsPage() {
                                 <Spinner className="size-4" />
                                 Checking connection...
                             </div>
-                        ) : !account.data ? (
+                        ) : !account.data?.length ? (
                             <Empty>
                                 <EmptyMedia variant="icon">
                                     <GitPullRequestArrow />
                                 </EmptyMedia>
                                 <EmptyHeader>
-                                    <EmptyTitle>Connect GitHub</EmptyTitle>
+                                    <EmptyTitle>Connect an account</EmptyTitle>
                                     <EmptyDescription>
                                         Sign in to see pull requests that
                                         involve you.
@@ -125,11 +122,10 @@ export function PullsPage() {
                                 </EmptyHeader>
                                 <EmptyContent>
                                     <Button
-                                        onClick={() =>
-                                            void router?.navigate({
-                                                to: "/account",
-                                            })
-                                        }
+                                        {...link({
+                                            title: "Account",
+                                            href: "/account",
+                                        })}
                                     >
                                         Go to Account
                                     </Button>
@@ -174,11 +170,10 @@ export function PullsPage() {
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() =>
-                                                void router?.navigate({
-                                                    to: "/account",
-                                                })
-                                            }
+                                            {...link({
+                                                title: "Account",
+                                                href: "/account",
+                                            })}
                                         >
                                             Go to Account
                                         </Button>
@@ -239,10 +234,10 @@ function PullsRow({
     pull,
     localRepos,
 }: {
-    pull: GithubPullRequestListItem;
+    pull: PullRequestListItem;
     localRepos: Map<string, string>;
 }) {
-    const openThread = useOpenThread();
+    const link = useInternalLink();
 
     const target = parsePullUrl(pull.htmlUrl);
     const repoPath = target
@@ -255,7 +250,11 @@ function PullsRow({
         repoPath !== undefined ? (
             <button
                 type="button"
-                onClick={() => void openThread(repoPath, "pull", pull.number)}
+                {...link({
+                    title: pull.title || "(no title)",
+                    repoPath,
+                    thread: { kind: "pull", number: pull.number },
+                })}
                 className="flex min-w-0 cursor-pointer items-center gap-1 text-left font-medium hover:underline"
             >
                 <span className="min-w-0 truncate">

@@ -5,12 +5,14 @@ import type { ReactElement } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { PublishToGitHubDialog } from "@/components/repo/dialogs/publish-dialog";
+import { PublishRepositoryDialog } from "@/components/repo/dialogs/publish-dialog";
 import { ToastProvider } from "@/components/ui/toast";
 import { AppServicesContext } from "@/contexts/services-context";
 import type {
     AccountProfile,
-    GithubOrg,
+    Capabilities,
+    Org,
+    ProviderDescriptor,
     PublishResult,
 } from "@/lib/backend/protocol";
 import type { BackendClient } from "@/lib/backend/transport/client";
@@ -31,19 +33,80 @@ const PROFILE: AccountProfile = {
     connectedAtMs: 1,
 };
 
-function backendWith() {
+const CAPABILITIES: Capabilities = {
+    issues: true,
+    pullRequests: true,
+    reviews: true,
+    notifications: true,
+    checks: true,
+    commitStatuses: true,
+    workflowRuns: true,
+    issuesWrite: true,
+    pullRequestsWrite: true,
+    publish: true,
+    orgs: true,
+};
+
+const PROVIDER: ProviderDescriptor = {
+    id: "github",
+    label: "GitHub",
+    hosts: ["github.com"],
+    imageHosts: [],
+    capabilities: CAPABILITIES,
+};
+
+const GITLAB_PROVIDER: ProviderDescriptor = {
+    id: "gitlab",
+    label: "GitLab",
+    hosts: ["gitlab.com"],
+    imageHosts: [],
+    capabilities: CAPABILITIES,
+};
+
+const GITLAB_PROFILE: AccountProfile = {
+    ...PROFILE,
+    login: "tanuki",
+};
+
+/** Owners each provider's account can publish under. */
+const ORGS: Record<string, string[]> = {
+    github: ["acme-corp"],
+    gitlab: ["tanuki-group"],
+};
+
+function backendWith(
+    options: { publish?: boolean; secondProvider?: boolean } = {}
+) {
     let publishOutcome: Result<PublishResult> | null = null;
     const publishCalls: Record<string, unknown>[] = [];
+    const provider =
+        options.publish === false
+            ? {
+                  ...PROVIDER,
+                  capabilities: { ...CAPABILITIES, publish: false },
+              }
+            : PROVIDER;
 
     const backend = {
-        github: {
-            account: async (): Promise<Result<AccountProfile | null>> => ({
+        forge: {
+            providers: async (): Promise<Result<ProviderDescriptor[]>> => ({
                 ok: true,
-                value: PROFILE,
+                value: options.secondProvider
+                    ? [provider, GITLAB_PROVIDER]
+                    : [provider],
             }),
-            listOrgs: async (): Promise<Result<GithubOrg[]>> => ({
+            account: async (
+                id: string
+            ): Promise<Result<AccountProfile | null>> => ({
                 ok: true,
-                value: [{ login: "acme-corp", avatarUrl: undefined }],
+                value: id === "gitlab" ? GITLAB_PROFILE : PROFILE,
+            }),
+            listOrgs: async (id: string): Promise<Result<Org[]>> => ({
+                ok: true,
+                value: (ORGS[id] ?? []).map((login) => ({
+                    login,
+                    avatarUrl: undefined,
+                })),
             }),
             publishRepository: async (
                 _repoId: number,
@@ -140,6 +203,58 @@ async function waitForElement<T extends Element>(selector: string): Promise<T> {
     return element;
 }
 
+/** Resolves the control a FieldLabel points at through its `htmlFor`. */
+function labeledControl<T extends HTMLElement>(labelText: string): T | null {
+    const label = [...document.body.querySelectorAll("label")].find(
+        (candidate) => candidate.textContent?.trim() === labelText
+    );
+    const id = label?.getAttribute("for");
+    return id ? (document.getElementById(id) as T | null) : null;
+}
+
+async function waitForLabeledControl<T extends HTMLElement>(
+    labelText: string
+): Promise<T> {
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline) {
+        const element = labeledControl<T>(labelText);
+        if (element) return element;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    const element = labeledControl<T>(labelText);
+    if (!element) throw new Error(`labeled control not found: ${labelText}`);
+    return element;
+}
+
+async function clickElement(element: Element): Promise<void> {
+    await act(async () => {
+        element.dispatchEvent(
+            new MouseEvent("click", { bubbles: true, cancelable: true })
+        );
+        await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+}
+
+async function selectItem(element: Element): Promise<void> {
+    // Base UI commits an item on click only after a pointerdown marked the
+    // interaction as a mouse selection.
+    await act(async () => {
+        element.dispatchEvent(
+            new MouseEvent("pointerdown", { bubbles: true, cancelable: true })
+        );
+        element.dispatchEvent(
+            new MouseEvent("click", { bubbles: true, cancelable: true })
+        );
+        await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+}
+
+async function openOwnerSelect(): Promise<HTMLElement> {
+    const trigger = await waitForLabeledControl<HTMLElement>("Owner");
+    await clickElement(trigger);
+    return await waitForElement<HTMLElement>('[data-slot="select-popup"]');
+}
+
 const REPO_PATH = "C:/repos/demo";
 const DIALOG_PROPS = {
     repoId: 5,
@@ -148,7 +263,7 @@ const DIALOG_PROPS = {
     onClose: () => {},
 };
 
-describe("PublishToGitHubDialog", () => {
+describe("PublishRepositoryDialog", () => {
     beforeEach(() => {
         seedSettingsForTests({});
         document.body.innerHTML = "";
@@ -167,18 +282,16 @@ describe("PublishToGitHubDialog", () => {
 
         const view = renderWith(
             services,
-            <PublishToGitHubDialog {...DIALOG_PROPS} />
+            <PublishRepositoryDialog {...DIALOG_PROPS} />
         );
         await flush();
 
         // The folder name seeds the repository name.
-        const nameInput =
-            await waitForElement<HTMLInputElement>("#publish-name");
+        const nameInput = await waitForLabeledControl<HTMLInputElement>("Name");
         expect(nameInput.value).toBe("demo");
 
-        const descriptionInput = await waitForElement<HTMLInputElement>(
-            "#publish-description"
-        );
+        const descriptionInput =
+            await waitForLabeledControl<HTMLInputElement>("Description");
         await typeInto(nameInput, "demo-renamed");
         await typeInto(descriptionInput, "My demo project");
 
@@ -195,12 +308,86 @@ describe("PublishToGitHubDialog", () => {
         view.unmount();
     });
 
+    it("says so when no provider can create repositories", async () => {
+        const services = backendWith({ publish: false });
+        const view = renderWith(
+            services,
+            <PublishRepositoryDialog {...DIALOG_PROPS} />
+        );
+        await flush();
+
+        const notice = await waitForElement<HTMLElement>(
+            "[data-testid=publish-dialog]"
+        );
+        expect(notice.textContent).toContain(
+            "no provider that can create repositories"
+        );
+        const button = [...document.body.querySelectorAll("button")].find(
+            (candidate) => candidate.textContent!.includes("Create repository")
+        );
+        expect(button?.disabled).toBe(true);
+        expect(services.publishCalls.length).toBe(0);
+        view.unmount();
+    });
+
+    it("groups owners by provider and publishes under the chosen one", async () => {
+        const services = backendWith({ secondProvider: true });
+        services.setPublishOutcome({
+            ok: true,
+            value: {
+                fullName: "tanuki-group/demo",
+                htmlUrl: "https://gitlab.com/tanuki-group/demo",
+                defaultBranch: "main",
+            },
+        });
+
+        const view = renderWith(
+            services,
+            <PublishRepositoryDialog {...DIALOG_PROPS} />
+        );
+        await flush();
+
+        const popup = await openOwnerSelect();
+        const groups = [
+            ...popup.querySelectorAll('[data-slot="select-group"]'),
+        ];
+        expect(
+            groups.map((group) =>
+                group
+                    .querySelector('[data-slot="select-group-label"]')!
+                    .textContent!.trim()
+            )
+        ).toEqual(["GitHub", "GitLab"]);
+
+        const gitlabOrg = [
+            ...popup.querySelectorAll('[data-slot="select-item"]'),
+        ].find((item) => item.textContent!.includes("tanuki-group"));
+        expect(gitlabOrg).toBeDefined();
+        await selectItem(gitlabOrg as Element);
+
+        // The closed control names the provider too, since the owner alone is
+        // ambiguous once two accounts are connected.
+        expect(
+            document.body.querySelector('[data-slot="select-value"]')!
+                .textContent
+        ).toContain("GitLab · tanuki-group");
+
+        await clickButtonWithText("Create repository");
+        await flush();
+
+        expect(services.publishCalls[0]).toMatchObject({
+            provider: "gitlab",
+            owner: "tanuki-group",
+        });
+        view.unmount();
+    });
+
     it("shows an inline conflict message when the name is taken", async () => {
         const services = backendWith();
         services.setPublishOutcome({
             ok: false,
             error: new GitBackendError({
-                code: "github",
+                code: "forge",
                 message: "github request failed (422)",
                 detail: "name already exists on this account",
                 retryable: false,
@@ -209,7 +396,7 @@ describe("PublishToGitHubDialog", () => {
 
         const view = renderWith(
             services,
-            <PublishToGitHubDialog {...DIALOG_PROPS} />
+            <PublishRepositoryDialog {...DIALOG_PROPS} />
         );
         await flush();
 

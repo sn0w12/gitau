@@ -38,10 +38,6 @@ const globalsInstalled = vi.hoisted(() => {
 });
 void globalsInstalled;
 
-vi.mock("@/components/window-controls", () => ({
-    WindowTitlebar: ({ children }: { children?: React.ReactNode }) => children,
-}));
-
 describe("titlebar update button", () => {
     beforeEach(() => {
         // Start from a pristine singleton for every test.

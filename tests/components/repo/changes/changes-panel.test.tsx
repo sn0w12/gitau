@@ -207,6 +207,15 @@ function buttonByText(text: string): HTMLButtonElement | undefined {
     );
 }
 
+/** Resolves the control a FieldLabel points at through its `htmlFor`. */
+function labeledControl<T extends HTMLElement>(labelText: string): T | null {
+    const label = [...document.querySelectorAll("label")].find(
+        (candidate) => candidate.textContent?.trim() === labelText
+    );
+    const id = label?.getAttribute("for");
+    return id ? (document.getElementById(id) as T | null) : null;
+}
+
 function dialogTitleIncludes(fragment: string): boolean {
     return Array.from(
         document.querySelectorAll('[data-slot="dialog-title"]')
@@ -270,6 +279,67 @@ describe("ChangesPanel", () => {
                 trigger.querySelector('[data-slot="badge"]')?.textContent
         );
         expect(counts).toEqual(["1", "1"]);
+        view.unmount();
+    });
+
+    it("keeps the highlight on a row whose side prefix changed", async () => {
+        seedSettingsForTests({});
+        const services = recordingBackend(
+            report([entry({ id: "index:a.ts", side: "index", path: "a.ts" })])
+        );
+
+        const view = renderWith(
+            services,
+            <ChangesPanel
+                repoId={5}
+                branch="main"
+                selectedId="worktree:a.ts"
+                onSelectedChange={() => {}}
+                selectedStashId={null}
+                onSelectedStash={() => {}}
+            />
+        );
+        await flush();
+
+        const rows = Array.from(
+            view.container.querySelectorAll('[role="option"]')
+        );
+        expect(rows).toHaveLength(1);
+        expect(rows[0].getAttribute("aria-selected")).toBe("true");
+        view.unmount();
+    });
+
+    it("selects only the matching side when both rows exist", async () => {
+        seedSettingsForTests({});
+        const services = recordingBackend(
+            report([
+                entry({ id: "index:a.ts", side: "index", path: "a.ts" }),
+                entry({ path: "a.ts" }),
+            ])
+        );
+
+        const view = renderWith(
+            services,
+            <ChangesPanel
+                repoId={5}
+                branch="main"
+                selectedId="index:a.ts"
+                onSelectedChange={() => {}}
+                selectedStashId={null}
+                onSelectedStash={() => {}}
+            />
+        );
+        await flush();
+
+        const selectedRows = Array.from(
+            view.container.querySelectorAll(
+                '[role="option"][aria-selected="true"]'
+            )
+        );
+        expect(selectedRows).toHaveLength(1);
+        expect(
+            selectedRows[0].querySelector('[aria-label="Unstage a.ts"]')
+        ).not.toBeNull();
         view.unmount();
     });
 
@@ -858,10 +928,7 @@ describe("ChangesPanel", () => {
         );
         expect(opened).toBe(true);
 
-        await typeInto(
-            document.querySelector<HTMLInputElement>("#stash-message")!,
-            "wip"
-        );
+        await typeInto(labeledControl<HTMLInputElement>("Message")!, "wip");
         await click(buttonByText("Stash")!);
 
         const settled = await waitFor(

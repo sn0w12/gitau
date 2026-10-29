@@ -1,11 +1,12 @@
 mod common;
 
 use common::TestRepo;
+use git_backend::api::changes::StatusOptions;
 use git_backend::api::history::{CommitDetailQuery, HistoryPageQuery};
 use git_backend::api::mutations::{
     BranchCreateRequest, CheckoutMode, CheckoutRequest, CommitRequest, TagCreateRequest,
 };
-use git_backend::domain::RevisionSpec;
+use git_backend::domain::{RepoId, RevisionSpec};
 use git_backend::{Backend, BackendConfig};
 
 #[tokio::test]
@@ -467,4 +468,137 @@ async fn checkout_and_restore_paths() {
         .unwrap();
 
     assert_eq!(repo.read("a.txt"), "v1\n");
+}
+
+async fn assert_clean(backend: &Backend, repo_id: RepoId) {
+    let status = backend
+        .status(repo_id, StatusOptions::default(), Default::default())
+        .await
+        .unwrap();
+    assert!(
+        status.entries.is_empty(),
+        "expected clean status, got {:?}",
+        status.entries
+    );
+}
+
+async fn checkout_branch(backend: &Backend, repo_id: RepoId, name: &str) {
+    backend
+        .checkout(
+            repo_id,
+            CheckoutRequest {
+                target: RevisionSpec::parse(name).unwrap(),
+                force: false,
+                mode: CheckoutMode::Safe,
+                paths: vec![],
+            },
+            None,
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn switching_branches_syncs_worktree_and_index() {
+    let repo = TestRepo::init("switch-branches");
+    repo.initial_commit(&[("a.txt", "v1\n"), ("b.txt", "v1\n")]);
+
+    let master = repo.repo.head().unwrap().peel_to_commit().unwrap();
+    repo.repo.branch("feature", &master, false).unwrap();
+    repo.repo.set_head("refs/heads/feature").unwrap();
+    repo.write("a.txt", "feature\n");
+    repo.delete("b.txt");
+    repo.write("c.txt", "feature\n");
+    repo.commit_all("feature change");
+
+    let master_tree = master.tree().unwrap();
+    repo.repo
+        .checkout_tree(master_tree.as_object(), None)
+        .unwrap();
+    repo.repo.set_head("refs/heads/master").unwrap();
+
+    let backend = Backend::new(BackendConfig::default());
+    let opened = backend.open_repository(&repo.root).await.unwrap();
+
+    checkout_branch(&backend, opened.id, "feature").await;
+
+    assert_eq!(repo.read("a.txt"), "feature\n");
+    assert_eq!(repo.read("c.txt"), "feature\n");
+    assert!(!repo.root.join("b.txt").exists());
+    assert_clean(&backend, opened.id).await;
+}
+
+#[tokio::test]
+async fn switching_branches_carries_uncommitted_changes_when_kept() {
+    let repo = TestRepo::init("switch-keep");
+    repo.initial_commit(&[("a.txt", "v1\n"), ("notes.txt", "base\n")]);
+
+    let master = repo.repo.head().unwrap().peel_to_commit().unwrap();
+    repo.repo.branch("feature", &master, false).unwrap();
+    repo.repo.set_head("refs/heads/feature").unwrap();
+    repo.write("a.txt", "feature\n");
+    repo.commit_all("feature change");
+
+    let master_tree = master.tree().unwrap();
+    repo.repo
+        .checkout_tree(master_tree.as_object(), None)
+        .unwrap();
+    repo.repo.set_head("refs/heads/master").unwrap();
+    repo.write("notes.txt", "wip\n");
+
+    let backend = Backend::new(BackendConfig::default());
+    let opened = backend.open_repository(&repo.root).await.unwrap();
+
+    backend
+        .checkout(
+            opened.id,
+            CheckoutRequest {
+                target: RevisionSpec::parse("feature").unwrap(),
+                force: false,
+                mode: CheckoutMode::KeepChanges,
+                paths: vec![],
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(repo.read("a.txt"), "feature\n");
+    assert_eq!(repo.read("notes.txt"), "wip\n");
+
+    let status = backend
+        .status(opened.id, StatusOptions::default(), Default::default())
+        .await
+        .unwrap();
+    assert_eq!(status.entries.len(), 1);
+    assert_eq!(status.entries[0].path.as_str(), "notes.txt");
+}
+
+#[tokio::test]
+async fn create_branch_with_checkout_moves_to_start_point() {
+    let repo = TestRepo::init("create-branch-checkout");
+    let first = repo.initial_commit(&[("a.txt", "v1\n")]);
+    repo.write("a.txt", "v2\n");
+    repo.commit_all("second");
+
+    let backend = Backend::new(BackendConfig::default());
+    let opened = backend.open_repository(&repo.root).await.unwrap();
+
+    backend
+        .create_branch(
+            opened.id,
+            BranchCreateRequest {
+                name: "side".into(),
+                start_point: Some(RevisionSpec::parse(&first.to_string()).unwrap()),
+                force: false,
+                checkout: true,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(repo.read("a.txt"), "v1\n");
+    assert_eq!(repo.repo.head().unwrap().shorthand().unwrap(), "side");
+    assert_clean(&backend, opened.id).await;
 }

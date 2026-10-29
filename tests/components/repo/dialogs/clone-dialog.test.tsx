@@ -141,7 +141,7 @@ describe("CloneRepoDialog", () => {
         await clickButtonWithText("Browse");
         await flush();
         await typeInto(
-            'input[placeholder="https://github.com/owner/repo.git"]',
+            '[data-testid="clone-url"]',
             "https://github.com/octocat/hello.git"
         );
         await flush();
@@ -184,10 +184,7 @@ describe("CloneRepoDialog", () => {
 
         await clickButtonWithText("Browse");
         await flush();
-        await typeInto(
-            'input[placeholder="https://github.com/owner/repo.git"]',
-            "octocat/hello"
-        );
+        await typeInto('[data-testid="clone-url"]', "octocat/hello");
         await clickButtonWithText("Clone");
         await waitFor('[data-testid="clone-phase"]');
 
@@ -211,10 +208,7 @@ describe("CloneRepoDialog", () => {
 
         await clickButtonWithText("Browse");
         await flush();
-        await typeInto(
-            'input[placeholder="https://github.com/owner/repo.git"]',
-            "octocat/hello"
-        );
+        await typeInto('[data-testid="clone-url"]', "octocat/hello");
         await clickButtonWithText("Clone");
 
         services.emit({
@@ -255,10 +249,7 @@ describe("CloneRepoDialog", () => {
 
         await clickButtonWithText("Browse");
         await flush();
-        await typeInto(
-            'input[placeholder="https://github.com/owner/repo.git"]',
-            "octocat/hello"
-        );
+        await typeInto('[data-testid="clone-url"]', "octocat/hello");
         await clickButtonWithText("Clone");
 
         services.emit({
@@ -273,10 +264,7 @@ describe("CloneRepoDialog", () => {
         });
         await flush();
 
-        await typeInto(
-            'input[placeholder="https://github.com/owner/repo.git"]',
-            "octocat/hello"
-        );
+        await typeInto('[data-testid="clone-url"]', "octocat/hello");
         await clickButtonWithText("Clone");
 
         expect(services.cloneInputs).toHaveLength(2);

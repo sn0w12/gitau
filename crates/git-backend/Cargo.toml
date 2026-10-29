@@ -10,8 +10,11 @@ name = "git_backend"
 path = "src/lib.rs"
 
 [dependencies]
+ansi.workspace = true
 base64.workspace = true
 chrono.workspace = true
+forge-core.workspace = true
+forge-github.workspace = true
 git2.workspace = true
 gix.workspace = true
 gix-status.workspace = true
@@ -31,6 +34,7 @@ trash.workspace = true
 fuzzy-matcher.workspace = true
 
 [dev-dependencies]
+base64.workspace = true
 criterion.workspace = true
 tempfile.workspace = true
 
@@ -48,6 +52,10 @@ harness = false
 
 [[bench]]
 name = "numstat"
+harness = false
+
+[[bench]]
+name = "huge"
 harness = false
 
 [[bench]]

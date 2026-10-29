@@ -26,12 +26,13 @@ import {
     reopenSessionRepositories,
     scheduleReopenRetry,
 } from "@/lib/bootstrap/session-persistence";
+
+import "./styles.css";
+import { startFontEngine } from "@/stores/font-store";
 import {
     configureSettingsSaver,
     initializeSettings,
 } from "@/stores/settings-store";
-
-import "./styles.css";
 import { startThemeEngine } from "@/stores/theme-store";
 const container = document.getElementById("root");
 if (!container) throw new Error("missing #root element");
@@ -133,6 +134,7 @@ async function bootstrap(): Promise<void> {
     }
 
     startThemeEngine();
+    startFontEngine();
 
     // Save failures are logged loudly: silent data loss is worse than noise.
     const disposePersistence = initSessionPersistence(async (doc) => {

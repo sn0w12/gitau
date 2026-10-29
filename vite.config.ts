@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import babel from "@rolldown/plugin-babel";
@@ -8,21 +9,47 @@ import { defineConfig } from "vitest/config";
 
 // react-scan must evaluate before React to hook the DevTools global, and
 // prepending it here instead of in main.tsx keeps the import sorter from
-// moving it below React. apply: "serve" keeps it out of production builds.
-function reactScanDev(): Plugin {
+// moving it below React.
+function reactScan(): Plugin {
+    let production = false;
     return {
-        name: "gitau:react-scan-dev",
-        apply: "serve",
+        name: "gitau:react-scan",
+        apply: (_config, { command, mode }) =>
+            command === "serve" || mode === "react-scan",
+        configResolved(config) {
+            production = config.command === "build";
+        },
         transform(code, id) {
             if (process.env.VITEST) return;
             const path = id.split("?")[0].replace(/\\/g, "/");
             if (!path.endsWith("/src/main.tsx")) return;
-            return `import { scan } from "react-scan";\nscan({ enabled: true });\n${code}`;
+            // react-scan skips itself when NODE_ENV is production unless this
+            // flag is set, and Tauri's script-src CSP blocks its blob worker.
+            const options = production
+                ? "{ enabled: true, dangerouslyForceRunInProduction: true, useOffscreenCanvasWorker: false }"
+                : "{ enabled: true }";
+            return `import { scan } from "react-scan";\nscan(${options});\n${code}`;
         },
     };
 }
 
+function buildCommit(): string {
+    const sha = process.env.GITHUB_SHA;
+    if (sha) return sha.slice(0, 7);
+    try {
+        return execFileSync("git", ["rev-parse", "--short=7", "HEAD"], {
+            encoding: "utf8",
+        }).trim();
+    } catch {
+        return "unknown";
+    }
+}
+
 const config = defineConfig({
+    define: {
+        __BUILD_COMMIT__: JSON.stringify(buildCommit()),
+        __BUILD_DATE__: JSON.stringify(new Date().toISOString()),
+    },
     resolve: {
         alias: {
             "@": fileURLToPath(new URL("./src", import.meta.url)),
@@ -32,7 +59,7 @@ const config = defineConfig({
         tailwindcss(),
         babel({ presets: [reactCompilerPreset()] }),
         viteReact(),
-        reactScanDev(),
+        reactScan(),
     ],
     server: {
         port: 3000,

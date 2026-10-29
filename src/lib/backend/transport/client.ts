@@ -10,28 +10,32 @@ import type {
     CommitHookEvent,
     CommitSummary,
     ConflictFile,
+    CreatePullRequestBody,
     CreateRepositoryRequest,
     CreateRepositoryResult,
     CheckoutMode,
     CredentialRequest,
-    DeviceFlowStart,
+    AuthChallenge,
+    ConnectionProfile,
+    DiffContextResult,
     DiffEvent,
     DiffImage,
     DiffRequest,
     FileContent,
-    GithubIssueComment,
-    GithubCheckRun,
-    GithubCheckRunDetail,
-    GithubCheckRunLog,
-    GithubCommitStatus,
-    GithubIssueDetail,
-    GithubIssueEvent,
-    GithubOrg,
-    GithubPullRequestCommit,
-    GithubPullRequestDetail,
-    GithubPullRequestReview,
-    GithubPullRequestReviewComment,
-    GithubRepoPermissions,
+    IssueComment,
+    CheckRun,
+    CheckRunDetail,
+    CheckRunLog,
+    CommitStatus,
+    IssueDetail,
+    IssueEvent,
+    Label,
+    Org,
+    PullRequestCommit,
+    PullRequestDetail,
+    PullRequestReview,
+    PullRequestReviewComment,
+    RepoPermissions,
     GraphEvent,
     HighlightedSnippet,
     GraphQuery,
@@ -45,7 +49,7 @@ import type {
     HookContent,
     HookOutputChunk,
     HookRunResult,
-    GithubWorkflowRun,
+    WorkflowRun,
     LicenseTemplateInfo,
     MergePullRequestBody,
     MergePullRequestResult,
@@ -79,6 +83,7 @@ import type {
     ValuesSnapshot,
     WorkflowOutcome,
     WorktreeInfo,
+    ProviderDescriptor,
 } from "../protocol";
 import { invokeCommand } from "./invoke";
 import { asResult } from "./result";
@@ -216,6 +221,22 @@ function createRawBackendClient() {
             ) =>
                 invokeCommand<RangeResult>("git_read_diff_range", {
                     args: { operationId, startRow, maxRows },
+                }),
+            readContext: (
+                operationId: number,
+                sectionId: number,
+                oldStart: number,
+                newStart: number,
+                count: number
+            ) =>
+                invokeCommand<DiffContextResult>("git_read_diff_context", {
+                    args: {
+                        operationId,
+                        sectionId,
+                        oldStart,
+                        newStart,
+                        count,
+                    },
                 }),
             cancel: (operationId: number) =>
                 invokeCommand<boolean>("git_cancel_operation", {
@@ -673,41 +694,57 @@ function createRawBackendClient() {
                 }),
         },
 
-        github: {
-            account: () =>
-                invokeCommand<AccountProfile | null>("github_account"),
-            beginSignIn: () =>
-                invokeCommand<DeviceFlowStart>("github_begin_sign_in"),
+        forge: {
+            providers: () =>
+                invokeCommand<ProviderDescriptor[]>("forge_providers"),
+            connections: () =>
+                invokeCommand<ConnectionProfile[]>("forge_connections"),
+            account: (provider: string) =>
+                invokeCommand<AccountProfile | null>("forge_account", {
+                    args: { provider },
+                }),
+            beginSignIn: (provider: string, host: string) =>
+                invokeCommand<AuthChallenge>("forge_begin_sign_in", {
+                    args: { provider, host },
+                }),
             completeSignIn: () =>
-                invokeCommand<AccountProfile>("github_complete_sign_in"),
-            cancelSignIn: () => invokeCommand<void>("github_cancel_sign_in"),
-            signOut: () => invokeCommand<void>("github_sign_out"),
-            listOrgs: () => invokeCommand<GithubOrg[]>("github_list_orgs"),
-            listNotifications: (page?: number) =>
-                invokeCommand<NotificationPage>("github_list_notifications", {
-                    args: { page },
+                invokeCommand<ConnectionProfile>("forge_complete_sign_in"),
+            cancelSignIn: () => invokeCommand<void>("forge_cancel_sign_in"),
+            signOut: (provider: string, host: string) =>
+                invokeCommand<void>("forge_sign_out", {
+                    args: { provider, host },
                 }),
-            markNotificationRead: (threadId: string) =>
-                invokeCommand<void>("github_mark_notification_read", {
-                    args: { threadId },
+            listOrgs: (provider: string) =>
+                invokeCommand<Org[]>("forge_list_orgs", { args: { provider } }),
+            listNotifications: (provider: string, page?: number) =>
+                invokeCommand<NotificationPage>("forge_list_notifications", {
+                    args: { provider, page },
                 }),
-            markAllNotificationsRead: () =>
-                invokeCommand<void>("github_mark_all_notifications_read"),
-            resolveSubjectUrl: (subjectUrl: string) =>
-                invokeCommand<string | null>("github_resolve_subject_url", {
-                    args: { subjectUrl },
+            markNotificationRead: (provider: string, threadId: string) =>
+                invokeCommand<void>("forge_mark_notification_read", {
+                    args: { provider, threadId },
+                }),
+            markAllNotificationsRead: (provider: string) =>
+                invokeCommand<void>("forge_mark_all_notifications_read", {
+                    args: { provider },
+                }),
+            resolveSubjectUrl: (provider: string, subjectUrl: string) =>
+                invokeCommand<string | null>("forge_resolve_subject_url", {
+                    args: { provider, subjectUrl },
                 }),
             listIssues: (
+                provider: string,
                 owner: string,
                 repo: string,
                 issueState?: string,
                 labels?: string[],
                 page?: number
             ) =>
-                invokeCommand<SearchIssuePage>("github_list_issues", {
-                    args: { owner, repo, issueState, labels, page },
+                invokeCommand<SearchIssuePage>("forge_list_issues", {
+                    args: { provider, owner, repo, issueState, labels, page },
                 }),
             listPullRequests: (
+                provider: string,
                 owner: string,
                 repo: string,
                 pullState?: string,
@@ -715,149 +752,227 @@ function createRawBackendClient() {
                 page?: number
             ) =>
                 invokeCommand<SearchPullRequestPage>(
-                    "github_list_pull_requests",
-                    { args: { owner, repo, pullState, labels, page } }
+                    "forge_list_pull_requests",
+                    {
+                        args: {
+                            provider,
+                            owner,
+                            repo,
+                            pullState,
+                            labels,
+                            page,
+                        },
+                    }
                 ),
-            getPull: (owner: string, repo: string, number: number) =>
-                invokeCommand<GithubPullRequestDetail>("github_get_pull", {
-                    args: { owner, repo, number },
-                }),
-            listPullReviews: (owner: string, repo: string, number: number) =>
-                invokeCommand<GithubPullRequestReview[]>(
-                    "github_list_pull_reviews",
-                    { args: { owner, repo, number } }
-                ),
-            listPullCommits: (owner: string, repo: string, number: number) =>
-                invokeCommand<GithubPullRequestCommit[]>(
-                    "github_list_pull_commits",
-                    { args: { owner, repo, number } }
-                ),
-            listPullReviewComments: (
+            getPull: (
+                provider: string,
                 owner: string,
                 repo: string,
                 number: number
             ) =>
-                invokeCommand<GithubPullRequestReviewComment[]>(
-                    "github_list_pull_review_comments",
-                    { args: { owner, repo, number } }
+                invokeCommand<PullRequestDetail>("forge_get_pull", {
+                    args: { provider, owner, repo, number },
+                }),
+            listPullReviews: (
+                provider: string,
+                owner: string,
+                repo: string,
+                number: number
+            ) =>
+                invokeCommand<PullRequestReview[]>("forge_list_pull_reviews", {
+                    args: { provider, owner, repo, number },
+                }),
+            listPullCommits: (
+                provider: string,
+                owner: string,
+                repo: string,
+                number: number
+            ) =>
+                invokeCommand<PullRequestCommit[]>("forge_list_pull_commits", {
+                    args: { provider, owner, repo, number },
+                }),
+            listPullReviewComments: (
+                provider: string,
+                owner: string,
+                repo: string,
+                number: number
+            ) =>
+                invokeCommand<PullRequestReviewComment[]>(
+                    "forge_list_pull_review_comments",
+                    { args: { provider, owner, repo, number } }
                 ),
+            createPull: (
+                provider: string,
+                owner: string,
+                repo: string,
+                body: CreatePullRequestBody
+            ) =>
+                invokeCommand<PullRequestDetail>("forge_create_pull", {
+                    args: { provider, owner, repo, body },
+                }),
+            listLabels: (provider: string, owner: string, repo: string) =>
+                invokeCommand<Label[]>("forge_list_labels", {
+                    args: { provider, owner, repo },
+                }),
             updatePull: (
+                provider: string,
                 owner: string,
                 repo: string,
                 number: number,
                 body: UpdatePullRequestBody
             ) =>
-                invokeCommand<GithubPullRequestDetail>("github_update_pull", {
-                    args: { owner, repo, number, body },
+                invokeCommand<PullRequestDetail>("forge_update_pull", {
+                    args: { provider, owner, repo, number, body },
                 }),
             mergePull: (
+                provider: string,
                 owner: string,
                 repo: string,
                 number: number,
                 body: MergePullRequestBody
             ) =>
-                invokeCommand<MergePullRequestResult>("github_merge_pull", {
-                    args: { owner, repo, number, body },
+                invokeCommand<MergePullRequestResult>("forge_merge_pull", {
+                    args: { provider, owner, repo, number, body },
                 }),
-            getCheckRun: (owner: string, repo: string, checkRunId: number) =>
-                invokeCommand<GithubCheckRunDetail>("github_get_check_run", {
-                    args: { owner, repo, checkRunId },
+            getCheckRun: (
+                provider: string,
+                owner: string,
+                repo: string,
+                checkRunId: number
+            ) =>
+                invokeCommand<CheckRunDetail>("forge_get_check_run", {
+                    args: { provider, owner, repo, checkRunId },
                 }),
-            getCheckRunLog: (owner: string, repo: string, checkRunId: number) =>
-                invokeCommand<GithubCheckRunLog>("github_get_check_run_log", {
-                    args: { owner, repo, checkRunId },
+            getCheckRunLog: (
+                provider: string,
+                owner: string,
+                repo: string,
+                checkRunId: number
+            ) =>
+                invokeCommand<CheckRunLog>("forge_get_check_run_log", {
+                    args: { provider, owner, repo, checkRunId },
                 }),
-            listCheckRuns: (owner: string, repo: string, sha: string) =>
-                invokeCommand<GithubCheckRun[]>("github_list_check_runs", {
-                    args: { owner, repo, sha },
+            listCheckRuns: (
+                provider: string,
+                owner: string,
+                repo: string,
+                sha: string
+            ) =>
+                invokeCommand<CheckRun[]>("forge_list_check_runs", {
+                    args: { provider, owner, repo, sha },
                 }),
-            listWorkflowRuns: (owner: string, repo: string, sha: string) =>
-                invokeCommand<GithubWorkflowRun[]>(
-                    "github_list_workflow_runs",
-                    { args: { owner, repo, sha } }
-                ),
-            listCommitStatuses: (owner: string, repo: string, sha: string) =>
-                invokeCommand<GithubCommitStatus[]>(
-                    "github_list_commit_statuses",
-                    { args: { owner, repo, sha } }
-                ),
-            searchIssues: (page?: number) =>
-                invokeCommand<SearchIssuePage>("github_search_issues", {
-                    args: { page },
+            listWorkflowRuns: (
+                provider: string,
+                owner: string,
+                repo: string,
+                sha: string
+            ) =>
+                invokeCommand<WorkflowRun[]>("forge_list_workflow_runs", {
+                    args: { provider, owner, repo, sha },
                 }),
-            searchPullRequests: (page?: number) =>
+            listCommitStatuses: (
+                provider: string,
+                owner: string,
+                repo: string,
+                sha: string
+            ) =>
+                invokeCommand<CommitStatus[]>("forge_list_commit_statuses", {
+                    args: { provider, owner, repo, sha },
+                }),
+            searchIssues: (provider: string, page?: number) =>
+                invokeCommand<SearchIssuePage>("forge_search_issues", {
+                    args: { provider, page },
+                }),
+            searchPullRequests: (provider: string, page?: number) =>
                 invokeCommand<SearchPullRequestPage>(
-                    "github_search_pull_requests",
-                    { args: { page } }
+                    "forge_search_pull_requests",
+                    { args: { provider, page } }
                 ),
-            getIssue: (owner: string, repo: string, number: number) =>
-                invokeCommand<GithubIssueDetail>("github_get_issue", {
-                    args: { owner, repo, number },
+            getIssue: (
+                provider: string,
+                owner: string,
+                repo: string,
+                number: number
+            ) =>
+                invokeCommand<IssueDetail>("forge_get_issue", {
+                    args: { provider, owner, repo, number },
                 }),
-            listIssueComments: (owner: string, repo: string, number: number) =>
-                invokeCommand<GithubIssueComment[]>(
-                    "github_list_issue_comments",
-                    { args: { owner, repo, number } }
-                ),
-            listIssueEvents: (owner: string, repo: string, number: number) =>
-                invokeCommand<GithubIssueEvent[]>("github_list_issue_events", {
-                    args: { owner, repo, number },
+            listIssueComments: (
+                provider: string,
+                owner: string,
+                repo: string,
+                number: number
+            ) =>
+                invokeCommand<IssueComment[]>("forge_list_issue_comments", {
+                    args: { provider, owner, repo, number },
+                }),
+            listIssueEvents: (
+                provider: string,
+                owner: string,
+                repo: string,
+                number: number
+            ) =>
+                invokeCommand<IssueEvent[]>("forge_list_issue_events", {
+                    args: { provider, owner, repo, number },
                 }),
             createIssueComment: (
+                provider: string,
                 owner: string,
                 repo: string,
                 number: number,
                 body: string
             ) =>
-                invokeCommand<GithubIssueComment>(
-                    "github_create_issue_comment",
-                    { args: { owner, repo, number, body } }
-                ),
+                invokeCommand<IssueComment>("forge_create_issue_comment", {
+                    args: { provider, owner, repo, number, body },
+                }),
             updateIssue: (
+                provider: string,
                 owner: string,
                 repo: string,
                 number: number,
                 body: UpdateIssueBody
             ) =>
-                invokeCommand<GithubIssueDetail>("github_update_issue", {
-                    args: { owner, repo, number, body },
+                invokeCommand<IssueDetail>("forge_update_issue", {
+                    args: { provider, owner, repo, number, body },
                 }),
             updateIssueComment: (
+                provider: string,
                 owner: string,
                 repo: string,
                 commentId: number,
                 body: string
             ) =>
-                invokeCommand<GithubIssueComment>(
-                    "github_update_issue_comment",
-                    { args: { owner, repo, commentId, body } }
-                ),
+                invokeCommand<IssueComment>("forge_update_issue_comment", {
+                    args: { provider, owner, repo, commentId, body },
+                }),
             deleteIssueComment: (
+                provider: string,
                 owner: string,
                 repo: string,
                 commentId: number
             ) =>
-                invokeCommand<void>("github_delete_issue_comment", {
-                    args: { owner, repo, commentId },
+                invokeCommand<void>("forge_delete_issue_comment", {
+                    args: { provider, owner, repo, commentId },
                 }),
-            repoPermissions: (owner: string, repo: string) =>
-                invokeCommand<GithubRepoPermissions>(
-                    "github_repo_permissions",
-                    { args: { owner, repo } }
-                ),
+            repoPermissions: (provider: string, owner: string, repo: string) =>
+                invokeCommand<RepoPermissions>("forge_repo_permissions", {
+                    args: { provider, owner, repo },
+                }),
             createIssue: (
+                provider: string,
                 owner: string,
                 repo: string,
                 title: string,
                 body?: string,
                 labels?: string[]
             ) =>
-                invokeCommand<GithubIssueDetail>("github_create_issue", {
-                    args: { owner, repo, title, body, labels },
+                invokeCommand<IssueDetail>("forge_create_issue", {
+                    args: { provider, owner, repo, title, body, labels },
                 }),
             publishRepository: (
                 repoId: number,
                 options: {
+                    provider?: string;
                     owner?: string;
                     name: string;
                     description?: string;
@@ -865,7 +980,7 @@ function createRawBackendClient() {
                 },
                 expectedGeneration?: number
             ) =>
-                invokeCommand<PublishResult>("github_publish_repository", {
+                invokeCommand<PublishResult>("forge_publish_repository", {
                     args: { repoId, ...options, expectedGeneration },
                 }),
         },
@@ -876,6 +991,10 @@ function createRawBackendClient() {
                 invokeCommand<ValuesSnapshot>("settings_set", {
                     args: { key, value },
                 }),
+        },
+
+        fonts: {
+            list: () => invokeCommand<string[]>("fonts_list"),
         },
 
         editor: {
@@ -993,8 +1112,9 @@ export function createBackendClient(): BackendClient {
         remotes: resultifyGroup(raw.remotes),
         operations: resultifyGroup(raw.operations),
         highlight: resultifyGroup(raw.highlight),
-        github: resultifyGroup(raw.github),
+        forge: resultifyGroup(raw.forge),
         settings: resultifyGroup(raw.settings),
+        fonts: resultifyGroup(raw.fonts),
         editor: resultifyGroup(raw.editor),
         fileManager: resultifyGroup(raw.fileManager),
         terminal: resultifyGroup(raw.terminal),

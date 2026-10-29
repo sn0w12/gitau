@@ -248,6 +248,15 @@ function dialogButton(label: string): HTMLButtonElement {
     return button!;
 }
 
+/** Resolves the control a FieldLabel points at through its `htmlFor`. */
+function labeledControl<T extends HTMLElement>(labelText: string): T | null {
+    const label = [...document.querySelectorAll("label")].find(
+        (candidate) => candidate.textContent?.trim() === labelText
+    );
+    const id = label?.getAttribute("for");
+    return id ? (document.getElementById(id) as T | null) : null;
+}
+
 describe("CommitContextMenu", () => {
     const clipboard = { writeText: vi.fn().mockResolvedValue(undefined) };
 
@@ -323,9 +332,7 @@ describe("CommitContextMenu", () => {
         );
         expect(opened).toBe(true);
 
-        const textarea = document.querySelector(
-            "#amend-message"
-        ) as HTMLTextAreaElement | null;
+        const textarea = labeledControl<HTMLTextAreaElement>("Message");
         expect(textarea).not.toBeNull();
         expect(textarea!.value).toBe(rowCommit.message);
         await act(async () => {
@@ -391,9 +398,7 @@ describe("CommitContextMenu", () => {
         );
         expect(opened).toBe(true);
 
-        const name = document.querySelector(
-            "#create-tag-name"
-        ) as HTMLInputElement | null;
+        const name = labeledControl<HTMLInputElement>("Name");
         expect(name).not.toBeNull();
         await act(async () => {
             fireEvent.change(name!, { target: { value: "v1.0.0" } });

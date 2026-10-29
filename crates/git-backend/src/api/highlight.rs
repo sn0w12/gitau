@@ -1,6 +1,8 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::engines::gix::highlight;
+
+pub use ansi::TextStyle as SnippetStyle;
 
 /// Oversized fences render plain rather than stalling the UI thread.
 const MAX_SNIPPET_BYTES: usize = 128 * 1024;
@@ -15,21 +17,6 @@ pub struct HighlightedSnippet {
     pub highlighted: bool,
     pub spans_by_line: Vec<Vec<u32>>,
     pub styles: Vec<SnippetStyle>,
-}
-
-/// One resolved style covering both app themes. Field names match the
-/// frontend `SyntaxStyle` (`b`/`i`/`u`), not the diff `WireStyle`.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
-pub struct SnippetStyle {
-    pub light: String,
-    pub dark: String,
-    #[serde(rename = "b")]
-    pub bold: bool,
-    #[serde(rename = "i")]
-    pub italic: bool,
-    #[serde(rename = "u")]
-    pub underline: bool,
 }
 
 /// Highlights one code fence, or reports it plain. Pure and fast for

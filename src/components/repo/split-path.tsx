@@ -27,12 +27,12 @@ export function SplitPath({
             )}
             <span className="max-w-full min-w-0 truncate whitespace-nowrap">
                 {before && <span className="text-muted-foreground">/</span>}
-                <span className="font-semibold">{head}</span>
+                <span>{head}</span>
             </span>
             {tail && (
                 <span
                     dir="rtl"
-                    className="max-w-full min-w-0 truncate font-semibold whitespace-nowrap"
+                    className="max-w-full min-w-0 truncate whitespace-nowrap"
                 >
                     <bdi>{tail}</bdi>
                 </span>

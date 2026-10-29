@@ -11,7 +11,8 @@ import {
     DialogPopup,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Form } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
 import type { CommitSummary } from "@/lib/backend/protocol";
 
@@ -80,30 +81,37 @@ function AmendCommitDialogBody({
                     The branch moves to the replacement commit.
                 </DialogDescription>
             </DialogHeader>
-            <DialogPanel className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="amend-message">Message</Label>
-                    <Textarea
-                        id="amend-message"
-                        value={message}
-                        onChange={(event) => setMessage(event.target.value)}
-                        rows={4}
-                        autoFocus
-                    />
-                </div>
-            </DialogPanel>
-            <DialogFooter>
-                <DialogClose render={<Button variant="ghost" />}>
-                    Cancel
-                </DialogClose>
-                <Button
-                    disabled={!canSubmit}
-                    loading={submitting}
-                    onClick={() => void handleSubmit()}
-                >
-                    Amend commit
-                </Button>
-            </DialogFooter>
+            <Form
+                className="contents"
+                onSubmit={(event) => {
+                    event.preventDefault();
+                    void handleSubmit();
+                }}
+            >
+                <DialogPanel className="flex flex-col gap-3">
+                    <Field>
+                        <FieldLabel>Message</FieldLabel>
+                        <Textarea
+                            value={message}
+                            onChange={(event) => setMessage(event.target.value)}
+                            rows={4}
+                            autoFocus
+                        />
+                    </Field>
+                </DialogPanel>
+                <DialogFooter>
+                    <DialogClose render={<Button variant="ghost" />}>
+                        Cancel
+                    </DialogClose>
+                    <Button
+                        type="submit"
+                        disabled={!canSubmit}
+                        loading={submitting}
+                    >
+                        Amend commit
+                    </Button>
+                </DialogFooter>
+            </Form>
         </>
     );
 }

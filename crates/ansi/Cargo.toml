@@ -1,0 +1,9 @@
+[package]
+name = "ansi"
+version.workspace = true
+edition = "2021"
+rust-version.workspace = true
+description = "ANSI SGR and workflow-command parsing for tool output"
+
+[dependencies]
+serde.workspace = true
