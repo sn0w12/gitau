@@ -111,6 +111,8 @@ export const forgeKeys = {
         repo: string,
         number: number
     ) => ["forge", "pull", provider, owner, repo, number] as const,
+    labels: (provider: string, owner: string, repo: string) =>
+        ["forge", "labels", provider, owner, repo] as const,
     pullReviews: (
         provider: string,
         owner: string,

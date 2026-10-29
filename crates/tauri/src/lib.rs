@@ -330,6 +330,8 @@ pub fn run() {
             commands::forge::forge_list_pull_reviews,
             commands::forge::forge_list_pull_commits,
             commands::forge::forge_list_pull_review_comments,
+            commands::forge::forge_list_labels,
+            commands::forge::forge_create_pull,
             commands::forge::forge_update_pull,
             commands::forge::forge_merge_pull,
             commands::forge::forge_list_check_runs,

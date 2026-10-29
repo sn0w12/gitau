@@ -1143,6 +1143,15 @@ export interface WorkflowRun {
     createdAt: string;
 }
 
+export interface CreatePullRequestBody {
+    title: string;
+    head: string;
+    base: string;
+    body?: string;
+    draft: boolean;
+    labels?: string[];
+}
+
 /** Partial pull request update: fields left out are untouched. */
 export interface UpdatePullRequestBody {
     state?: string;

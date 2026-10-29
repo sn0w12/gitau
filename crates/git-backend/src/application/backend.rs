@@ -39,11 +39,11 @@ use crate::api::worktrees::{
     WorktreeCreateRequest, WorktreeInfo, WorktreeLockRequest, WorktreeRemoveRequest,
 };
 use crate::api::{
-    AccountProfile, CheckRun, CheckRunDetail, CheckRunLog, CommitStatus, IssueComment, IssueDetail,
-    IssueEvent, MergePullRequestBody, MergePullRequestResult, NotificationPage, Org,
-    PublishRepositoryRequest, PublishResult, PullRequestCommit, PullRequestDetail,
-    PullRequestReview, PullRequestReviewComment, RepoPermissions, SearchIssuePage,
-    SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody, WorkflowRun,
+    AccountProfile, CheckRun, CheckRunDetail, CheckRunLog, CommitStatus, CreatePullRequestBody,
+    IssueComment, IssueDetail, IssueEvent, Label, MergePullRequestBody, MergePullRequestResult,
+    NotificationPage, Org, PublishRepositoryRequest, PublishResult, PullRequestCommit,
+    PullRequestDetail, PullRequestReview, PullRequestReviewComment, RepoPermissions,
+    SearchIssuePage, SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody, WorkflowRun,
 };
 use crate::domain::history::{
     BlameResult, CommitWithDetail, FileContent, HistoryChart, HistoryPage, RepoListing,
@@ -2132,6 +2132,42 @@ impl Backend {
             .await?)
     }
 
+    pub async fn forge_create_pull(
+        &self,
+        provider: String,
+        owner: String,
+        repo: String,
+        body: CreatePullRequestBody,
+    ) -> Result<PullRequestDetail> {
+        if body.title.trim().is_empty() {
+            return Err(GitError::invalid_input(
+                "pull request title must not be empty",
+            ));
+        }
+        if body.head.trim().is_empty() || body.base.trim().is_empty() {
+            return Err(GitError::invalid_input(
+                "pull request needs a head and a base branch",
+            ));
+        }
+        let (provider, token) = self.forge(&provider)?;
+        if !provider.capabilities().pull_requests_write {
+            return Err(GitError::Unsupported {
+                capability: "create pull request".into(),
+            });
+        }
+        Ok(provider.create_pull(&token, &owner, &repo, &body).await?)
+    }
+
+    pub async fn forge_list_labels(
+        &self,
+        provider: String,
+        owner: String,
+        repo: String,
+    ) -> Result<Vec<Label>> {
+        let (provider, token) = self.forge(&provider)?;
+        Ok(provider.list_labels(&token, &owner, &repo).await?)
+    }
+
     /// Partial update to a pull request: state, base branch, or draft flag.
     /// Every field left `None` is untouched.
     pub async fn forge_update_pull(
@@ -3105,6 +3141,36 @@ mod remote_info_tests {
         assert_eq!(backend.prune_remote_info_cache(REMOTE_INFO_PRUNE_AFTER), 1);
         assert!(read_cached_remote_info(dir.path(), "github.com/octo/fresh").is_some());
         assert!(read_cached_remote_info(dir.path(), "github.com/octo/old").is_none());
+    }
+}
+
+#[cfg(test)]
+mod create_pull_tests {
+    use super::*;
+
+    fn body(title: &str, head: &str, base: &str) -> CreatePullRequestBody {
+        CreatePullRequestBody {
+            title: title.into(),
+            head: head.into(),
+            base: base.into(),
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn create_pull_rejects_a_blank_title_or_branch() {
+        let backend = Backend::default();
+        for request in [
+            body(" ", "feature", "main"),
+            body("Add thing", " ", "main"),
+            body("Add thing", "feature", ""),
+        ] {
+            let error = backend
+                .forge_create_pull("github".into(), "octo".into(), "repo".into(), request)
+                .await
+                .unwrap_err();
+            assert_eq!(error.code(), "invalidInput");
+        }
     }
 }
 

@@ -8,6 +8,7 @@ import {
     GitBranch,
     GitCommitVertical,
     GitMerge,
+    GitPullRequest,
     Lock,
     LockOpen,
     Plus,
@@ -17,6 +18,7 @@ import {
 import * as React from "react";
 import { useMemo, useState } from "react";
 
+import { CreatePullDialog } from "@/components/repo/pulls/create-pull-dialog";
 import { ToolbarTriggerFrame } from "@/components/repo/toolbar-trigger";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,6 +39,8 @@ import {
 import { Popover, PopoverPopup, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { useConfirm } from "@/contexts/confirm-context";
+import { capabilityAllows } from "@/hooks/forge/use-forge-account";
+import { useRepoCapabilities } from "@/hooks/forge/use-forge-issues";
 import { useMergeActions } from "@/hooks/repositories/use-merge-actions";
 import { useOpenRepository } from "@/hooks/repositories/use-open-repository";
 import { repoDisplayName } from "@/hooks/repositories/use-repo-identity";
@@ -60,22 +64,16 @@ import type {
 } from "@/lib/backend/protocol";
 import { repositoryKeys } from "@/lib/backend/queries/query-keys";
 import { REPO_TOOLBAR_TRIGGER_CLASS } from "@/lib/constants";
+import { isDefaultBranchName } from "@/lib/repositories/default-branch";
 import { toastError } from "@/lib/toast-error";
 import { cn } from "@/lib/utils";
 
 import { AutocompleteInput } from "../../ui/autocomplete";
 import { CreateCheckoutDialog } from "./create-checkout-dialog";
 
-/** Conventional defaults until the backend exposes the remote HEAD symref. */
-const DEFAULT_BRANCH_NAMES = ["main", "master"];
-
 // A worktree and a branch can share a name, so worktree values live in their
 // own namespace to keep the command's item values unique.
 const WORKTREE_VALUE_PREFIX = "worktree\u0000";
-
-function isDefaultBranch(branch: BranchInfo): boolean {
-    return DEFAULT_BRANCH_NAMES.includes(branch.name.toLowerCase());
-}
 
 function worktreeValue(name: string): string {
     return `${WORKTREE_VALUE_PREFIX}${name}`;
@@ -113,6 +111,7 @@ export function BranchSelector({ repoId }: { repoId: number }) {
     const unlockWorktree = useUnlockWorktreeMutation(repoId);
     const operation = useOperationState(repoId);
     const mergeActions = useMergeActions(repoId);
+    const capabilities = useRepoCapabilities(repoId);
     const queryClient = useQueryClient();
     const openRepo = useOpenRepository();
     const { confirm } = useConfirm();
@@ -124,6 +123,8 @@ export function BranchSelector({ repoId }: { repoId: number }) {
 
     const [open, setOpen] = useState(false);
     const [createOpen, setCreateOpen] = useState(false);
+    const [pullOpen, setPullOpen] = useState(false);
+    const [pullHead, setPullHead] = useState<string | null>(null);
 
     const head = snapshot.data?.head;
     const branches = useMemo(
@@ -223,13 +224,16 @@ export function BranchSelector({ repoId }: { repoId: number }) {
         // Only the "Other" group drops claimed branches. A default branch held
         // by a linked tree stays listed, because hiding the sole default
         // branch would remove the group entirely.
-        const defaults = branches.filter(isDefaultBranch);
+        const defaults = branches.filter((branch) =>
+            isDefaultBranchName(branch.name)
+        );
         if (defaults.length > 0) {
             result.push({ value: "Default branch", items: toItems(defaults) });
         }
         const others = branches.filter(
             (branch) =>
-                !isDefaultBranch(branch) && !branchOwner.has(branch.name)
+                !isDefaultBranchName(branch.name) &&
+                !branchOwner.has(branch.name)
         );
         if (others.length > 0) {
             result.push({ value: "Other", items: toItems(others) });
@@ -303,6 +307,12 @@ export function BranchSelector({ repoId }: { repoId: number }) {
         if (branchName === currentName || mergeActions.pending) return;
         const outcome = await mergeActions.mergeBranch(branchName);
         if (outcome) close();
+    };
+
+    const openPull = (branchName: string) => {
+        close();
+        setPullHead(branchName);
+        setPullOpen(true);
     };
 
     const toggleWorktreeLock = async (tree: WorktreeInfo) => {
@@ -489,6 +499,10 @@ export function BranchSelector({ repoId }: { repoId: number }) {
                                                                     branch.name
                                                                 )
                                                             }
+                                                            canCreatePull={capabilityAllows(
+                                                                capabilities,
+                                                                "pullRequestsWrite"
+                                                            )}
                                                             disabled={
                                                                 checkout.isPending
                                                             }
@@ -502,6 +516,9 @@ export function BranchSelector({ repoId }: { repoId: number }) {
                                                                     name
                                                                 )
                                                             }
+                                                            onCreatePull={(
+                                                                name
+                                                            ) => openPull(name)}
                                                         />
                                                     );
                                                 }}
@@ -521,6 +538,12 @@ export function BranchSelector({ repoId }: { repoId: number }) {
                 open={createOpen}
                 onClose={() => setCreateOpen(false)}
             />
+            <CreatePullDialog
+                repoId={repoId}
+                initialHead={pullHead ?? undefined}
+                open={pullOpen}
+                onClose={() => setPullOpen(false)}
+            />
         </>
     );
 }
@@ -531,18 +554,22 @@ function BranchRow({
     currentName,
     branchOwner,
     canMerge,
+    canCreatePull,
     disabled,
     onSwitch,
     onMerge,
+    onCreatePull,
 }: {
     item: SelectorItem;
     branch: BranchInfo | undefined;
     currentName: string | null;
     branchOwner: Map<string, string>;
     canMerge: boolean;
+    canCreatePull: boolean;
     disabled: boolean;
     onSwitch: (name: string) => void;
     onMerge: (name: string) => void;
+    onCreatePull: (name: string) => void;
 }) {
     if (!branch) {
         return (
@@ -604,6 +631,13 @@ function BranchRow({
                 >
                     <GitMerge />
                     Merge into current
+                </ContextMenuItem>
+                <ContextMenuItem
+                    disabled={!canCreatePull}
+                    onClick={() => onCreatePull(branch.name)}
+                >
+                    <GitPullRequest />
+                    Create pull request
                 </ContextMenuItem>
             </ContextMenuPopup>
         </ContextMenu>

@@ -502,6 +502,17 @@ pub struct PullRequestReviewComment {
     pub pull_request_review_id: Option<u64>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct CreatePullRequestBody {
+    pub title: String,
+    pub head: String,
+    pub base: String,
+    pub body: Option<String>,
+    pub draft: bool,
+    pub labels: Vec<String>,
+}
+
 /// Partial update to a pull request: every field left `None` is untouched.
 /// The field names are single words, so the camelCase and snake_case wire
 /// conventions agree and this serializes as GitHub expects.
