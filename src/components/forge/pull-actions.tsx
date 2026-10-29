@@ -109,7 +109,7 @@ export function PullHeaderActions({
                                 aria-label="Copy options"
                                 size="icon-sm"
                                 variant={blocker !== null ? "default" : "info"}
-                                disabled={blocker !== null}
+                                disabled={blocker !== null || pending}
                             />
                         }
                     >
