@@ -31,7 +31,7 @@ function provider(
     label: string,
     hosts: string[]
 ): ProviderDescriptor {
-    return { id, label, hosts, capabilities: NONE };
+    return { id, label, hosts, imageHosts: [], capabilities: NONE };
 }
 
 const PROVIDERS = [

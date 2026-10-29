@@ -67,6 +67,7 @@ const PROVIDER: ProviderDescriptor = {
     id: "github",
     label: "GitHub",
     hosts: ["github.com"],
+    imageHosts: [],
     capabilities: CAPABILITIES,
 };
 

@@ -51,6 +51,7 @@ const PROVIDER: ProviderDescriptor = {
     id: "github",
     label: "GitHub",
     hosts: ["github.com"],
+    imageHosts: [],
     capabilities: CAPABILITIES,
 };
 
@@ -58,6 +59,7 @@ const GITLAB_PROVIDER: ProviderDescriptor = {
     id: "gitlab",
     label: "GitLab",
     hosts: ["gitlab.com"],
+    imageHosts: [],
     capabilities: CAPABILITIES,
 };
 

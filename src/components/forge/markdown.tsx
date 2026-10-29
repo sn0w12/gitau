@@ -7,6 +7,8 @@ import {
     useMemo,
 } from "react";
 
+import { useForgeProviders } from "@/hooks/forge/use-forge-account";
+import { isTrustedImageSource } from "@/lib/forge/image-hosts";
 import { ALERT_TAG, githubMarkdownExtension } from "@/lib/markdown/github";
 import {
     DETAILS_TAG,
@@ -57,12 +59,8 @@ function isMermaid(lang: string | undefined): boolean {
     return (lang ?? "").trim().toLowerCase() === "mermaid";
 }
 
-// GitHub-owned hosts, subdomains included: user attachments and badges live
-// on `*.githubusercontent.com` and `*.githubapp.com`, not on the apex.
-const TRUSTED_IMAGE_SOURCE =
-    /^https:\/\/(?:[a-z0-9-]+\.)*(?:github\.com|githubusercontent\.com|githubassets\.com|githubapp\.com)\//i;
-
 const InsideLinkContext = createContext(false);
+const ImageHostsContext = createContext<readonly string[]>([]);
 
 const components = {
     a(props) {
@@ -277,8 +275,9 @@ const components = {
     },
     img({ children: _voidChildren, ...props }) {
         const insideLink = useContext(InsideLinkContext);
+        const imageHosts = useContext(ImageHostsContext);
         const src = props.src || "";
-        if (TRUSTED_IMAGE_SOURCE.test(src)) {
+        if (isTrustedImageSource(src, imageHosts)) {
             return <img {...props} className="max-w-full rounded-md" />;
         }
         const href = linkHref(src);
@@ -329,21 +328,31 @@ export function CustomMarkdown({
         ],
         [owner, repo]
     );
+    const providers = useForgeProviders();
+    // A body's own provider is not known at this layer, and the app trusts
+    // every registered provider's image hosts, so the union covers all of
+    // them.
+    const imageHosts = useMemo(
+        () => (providers.data ?? []).flatMap((provider) => provider.imageHosts),
+        [providers.data]
+    );
     return (
-        <div className="min-w-0 break-words">
-            <Markdown
-                extensions={extensions}
-                components={components}
-                // Required so the parser can tell real html from escaped
-                // `\<b>` text. It is safe because `safeHtmlExtension`
-                // rewrites every html node before the renderer sees one, so
-                // the renderer's innerHTML branch stays unreachable.
-                allowHtml
-            >
-                {typeof children === "string"
-                    ? normalizeHtmlBlocks(children)
-                    : children}
-            </Markdown>
-        </div>
+        <ImageHostsContext value={imageHosts}>
+            <div className="min-w-0 break-words">
+                <Markdown
+                    extensions={extensions}
+                    components={components}
+                    // Required so the parser can tell real html from escaped
+                    // `\<b>` text. It is safe because `safeHtmlExtension`
+                    // rewrites every html node before the renderer sees one,
+                    // so the renderer's innerHTML branch stays unreachable.
+                    allowHtml
+                >
+                    {typeof children === "string"
+                        ? normalizeHtmlBlocks(children)
+                        : children}
+                </Markdown>
+            </div>
+        </ImageHostsContext>
     );
 }

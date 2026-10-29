@@ -43,6 +43,11 @@ impl ForgeRegistry {
                 id: provider.id().to_owned(),
                 label: provider.label().to_owned(),
                 hosts: provider.hosts().iter().map(|h| (*h).to_owned()).collect(),
+                image_hosts: provider
+                    .image_hosts()
+                    .iter()
+                    .map(|h| (*h).to_owned())
+                    .collect(),
                 capabilities: provider.capabilities(),
             })
             .collect()

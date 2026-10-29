@@ -55,6 +55,7 @@ function backendWith(caps: Capabilities) {
         id: "github",
         label: "GitHub",
         hosts: ["github.com"],
+        imageHosts: [],
         capabilities: caps,
     };
     const connection: ConnectionProfile = {

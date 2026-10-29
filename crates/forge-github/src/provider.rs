@@ -130,6 +130,15 @@ impl ForgeProvider for GithubProvider {
         &[HOST]
     }
 
+    fn image_hosts(&self) -> &'static [&'static str] {
+        &[
+            HOST,
+            "githubusercontent.com",
+            "githubassets.com",
+            "githubapp.com",
+        ]
+    }
+
     fn parse_remote(&self, url: &str) -> Option<(String, String, String)> {
         parse_github_remote(url).map(|(owner, repo)| (HOST.to_owned(), owner, repo))
     }
@@ -1159,6 +1168,19 @@ mod tests {
 
     fn provider(recorder: &Arc<Recorder>) -> GithubProvider {
         GithubProvider::with_transport(recorder.clone())
+    }
+
+    #[test]
+    fn advertises_its_image_hosts() {
+        assert_eq!(
+            GithubProvider::default().image_hosts(),
+            &[
+                "github.com",
+                "githubusercontent.com",
+                "githubassets.com",
+                "githubapp.com",
+            ]
+        );
     }
 
     fn param(request: &Request, name: &str) -> Option<String> {

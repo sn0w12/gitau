@@ -771,6 +771,7 @@ export interface ProviderDescriptor {
     id: string;
     label: string;
     hosts: string[];
+    imageHosts: string[];
     capabilities: Capabilities;
 }
 

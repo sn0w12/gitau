@@ -42,6 +42,14 @@ pub trait ForgeProvider: Send + Sync {
     /// configured, since a user adds them.
     fn hosts(&self) -> &'static [&'static str];
 
+    /// Host suffixes whose images a body from this provider may load directly.
+    /// A host matches exactly or as a subdomain; the renderer turns every
+    /// other image into a link, so a body cannot pull in arbitrary remote
+    /// images.
+    fn image_hosts(&self) -> &'static [&'static str] {
+        &[]
+    }
+
     fn matches_host(&self, host: &str) -> bool {
         let host = host.trim_start_matches("www.");
         self.hosts().iter().any(|h| h.eq_ignore_ascii_case(host))

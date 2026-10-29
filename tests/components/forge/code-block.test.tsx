@@ -24,6 +24,9 @@ function servicesWith(snippet: HighlightedSnippet, onCall: () => void) {
                 return { ok: true, value: snippet };
             },
         },
+        forge: {
+            providers: async () => ({ ok: true as const, value: [] }),
+        },
     };
     return {
         backend: backend as unknown as BackendClient,

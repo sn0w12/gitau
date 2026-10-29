@@ -12,7 +12,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CustomMarkdown } from "@/components/forge/markdown";
 import { AppServicesContext } from "@/contexts/services-context";
-import type { HighlightedSnippet } from "@/lib/backend/protocol";
+import type {
+    Capabilities,
+    HighlightedSnippet,
+    ProviderDescriptor,
+} from "@/lib/backend/protocol";
+import { forgeKeys } from "@/lib/backend/queries/query-keys";
 import type { BackendClient } from "@/lib/backend/transport/client";
 import type { Result } from "@/lib/backend/transport/result";
 import { seedSettingsForTests } from "@/stores/settings-store";
@@ -28,6 +33,35 @@ const PLAIN: HighlightedSnippet = {
     styles: [],
 };
 
+const NO_CAPABILITIES: Capabilities = {
+    issues: false,
+    pullRequests: false,
+    reviews: false,
+    notifications: false,
+    checks: false,
+    commitStatuses: false,
+    workflowRuns: false,
+    issuesWrite: false,
+    pullRequestsWrite: false,
+    publish: false,
+    orgs: false,
+};
+
+const PROVIDERS: ProviderDescriptor[] = [
+    {
+        id: "github",
+        label: "GitHub",
+        hosts: ["github.com"],
+        imageHosts: [
+            "github.com",
+            "githubusercontent.com",
+            "githubassets.com",
+            "githubapp.com",
+        ],
+        capabilities: NO_CAPABILITIES,
+    },
+];
+
 function renderMarkdown(source: string, owner?: string, repo?: string) {
     const backend = {
         highlight: {
@@ -36,13 +70,18 @@ function renderMarkdown(source: string, owner?: string, repo?: string) {
                 value: PLAIN,
             }),
         },
+        forge: {
+            providers: async (): Promise<Result<ProviderDescriptor[]>> => ({
+                ok: true,
+                value: PROVIDERS,
+            }),
+        },
     } as unknown as BackendClient;
-    const services = {
-        backend,
-        queryClient: new QueryClient({
-            defaultOptions: { queries: { retry: false } },
-        }),
-    };
+    const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+    });
+    queryClient.setQueryData(forgeKeys.providers(), PROVIDERS);
+    const services = { backend, queryClient };
     function Wrapper({ children }: { children: ReactNode }) {
         return (
             <AppServicesContext.Provider value={services}>

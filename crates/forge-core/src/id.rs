@@ -49,6 +49,7 @@ pub struct ProviderDescriptor {
     pub id: String,
     pub label: String,
     pub hosts: Vec<String>,
+    pub image_hosts: Vec<String>,
     pub capabilities: Capabilities,
 }
 
