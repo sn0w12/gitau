@@ -12,7 +12,7 @@ import {
 } from "@/components/forge/input";
 import { MessageSpacer, TimelineMessage } from "@/components/forge/message";
 import {
-    MERGE_METHOD_LABEL,
+    MERGE_METHOD_TEXT,
     PullChangesBlock,
     PullHeaderActions,
 } from "@/components/forge/pull-actions";
@@ -383,7 +383,7 @@ function PullRequestContent({
     const handleMerge = async (method: PullRequestMergeMethod) => {
         const result = await confirm({
             title: `Merge pull request #${pull.number}?`,
-            description: `${MERGE_METHOD_LABEL[method]}: ${pull.head.ref} into ${pull.base.ref}. This writes to the remote and cannot be undone from here.`,
+            description: `${MERGE_METHOD_TEXT[method].label}: ${pull.head.ref} into ${pull.base.ref}. This writes to the remote and cannot be undone from here.`,
             confirmText: "Merge",
         });
         if (!result.confirmed) return;

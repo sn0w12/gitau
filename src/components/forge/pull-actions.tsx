@@ -1,17 +1,11 @@
-import { GitMerge } from "lucide-react";
-import { useState } from "react";
+import { ChevronDownIcon, GitMerge } from "lucide-react";
 
 import { isOpenThread } from "@/components/forge/status-badge";
 import { SidebarBlock } from "@/components/forge/thread-chrome";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-    Select,
-    SelectItem,
-    SelectPopup,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+import { Group, GroupSeparator } from "@/components/ui/group";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@/components/ui/menu";
 import type {
     PullRequestDetail,
     PullRequestMergeMethod,
@@ -19,10 +13,25 @@ import type {
 
 const MERGE_METHODS: PullRequestMergeMethod[] = ["merge", "squash", "rebase"];
 
-export const MERGE_METHOD_LABEL: Record<PullRequestMergeMethod, string> = {
-    merge: "Create a merge commit",
-    squash: "Squash and merge",
-    rebase: "Rebase and merge",
+export const MERGE_METHOD_TEXT: Record<
+    PullRequestMergeMethod,
+    { label: string; description: string }
+> = {
+    merge: {
+        label: "Create a merge commit",
+        description:
+            "All commits from this branch will be added to the base branch via a merge commit.",
+    },
+    squash: {
+        label: "Squash and merge",
+        description:
+            "The 1 commit from this branch will be added to the base branch.",
+    },
+    rebase: {
+        label: "Rebase and merge",
+        description:
+            "The 1 commit from this branch will be rebased and added to the base branch.",
+    },
 };
 
 /**
@@ -64,9 +73,7 @@ export function PullHeaderActions({
     onToggleDraft: () => void;
     pending: boolean;
 }) {
-    const [method, setMethod] = useState<PullRequestMergeMethod>("merge");
     const blocker = mergeBlocker(pull);
-
     if (!canPush || !isOpenThread(pull)) return null;
 
     if (pull.draft) {
@@ -79,47 +86,55 @@ export function PullHeaderActions({
 
     return (
         <div className="flex items-center gap-1.5">
-            {blocker === null ? (
-                <Select
-                    aria-label="Merge method"
-                    value={method}
-                    onValueChange={(next) => {
-                        if (typeof next === "string") {
-                            setMethod(next as PullRequestMergeMethod);
-                        }
-                    }}
-                    items={MERGE_METHODS.map((value) => ({
-                        value,
-                        label: MERGE_METHOD_LABEL[value],
-                    }))}
+            <Group>
+                <Button
+                    variant={blocker !== null ? "default" : "info"}
+                    disabled={blocker !== null}
+                    loading={pending}
+                    size="sm"
+                    onClick={() => onMerge("merge")}
                 >
-                    <SelectTrigger className="w-auto">
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectPopup>
+                    <span className="inline-flex items-center gap-1">
+                        <GitMerge />
+                        {blocker === null
+                            ? "Merge pull request"
+                            : "Cannot merge yet"}
+                    </span>
+                </Button>
+                <GroupSeparator />
+                <Menu>
+                    <MenuTrigger
+                        render={
+                            <Button
+                                aria-label="Copy options"
+                                size="icon-sm"
+                                variant={blocker !== null ? "default" : "info"}
+                                disabled={blocker !== null}
+                            />
+                        }
+                    >
+                        <ChevronDownIcon
+                            aria-hidden="true"
+                            className="size-4"
+                        />
+                    </MenuTrigger>
+                    <MenuPopup align="end" className="max-w-72">
                         {MERGE_METHODS.map((value) => (
-                            <SelectItem key={value} value={value}>
-                                <span className="truncate">
-                                    {MERGE_METHOD_LABEL[value]}
+                            <MenuItem
+                                key={value}
+                                onClick={() => onMerge(value)}
+                            >
+                                <span className="flex flex-col">
+                                    {MERGE_METHOD_TEXT[value].label}
+                                    <span className="text-xs text-muted-foreground">
+                                        {MERGE_METHOD_TEXT[value].description}
+                                    </span>
                                 </span>
-                            </SelectItem>
+                            </MenuItem>
                         ))}
-                    </SelectPopup>
-                </Select>
-            ) : null}
-            <Button
-                variant={blocker !== null ? "default" : "info"}
-                disabled={blocker !== null}
-                loading={pending}
-                onClick={() => onMerge(method)}
-            >
-                <span className="inline-flex items-center gap-1">
-                    <GitMerge />
-                    {blocker === null
-                        ? "Merge pull request"
-                        : "Cannot merge yet"}
-                </span>
-            </Button>
+                    </MenuPopup>
+                </Menu>
+            </Group>
         </div>
     );
 }
