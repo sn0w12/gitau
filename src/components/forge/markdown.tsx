@@ -1,5 +1,11 @@
 import { Markdown, type MarkdownComponents } from "@tanstack/markdown/react";
-import { Children, isValidElement, useMemo } from "react";
+import {
+    Children,
+    createContext,
+    isValidElement,
+    useContext,
+    useMemo,
+} from "react";
 
 import { ALERT_TAG, githubMarkdownExtension } from "@/lib/markdown/github";
 import {
@@ -51,6 +57,13 @@ function isMermaid(lang: string | undefined): boolean {
     return (lang ?? "").trim().toLowerCase() === "mermaid";
 }
 
+// GitHub-owned hosts, subdomains included: user attachments and badges live
+// on `*.githubusercontent.com` and `*.githubapp.com`, not on the apex.
+const TRUSTED_IMAGE_SOURCE =
+    /^https:\/\/(?:[a-z0-9-]+\.)*(?:github\.com|githubusercontent\.com|githubassets\.com|githubapp\.com)\//i;
+
+const InsideLinkContext = createContext(false);
+
 const components = {
     a(props) {
         const href = linkHref(props.href);
@@ -58,12 +71,19 @@ const components = {
         // The heading anchor arrives with its own classes; merge so the
         // hover-reveal styling survives the link color.
         const className = cn("text-info hover:text-info/70", props.className);
-        if (external) {
-            return (
-                <ExternalLink {...props} href={href} className={className} />
-            );
-        }
-        return <a {...props} href={href} className={className} />;
+        return (
+            <InsideLinkContext value={true}>
+                {external ? (
+                    <ExternalLink
+                        {...props}
+                        href={href}
+                        className={className}
+                    />
+                ) : (
+                    <a {...props} href={href} className={className} />
+                )}
+            </InsideLinkContext>
+        );
     },
     p(props) {
         return <p {...props} className="my-2 first:mt-0 last:mb-0" />;
@@ -256,24 +276,22 @@ const components = {
         return <ins {...props} className="no-underline" />;
     },
     img({ children: _voidChildren, ...props }) {
+        const insideLink = useContext(InsideLinkContext);
         const src = props.src || "";
-        const trusted =
-            /^https:\/\/(github\.com|githubusercontent\.com|githubassets\.com)\//i.test(
-                src
-            );
-        if (!trusted) {
-            const href = linkHref(src);
-            if (!href) return null;
-            return (
-                <ExternalLink
-                    href={href}
-                    className="text-info hover:text-info/70"
-                >
-                    {props.alt || src}
-                </ExternalLink>
-            );
+        if (TRUSTED_IMAGE_SOURCE.test(src)) {
+            return <img {...props} className="max-w-full rounded-md" />;
         }
-        return <img {...props} className="max-w-full rounded-md" />;
+        const href = linkHref(src);
+        if (!href) return null;
+        const label = props.alt || src;
+        // An anchor cannot contain another anchor, so an image that already
+        // sits inside a link degrades to its alt text.
+        if (insideLink) return <>{label}</>;
+        return (
+            <ExternalLink href={href} className="text-info hover:text-info/70">
+                {label}
+            </ExternalLink>
+        );
     },
     input(props) {
         if (props.type === "checkbox") {

@@ -197,6 +197,53 @@ describe("Safe HTML", () => {
     });
 });
 
+describe("Images", () => {
+    it("renders the dependabot compatibility badge inside its link", () => {
+        const src =
+            "https://dependabot-badges.githubapp.com/badges/compatibility_score?dependency-name=rustls&package-manager=cargo&previous-version=0.23.45&new-version=0.23.46";
+        const view = renderMarkdown(
+            `[![Dependabot compatibility score](${src})](https://docs.github.com/scores)`
+        );
+        // The image belongs to the outer link; a second anchor here means the
+        // renderer turned the badge itself into a nested link.
+        expect(hrefs(view.container)).toEqual([
+            "https://docs.github.com/scores",
+        ]);
+        const image = view.container.querySelector("img");
+        expect(image?.getAttribute("src")).toBe(src);
+        expect(image?.getAttribute("alt")).toBe(
+            "Dependabot compatibility score"
+        );
+    });
+
+    it("trusts a GitHub image subdomain", () => {
+        const src = "https://avatars.githubusercontent.com/u/1";
+        const view = renderMarkdown(`![avatar](${src})`);
+        expect(view.container.querySelector("img")?.getAttribute("src")).toBe(
+            src
+        );
+    });
+
+    it("links a standalone image from an untrusted host", () => {
+        const view = renderMarkdown(
+            "![build](https://badge.example/build.svg)"
+        );
+        expect(hrefs(view.container)).toEqual([
+            "https://badge.example/build.svg",
+        ]);
+        expect(view.container.textContent).toBe("build");
+    });
+
+    it("keeps an untrusted image inside its link as alt text", () => {
+        const view = renderMarkdown(
+            "[![build](https://badge.example/build.svg)](https://example.com/ci)"
+        );
+        expect(hrefs(view.container)).toEqual(["https://example.com/ci"]);
+        expect(view.container.querySelector("img")).toBeNull();
+        expect(view.container.textContent).toContain("build");
+    });
+});
+
 describe("GitHub references", () => {
     it("links a user mention", () => {
         const view = renderMarkdown(
