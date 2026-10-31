@@ -57,6 +57,10 @@ describe("parseRepoSearch", () => {
         const onlyIssues = parseRepoSearch({ issuesTab: "closed" });
         expect(onlyIssues.pullsTab).toBe("open");
     });
+
+    it("accepts the readme view", () => {
+        expect(parseRepoSearch({ view: "readme" }).view).toBe("readme");
+    });
 });
 
 describe("repoStateReducer", () => {

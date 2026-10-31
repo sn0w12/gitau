@@ -70,6 +70,7 @@ import type {
     RemoveRepositoryResult,
     ResetKind,
     ResolveSide,
+    ReadmeContent,
     SessionDocument,
     SessionRepository,
     SettingValue,
@@ -113,6 +114,10 @@ function createRawBackendClient() {
                 }),
             snapshot: (repoId: number) =>
                 invokeCommand<RepoSnapshot>("git_repository_snapshot", {
+                    args: { repoId },
+                }),
+            readme: (repoId: number) =>
+                invokeCommand<ReadmeContent | null>("git_readme", {
                     args: { repoId },
                 }),
             create: (request: CreateRepositoryRequest) =>

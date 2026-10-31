@@ -37,6 +37,7 @@ export interface SettingsValues {
     switchGraphViewShortcut: string;
     switchIssuesViewShortcut: string;
     switchPullsViewShortcut: string;
+    switchReadmeViewShortcut: string;
     stageAllShortcut: string;
     unstageAllShortcut: string;
     discardAllShortcut: string;
@@ -65,6 +66,7 @@ export const SHORTCUT_SETTING_KEYS = [
     "switchGraphViewShortcut",
     "switchIssuesViewShortcut",
     "switchPullsViewShortcut",
+    "switchReadmeViewShortcut",
     "stageAllShortcut",
     "unstageAllShortcut",
     "discardAllShortcut",

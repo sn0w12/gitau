@@ -25,6 +25,7 @@ import {
     listingQuery,
     operationStateQuery,
     rareReadQuery,
+    readmeQuery,
     remoteRepoInfoByPathQuery,
     remoteRepoInfoQuery,
     remotesByPathQuery,
@@ -54,6 +55,14 @@ export function useRepositorySnapshot(repoId: number | undefined) {
     const { backend } = useAppServices();
     return useQuery({
         ...snapshotQuery({ backend }, repoId ?? 0),
+        enabled: hasValidRepoId(repoId),
+    });
+}
+
+export function useRepoReadme(repoId: number | undefined) {
+    const { backend } = useAppServices();
+    return useQuery({
+        ...readmeQuery({ backend }, repoId ?? 0),
         enabled: hasValidRepoId(repoId),
     });
 }

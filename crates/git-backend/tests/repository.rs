@@ -28,6 +28,30 @@ async fn open_repository_reports_head_and_generation() {
 }
 
 #[tokio::test]
+async fn readme_reads_the_worktree_file() {
+    let repo = TestRepo::init("readme");
+    repo.initial_commit(&[("README.md", "# hello\n")]);
+
+    let backend = Backend::new(BackendConfig::default());
+    let opened = backend.open_repository(&repo.root).await.unwrap();
+
+    let readme = backend.readme(opened.id).await.unwrap().expect("README");
+    assert_eq!(readme.path, "README.md");
+    assert_eq!(readme.content, "# hello\n");
+}
+
+#[tokio::test]
+async fn readme_is_none_without_a_recognized_file() {
+    let repo = TestRepo::init("readme-none");
+    repo.initial_commit(&[("notes.txt", "nothing here\n")]);
+
+    let backend = Backend::new(BackendConfig::default());
+    let opened = backend.open_repository(&repo.root).await.unwrap();
+
+    assert!(backend.readme(opened.id).await.unwrap().is_none());
+}
+
+#[tokio::test]
 async fn open_repository_from_subdirectory_deduplicates() {
     let repo = TestRepo::init("dedupe");
     repo.initial_commit(&[("src/lib.rs", "pub fn f() {}")]);

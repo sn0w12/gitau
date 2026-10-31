@@ -48,6 +48,16 @@ export function snapshotQuery(deps: RepositoryQueryDeps, repoId: number) {
     });
 }
 
+export function readmeQuery(deps: RepositoryQueryDeps, repoId: number) {
+    return queryOptions({
+        queryKey: repositoryKeys.readme(repoId),
+        queryFn: async () =>
+            expectOk(await deps.backend.repositories.readme(repoId)),
+        staleTime: 30_000,
+        gcTime: 10 * 60_000,
+    });
+}
+
 export function statusQuery(
     deps: RepositoryQueryDeps,
     repoId: number,

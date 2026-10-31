@@ -7,6 +7,7 @@ export const REPO_VIEW_SHORTCUTS: Record<RepoView, ShortcutSettingKey> = {
     graph: "switchGraphViewShortcut",
     issues: "switchIssuesViewShortcut",
     pulls: "switchPullsViewShortcut",
+    readme: "switchReadmeViewShortcut",
 };
 
 export function displayToken(token: string): string {

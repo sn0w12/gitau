@@ -19,6 +19,7 @@ import { CommitGraphView } from "./history/commit-graph-view";
 import { HistoryChartView } from "./history/history-chart-view";
 import { IssuesView } from "./issues/issues-view";
 import { PullRequestsView } from "./pulls/pulls-view";
+import { ReadmeView } from "./readme/readme-view";
 
 function stripChangeSide(changeId: string): string {
     const separator = changeId.indexOf(":");
@@ -55,20 +56,7 @@ function EmptyState({ label }: { label: string }) {
     );
 }
 
-export function MainRepoView({
-    repoId,
-    tab,
-    view,
-    issuesTab,
-    pullsTab,
-    issueLabel,
-    pullLabel,
-    generation,
-    selectedChangeId,
-    selectedCommitId,
-    selectedStashId,
-    dispatch,
-}: {
+type MainRepoViewProps = {
     repoId: number;
     tab: RepoTab;
     view: RepoView;
@@ -81,7 +69,29 @@ export function MainRepoView({
     selectedCommitId: string | null;
     selectedStashId: string | null;
     dispatch: React.ActionDispatch<[action: RepoStateAction]>;
-}) {
+};
+
+export function MainRepoView(props: MainRepoViewProps) {
+    if (props.view === "readme") {
+        return <ReadmeView repoId={props.repoId} />;
+    }
+    return <RepoViewBody {...props} />;
+}
+
+function RepoViewBody({
+    repoId,
+    tab,
+    view,
+    issuesTab,
+    pullsTab,
+    issueLabel,
+    pullLabel,
+    generation,
+    selectedChangeId,
+    selectedCommitId,
+    selectedStashId,
+    dispatch,
+}: MainRepoViewProps) {
     const tabId = useTabId();
     const nothingSelected =
         !selectedChangeId && !selectedCommitId && !selectedStashId;

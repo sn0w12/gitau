@@ -33,7 +33,9 @@ use crate::api::remotes::{
     CloneEvent, CloneProgress, CloneRequest, CredentialKind, CredentialRequest, FetchRequest,
     GitPullRequest, PushOutcome, PushRequest, RemoteAddRequest,
 };
-use crate::api::repository::{CreateRepositoryRequest, GitignoreTemplateInfo, LicenseTemplateInfo};
+use crate::api::repository::{
+    CreateRepositoryRequest, GitignoreTemplateInfo, LicenseTemplateInfo, ReadmeContent,
+};
 use crate::api::submodules::{SubmoduleAddRequest, SubmoduleInfo, SubmoduleUpdateRequest};
 use crate::api::worktrees::{
     WorktreeCreateRequest, WorktreeInfo, WorktreeLockRequest, WorktreeRemoveRequest,
@@ -464,6 +466,20 @@ impl Backend {
     pub async fn repository_snapshot(&self, id: RepoId) -> Result<RepoSnapshot> {
         let entry = self.registry.get(id)?;
         build_snapshot(&entry)
+    }
+
+    /// Returns `None` for a bare repository or when the worktree has no
+    /// recognized README file.
+    pub async fn readme(&self, id: RepoId) -> Result<Option<ReadmeContent>> {
+        let entry = self.registry.get(id)?;
+        let Some(workdir) = entry.gix.workdir().map(Path::to_path_buf) else {
+            return Ok(None);
+        };
+        self.scheduler
+            .run(&CancellationToken::new(), move || {
+                Ok(read_worktree_readme(&workdir))
+            })
+            .await
     }
 
     pub fn clear_repository_caches(&self, id: RepoId) -> Result<()> {
@@ -2695,17 +2711,31 @@ fn commit_detail_blocking(
     })
 }
 
+const README_NAMES: [&str; 6] = [
+    "README.md",
+    "Readme.md",
+    "readme.md",
+    "README",
+    "Readme",
+    "readme",
+];
+
+fn read_worktree_readme(workdir: &Path) -> Option<ReadmeContent> {
+    for name in README_NAMES {
+        let path = workdir.join(name);
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            return Some(ReadmeContent {
+                path: name.to_owned(),
+                content,
+            });
+        }
+    }
+    None
+}
+
 fn try_read_readme(repo_path: &Path) -> String {
     let workdir = repo_path;
-    let readme_names = [
-        "README.md",
-        "Readme.md",
-        "readme.md",
-        "README",
-        "Readme",
-        "readme",
-    ];
-    for name in &readme_names {
+    for name in README_NAMES {
         let path = workdir.join(name);
         if let Ok(content) = std::fs::read_to_string(&path) {
             if let Some(paragraph) = crate::domain::readme::first_paragraph(

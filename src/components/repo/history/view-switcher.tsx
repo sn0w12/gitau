@@ -20,6 +20,7 @@ const VIEW_LABELS: Record<RepoView, string> = {
     graph: "Commit Graph",
     issues: "Issues",
     pulls: "Pull requests",
+    readme: "Readme",
 };
 
 /** The right-panel view menu: switches the main area between the available

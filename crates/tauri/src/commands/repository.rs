@@ -3,6 +3,7 @@ use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
 use git_backend::api::repository::{
     CreateRepositoryRequest, GitignoreTemplateInfo, LicenseTemplateInfo, OpenRepositoryRequest,
+    ReadmeContent,
 };
 use git_backend::application::RemoveRepositoryResult;
 use git_backend::domain::RepoSnapshot;
@@ -57,6 +58,18 @@ pub async fn git_repository_snapshot(
     state
         .backend
         .repository_snapshot(to_repo_id(repo_id))
+        .await
+        .map_err(to_serialized)
+}
+
+#[tauri::command]
+pub async fn git_readme(
+    state: SharedState<'_>,
+    repo_id: u64,
+) -> CommandResult<Option<ReadmeContent>> {
+    state
+        .backend
+        .readme(to_repo_id(repo_id))
         .await
         .map_err(to_serialized)
 }

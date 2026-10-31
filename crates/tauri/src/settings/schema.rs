@@ -276,6 +276,9 @@ pub fn builtin() -> SettingsSchema {
                             shortcut("switchPullsViewShortcut", "Switch to Pull requests view")
                                 .description("Shows the Pull requests view in the main panel.")
                                 .default_value(SettingValue::Str("Mod+P".to_owned())),
+                            shortcut("switchReadmeViewShortcut", "Switch to Readme view")
+                                .description("Shows the Readme view in the main panel.")
+                                .default_value(SettingValue::Str("Mod+Shift+R".to_owned())),
                         ],
                     },
                     SettingsSection {

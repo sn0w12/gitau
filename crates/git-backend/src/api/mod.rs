@@ -40,6 +40,7 @@ pub use remotes::{
 };
 pub use repository::{
     CreateRepositoryRequest, GitignoreTemplateInfo, LicenseTemplateInfo, OpenRepositoryRequest,
+    ReadmeContent,
 };
 pub use submodules::{SubmoduleAddRequest, SubmoduleInfo, SubmoduleUpdateRequest};
 pub use worktrees::{WorktreeCreateRequest, WorktreeInfo, WorktreeLockRequest};
