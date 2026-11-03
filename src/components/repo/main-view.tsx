@@ -72,9 +72,6 @@ type MainRepoViewProps = {
 };
 
 export function MainRepoView(props: MainRepoViewProps) {
-    if (props.view === "readme") {
-        return <ReadmeView repoId={props.repoId} />;
-    }
     return <RepoViewBody {...props} />;
 }
 
@@ -93,8 +90,6 @@ function RepoViewBody({
     dispatch,
 }: MainRepoViewProps) {
     const tabId = useTabId();
-    const nothingSelected =
-        !selectedChangeId && !selectedCommitId && !selectedStashId;
     useHotkey("Escape", () => dispatch({ type: "CLEAR_SELECTION" }), {
         preventDefault: true,
     });
@@ -144,6 +139,20 @@ function RepoViewBody({
                 dispatch={dispatch}
             />
         );
+    }
+
+    if (view === "readme") {
+        if (selectedCommitId && tab === "history") {
+            return (
+                <CommitDiffView
+                    repoId={repoId}
+                    commitId={selectedCommitId}
+                    tabId={tabId}
+                    dispatch={dispatch}
+                />
+            );
+        }
+        return <ReadmeView repoId={repoId} />;
     }
 
     if (view === "graph") {
@@ -196,6 +205,38 @@ function RepoViewBody({
         );
     }
 
+    return (
+        <OverviewView
+            repoId={repoId}
+            tab={tab}
+            selectedChangeId={selectedChangeId}
+            selectedCommitId={selectedCommitId}
+            selectedStashId={selectedStashId}
+            tabId={tabId}
+            dispatch={dispatch}
+        />
+    );
+}
+
+function OverviewView({
+    repoId,
+    tab,
+    selectedChangeId,
+    selectedCommitId,
+    selectedStashId,
+    tabId,
+    dispatch,
+}: {
+    repoId: number;
+    tab: RepoTab;
+    selectedChangeId: string | null;
+    selectedCommitId: string | null;
+    selectedStashId: string | null;
+    tabId: string;
+    dispatch: React.ActionDispatch<[action: RepoStateAction]>;
+}) {
+    const nothingSelected =
+        !selectedChangeId && !selectedCommitId && !selectedStashId;
     return (
         <div className="flex size-full min-h-0 flex-col">
             {tab === "history" && <DeferredHistoryChart repoId={repoId} />}
