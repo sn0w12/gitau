@@ -125,6 +125,21 @@ export function listingQuery(deps: RepositoryQueryDeps, repoId: number) {
     });
 }
 
+export function aheadBehindQuery(
+    deps: RepositoryQueryDeps,
+    repoId: number,
+    head: string,
+    base: string
+) {
+    return queryOptions({
+        queryKey: repositoryKeys.aheadBehind(repoId, head, base),
+        queryFn: async () =>
+            expectOk(await deps.backend.refs.aheadBehind(repoId, head, base)),
+        staleTime: 10_000,
+        gcTime: 5 * 60_000,
+    });
+}
+
 export function worktreesQuery(deps: RepositoryQueryDeps, repoId: number) {
     return queryOptions({
         queryKey: repositoryKeys.worktrees(repoId),

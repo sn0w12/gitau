@@ -8,8 +8,8 @@ use crate::api::mutations::{
     ResetRequest, TagCreateRequest,
 };
 use crate::domain::{
-    BranchInfo, CommitSummary, ObjectId, RelativePath, Signature as DomainSignature, TagInfo,
-    UpstreamRef,
+    AheadBehind, BranchInfo, CommitSummary, ObjectId, RelativePath, Signature as DomainSignature,
+    TagInfo, UpstreamRef,
 };
 use crate::engines::git2::session::resolve_signature;
 use crate::error::{GitError, Result};
@@ -398,6 +398,26 @@ pub fn rename_branch(
     let mut branch = repo.find_branch(old.as_str(), BranchType::Local)?;
     branch.rename(new.as_str(), force)?;
     branch_info(repo, new.clone())
+}
+
+pub fn branch_ahead_behind(
+    repo: &git2::Repository,
+    head: &crate::domain::BranchName,
+    base: &crate::domain::BranchName,
+) -> Result<AheadBehind> {
+    let head = repo
+        .find_branch(head.as_str(), BranchType::Local)?
+        .get()
+        .peel_to_commit()?;
+    let base = repo
+        .find_branch(base.as_str(), BranchType::Local)?
+        .get()
+        .peel_to_commit()?;
+    let (ahead, behind) = repo.graph_ahead_behind(head.id(), base.id())?;
+    Ok(AheadBehind {
+        ahead: ahead as u32,
+        behind: behind as u32,
+    })
 }
 
 pub fn list_branches(repo: &git2::Repository) -> Result<Vec<BranchInfo>> {

@@ -271,6 +271,11 @@ export interface BranchInfo {
     upstream?: UpstreamRef;
 }
 
+export interface AheadBehind {
+    ahead: number;
+    behind: number;
+}
+
 export interface TagInfo {
     name: string;
     target: Oid;

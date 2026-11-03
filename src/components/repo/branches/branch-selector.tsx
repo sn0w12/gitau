@@ -45,6 +45,7 @@ import { useMergeActions } from "@/hooks/repositories/use-merge-actions";
 import { useOpenRepository } from "@/hooks/repositories/use-open-repository";
 import { repoDisplayName } from "@/hooks/repositories/use-repo-identity";
 import {
+    useBranchAheadBehind,
     useOperationState,
     useRepoListing,
     useRepositorySnapshot,
@@ -64,7 +65,10 @@ import type {
 } from "@/lib/backend/protocol";
 import { repositoryKeys } from "@/lib/backend/queries/query-keys";
 import { REPO_TOOLBAR_TRIGGER_CLASS } from "@/lib/constants";
-import { isDefaultBranchName } from "@/lib/repositories/default-branch";
+import {
+    isDefaultBranchName,
+    pickBaseBranch,
+} from "@/lib/repositories/default-branch";
 import { toastError } from "@/lib/toast-error";
 import { cn } from "@/lib/utils";
 
@@ -133,6 +137,10 @@ export function BranchSelector({ repoId }: { repoId: number }) {
                 a.name.localeCompare(b.name)
             ),
         [listing.data?.branches]
+    );
+    const branchNames = useMemo(
+        () => branches.map((branch) => branch.name),
+        [branches]
     );
 
     // Linked trees that claim a branch. The primary tree only claims one when
@@ -481,6 +489,7 @@ export function BranchSelector({ repoId }: { repoId: number }) {
                                                     return (
                                                         <BranchRow
                                                             key={item.value}
+                                                            repoId={repoId}
                                                             item={item}
                                                             branch={branch}
                                                             currentName={
@@ -502,6 +511,10 @@ export function BranchSelector({ repoId }: { repoId: number }) {
                                                             canCreatePull={capabilityAllows(
                                                                 capabilities,
                                                                 "pullRequestsWrite"
+                                                            )}
+                                                            defaultBase={pickBaseBranch(
+                                                                branchNames,
+                                                                item.value
                                                             )}
                                                             disabled={
                                                                 checkout.isPending
@@ -549,28 +562,39 @@ export function BranchSelector({ repoId }: { repoId: number }) {
 }
 
 function BranchRow({
+    repoId,
     item,
     branch,
     currentName,
     branchOwner,
     canMerge,
     canCreatePull,
+    defaultBase,
     disabled,
     onSwitch,
     onMerge,
     onCreatePull,
 }: {
+    repoId: number;
     item: SelectorItem;
     branch: BranchInfo | undefined;
     currentName: string | null;
     branchOwner: Map<string, string>;
     canMerge: boolean;
     canCreatePull: boolean;
+    defaultBase: string;
     disabled: boolean;
     onSwitch: (name: string) => void;
     onMerge: (name: string) => void;
     onCreatePull: (name: string) => void;
 }) {
+    const [menuOpen, setMenuOpen] = useState(false);
+    const ahead = useBranchAheadBehind(
+        repoId,
+        menuOpen && branch ? branch.name : null,
+        menuOpen && branch ? defaultBase : null
+    );
+    const hasCommitsToMerge = ahead.data == null || ahead.data.ahead > 0;
     if (!branch) {
         return (
             <CommandItem value={item.value} disabled>
@@ -580,7 +604,7 @@ function BranchRow({
         );
     }
     return (
-        <ContextMenu>
+        <ContextMenu onOpenChange={setMenuOpen}>
             <ContextMenuTrigger className="block">
                 <CommandItem
                     value={item.value}
@@ -633,7 +657,7 @@ function BranchRow({
                     Merge into current
                 </ContextMenuItem>
                 <ContextMenuItem
-                    disabled={!canCreatePull}
+                    disabled={!canCreatePull || !hasCommitsToMerge}
                     onClick={() => onCreatePull(branch.name)}
                 >
                     <GitPullRequest />

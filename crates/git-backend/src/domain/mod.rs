@@ -18,6 +18,6 @@ pub use graph::{GraphEdge, GraphRow, GraphRowKind};
 pub use history::{BlameLine, BlameResult, FileContent, HistoryPage, RepoListing};
 pub use ids::{Generation, ObjectId, OperationId, RepoId, RowIndex, ShaKind, SnapshotId};
 pub use paths::RelativePath;
-pub use refs::{BranchInfo, TagInfo, UpstreamRef};
+pub use refs::{AheadBehind, BranchInfo, TagInfo, UpstreamRef};
 pub use revisions::{BranchName, RefName, RemoteName, RevisionSpec, TagName};
 pub use snapshots::{HeadState, RepoSnapshot};

@@ -47,6 +47,7 @@ import {
 } from "@/hooks/forge/use-forge-issues";
 import { useCreatePullRequest } from "@/hooks/forge/use-forge-pull-requests";
 import {
+    useBranchAheadBehind,
     useRepoListing,
     useRepositorySnapshot,
 } from "@/hooks/repositories/use-repository-queries";
@@ -162,11 +163,20 @@ function CreatePullForm({
         branchCount: names.length,
     });
     const busy = push.isPending || create.pending;
+    const ahead = useBranchAheadBehind(
+        repoId,
+        headValue || null,
+        baseValue || null
+    );
+    const aheadCount = ahead.data?.ahead ?? null;
+    const canMerge = aheadCount != null && aheadCount > 0;
+    const nothingToMerge = aheadCount === 0;
     const canSubmit = canCreatePull({
         notice,
         head: headValue,
         base: baseValue,
         title: titleValue,
+        canMerge,
         busy,
     });
 
@@ -243,7 +253,14 @@ function CreatePullForm({
                                 draft={draft}
                                 onDraftChange={setDraft}
                             />
-                            {pushNotice != null && (
+                            {nothingToMerge && (
+                                <p className="text-sm text-muted-foreground">
+                                    {headValue} has no commits ahead of{" "}
+                                    {baseValue} yet, so there is nothing to
+                                    merge.
+                                </p>
+                            )}
+                            {pushNotice != null && !nothingToMerge && (
                                 <p className="text-sm text-muted-foreground">
                                     {pushNotice}
                                 </p>
@@ -551,12 +568,14 @@ function canCreatePull({
     head,
     base,
     title,
+    canMerge,
     busy,
 }: {
     notice: string | null;
     head: string;
     base: string;
     title: string;
+    canMerge: boolean;
     busy: boolean;
 }): boolean {
     return (
@@ -565,6 +584,7 @@ function canCreatePull({
         base !== "" &&
         base !== head &&
         title.trim().length > 0 &&
+        canMerge &&
         !busy
     );
 }

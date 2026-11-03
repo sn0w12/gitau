@@ -10,6 +10,8 @@ export const repositoryKeys = {
     status: (repoId: number, options?: StatusOptions) =>
         ["repository", repoId, "status", options ?? {}] as const,
     listing: (repoId: number) => ["repository", repoId, "listing"] as const,
+    aheadBehind: (repoId: number, head: string, base: string) =>
+        ["repository", repoId, "aheadBehind", head, base] as const,
     remoteInfo: (repoId: number) =>
         ["repository", repoId, "remoteInfo"] as const,
     remotes: (repoId: number) => ["repository", repoId, "remotes"] as const,

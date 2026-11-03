@@ -366,6 +366,45 @@ async fn empty_commit_is_rejected_unless_allowed() {
 }
 
 #[tokio::test]
+async fn branch_ahead_behind_counts_commits_each_side() {
+    let repo = TestRepo::init("ahead-behind");
+    repo.initial_commit(&[("a.txt", "one\n")]);
+    let base = repo.repo.head().unwrap().shorthand().unwrap().to_owned();
+    repo.repo
+        .branch("feature", &repo.head_commit(), false)
+        .unwrap();
+
+    repo.write("a.txt", "two\n");
+    repo.commit_all("base moves on");
+
+    repo.repo.set_head("refs/heads/feature").unwrap();
+    repo.write("b.txt", "feature work\n");
+    repo.commit_all("feature work");
+
+    let backend = Backend::new(BackendConfig::default());
+    let opened = backend.open_repository(&repo.root).await.unwrap();
+
+    let ahead = backend
+        .branch_ahead_behind(
+            opened.id,
+            "feature".into(),
+            base.clone(),
+            Default::default(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(ahead.ahead, 1);
+    assert_eq!(ahead.behind, 1);
+
+    let synced = backend
+        .branch_ahead_behind(opened.id, base.clone(), base, Default::default())
+        .await
+        .unwrap();
+    assert_eq!(synced.ahead, 0);
+    assert_eq!(synced.behind, 0);
+}
+
+#[tokio::test]
 async fn branches_and_tags_lifecycle() {
     let repo = TestRepo::init("branch-tag");
     repo.initial_commit(&[("a.txt", "one\n")]);

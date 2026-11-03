@@ -16,6 +16,7 @@ import type { HistoryPageQueryLike } from "@/lib/backend/queries/query-keys";
 import { iconKeys } from "@/lib/backend/queries/query-keys";
 import type { RareRead } from "@/lib/backend/queries/repository-queries";
 import {
+    aheadBehindQuery,
     commitDetailQuery,
     conflictFileQuery,
     fileAtRevisionQuery,
@@ -115,6 +116,18 @@ export function useRepoListing(repoId: number | undefined) {
     return useQuery({
         ...listingQuery({ backend }, repoId ?? 0),
         enabled: hasValidRepoId(repoId),
+    });
+}
+
+export function useBranchAheadBehind(
+    repoId: number | undefined,
+    head: string | null,
+    base: string | null
+) {
+    const { backend } = useAppServices();
+    return useQuery({
+        ...aheadBehindQuery({ backend }, repoId ?? 0, head ?? "", base ?? ""),
+        enabled: hasValidRepoId(repoId) && !!head && !!base,
     });
 }
 

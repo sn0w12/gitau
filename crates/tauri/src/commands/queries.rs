@@ -125,6 +125,25 @@ pub async fn git_list_branches_and_tags(
 }
 
 #[tauri::command]
+pub async fn git_branch_ahead_behind(
+    state: SharedState<'_>,
+    repo_id: u64,
+    head: String,
+    base: String,
+) -> CommandResult<git_backend::domain::AheadBehind> {
+    state
+        .backend
+        .branch_ahead_behind(
+            to_repo_id(repo_id),
+            head,
+            base,
+            git_backend::runtime::cancellation::CancellationToken::new(),
+        )
+        .await
+        .map_err(to_serialized)
+}
+
+#[tauri::command]
 pub fn git_read_diff_image(
     state: SharedState<'_>,
     operation_id: u64,

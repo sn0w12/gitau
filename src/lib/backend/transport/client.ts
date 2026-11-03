@@ -2,6 +2,7 @@ import { Channel } from "@tauri-apps/api/core";
 
 import type {
     AccountProfile,
+    AheadBehind,
     BranchInfo,
     CachedIcon,
     CloneEvent,
@@ -311,6 +312,11 @@ function createRawBackendClient() {
             listBranchesAndTags: (repoId: number) =>
                 invokeCommand<RepoListing>("git_list_branches_and_tags", {
                     args: { repoId },
+                }),
+            /** Commits `head` has that `base` lacks, and the reverse. */
+            aheadBehind: (repoId: number, head: string, base: string) =>
+                invokeCommand<AheadBehind>("git_branch_ahead_behind", {
+                    args: { repoId, head, base },
                 }),
             createBranch: (
                 repoId: number,

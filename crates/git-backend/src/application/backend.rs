@@ -52,8 +52,8 @@ use crate::domain::history::{
 };
 use crate::domain::templates;
 use crate::domain::{
-    BranchInfo, ChangeKind, CommitSummary, Generation, ObjectId, OperationId, RelativePath, RepoId,
-    RepoSnapshot, SnapshotId, StatusReport, TagInfo,
+    AheadBehind, BranchInfo, ChangeKind, CommitSummary, Generation, ObjectId, OperationId,
+    RelativePath, RepoId, RepoSnapshot, SnapshotId, StatusReport, TagInfo,
 };
 use crate::engines::git2::{hooks as git2_hooks, mutations};
 use crate::engines::gix::objects as gix_objects;
@@ -970,6 +970,26 @@ impl Backend {
                     branches: mutations::list_branches(&repo)?,
                     tags: mutations::list_tags(&repo)?,
                 })
+            })
+            .await
+    }
+
+    pub async fn branch_ahead_behind(
+        &self,
+        id: RepoId,
+        head: String,
+        base: String,
+        token: CancellationToken,
+    ) -> Result<AheadBehind> {
+        let head = crate::domain::BranchName::parse(&head, "branch")?;
+        let base = crate::domain::BranchName::parse(&base, "branch")?;
+        let entry = self.registry.get(id)?;
+        let path = entry.canonical_path.clone();
+        self.scheduler
+            .run(&token, move || {
+                let repo = git2::Repository::discover(&path)
+                    .map_err(|e| crate::streaming::pipeline::map_open_error(&path, e))?;
+                mutations::branch_ahead_behind(&repo, &head, &base)
             })
             .await
     }

@@ -26,6 +26,14 @@ pub struct BranchInfo {
     pub upstream: Option<UpstreamRef>,
 }
 
+/// Commits `head` has that `base` does not, and the reverse.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AheadBehind {
+    pub ahead: u32,
+    pub behind: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TagInfo {
