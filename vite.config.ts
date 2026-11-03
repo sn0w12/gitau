@@ -71,6 +71,12 @@ const config = defineConfig({
     test: {
         include: ["tests/**/*.test.{ts,tsx}"],
         setupFiles: ["./tests/setup.ts"],
+        // Node 25+ exposes its own Web Storage globals. Vitest's jsdom
+        // environment only copies a browser global when the Node process does
+        // not already define that name, so tests would get Node's
+        // localStorage (undefined without --localstorage-file) instead of
+        // jsdom's Storage.
+        execArgv: ["--no-experimental-webstorage"],
         alias: {
             // The real package imports a stylesheet and defines custom
             // elements at module scope, which Vitest cannot load. Tests never
