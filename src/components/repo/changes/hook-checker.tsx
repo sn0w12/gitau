@@ -219,7 +219,6 @@ export function HookChecker({
             </PopoverContent>
             <HookEditorDialog
                 repoId={repoId}
-                hooks={discovered}
                 open={editorOpen}
                 onClose={() => setEditorOpen(false)}
             />

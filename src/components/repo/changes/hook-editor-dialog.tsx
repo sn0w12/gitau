@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { SquarePen } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -16,8 +16,13 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Form } from "@/components/ui/form";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
 import { ScrollTextarea } from "@/components/ui/textarea";
+import {
+    Tooltip,
+    TooltipTrigger,
+    TooltipContent,
+} from "@/components/ui/tooltip";
 import { useAppServices } from "@/contexts/services-context";
-import type { GitHook } from "@/lib/backend/protocol";
+import { useOpenInEditor } from "@/hooks/repositories/use-open-in-editor";
 import { repositoryKeys } from "@/lib/backend/queries/query-keys";
 import { toastError } from "@/lib/toast-error";
 
@@ -48,12 +53,10 @@ interface HookEditorEntry {
  */
 export function HookEditorDialog({
     repoId,
-    hooks,
     open,
     onClose,
 }: {
     repoId: number;
-    hooks: GitHook[];
     open: boolean;
     onClose: () => void;
 }) {
@@ -65,20 +68,15 @@ export function HookEditorDialog({
             }}
         >
             <DialogPopup className="max-w-3xl" data-testid="hook-editor-dialog">
-                <HookEditorDialogBody repoId={repoId} hooks={hooks} />
+                <HookEditorDialogBody repoId={repoId} />
             </DialogPopup>
         </Dialog>
     );
 }
 
-function HookEditorDialogBody({
-    repoId,
-    hooks,
-}: {
-    repoId: number;
-    hooks: GitHook[];
-}) {
+function HookEditorDialogBody({ repoId }: { repoId: number }) {
     const { backend, queryClient } = useAppServices();
+    const { enabled: editorConfigured, openInEditor } = useOpenInEditor();
     const [activeHook, setActiveHook] = useState<string>(STANDARD_HOOKS[0]);
     const [byHook, setByHook] = useState<Record<string, HookEditorEntry>>({});
     const [saving, setSaving] = useState(false);
@@ -176,30 +174,24 @@ function HookEditorDialogBody({
                     >
                         <TabsList
                             aria-label="Commit hooks"
-                            className="h-fit w-44 shrink-0 self-start p-1"
+                            className="h-fit shrink-0 self-start p-1"
                         >
                             {STANDARD_HOOKS.map((name) => (
                                 <TabsTab
                                     key={name}
                                     value={name}
-                                    className="px-1.5 text-xs"
+                                    className="flex flex-row px-1.5 text-xs data-[orientation=vertical]:justify-between"
                                 >
-                                    <span className="min-w-0 truncate font-mono">
+                                    <span className="min-w-0 truncate">
                                         {name}
                                     </span>
-                                    {hooks.some(
-                                        (hook) => hook.name === name
-                                    ) && (
-                                        <Check
-                                            data-testid={`hook-picker-${name}-installed`}
-                                            className="ml-auto size-3 shrink-0 text-success"
-                                        />
-                                    )}
                                 </TabsTab>
                             ))}
                         </TabsList>
                         {STANDARD_HOOKS.map((name) => {
                             const loaded = byHook[name];
+                            const canOpenInEditor =
+                                editorConfigured && loaded?.exists === true;
                             return (
                                 <TabsPanel
                                     key={name}
@@ -207,7 +199,36 @@ function HookEditorDialogBody({
                                     className="min-w-0"
                                 >
                                     <Field className="gap-1.5">
-                                        <FieldLabel>{name} script</FieldLabel>
+                                        <div className="flex w-full items-center justify-between">
+                                            <FieldLabel className="ui-selectable cursor-text">
+                                                {name} script
+                                            </FieldLabel>
+                                            <Tooltip>
+                                                <TooltipTrigger
+                                                    render={
+                                                        <Button
+                                                            size="icon-2xs"
+                                                            variant="ghost"
+                                                            aria-label={`Open ${name} in editor`}
+                                                            disabled={
+                                                                !canOpenInEditor
+                                                            }
+                                                            onClick={() => {
+                                                                if (loaded)
+                                                                    void openInEditor(
+                                                                        loaded.path
+                                                                    );
+                                                            }}
+                                                        >
+                                                            <SquarePen />
+                                                        </Button>
+                                                    }
+                                                />
+                                                <TooltipContent>
+                                                    Open in editor
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </div>
                                         {loaded == null ? (
                                             <ScrollTextarea
                                                 className="h-[12lh] font-mono"
