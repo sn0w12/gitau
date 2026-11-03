@@ -193,7 +193,7 @@ function replacementFor(file, version) {
             return [/^version = "[^"]+"/m, `version = "${version}"`];
         case "Cargo.lock":
             return [
-                /name = "(?:git-backend|gitau)"\r?\nversion = "[^"]+"/g,
+                /name = "(?:git|gitau)"\r?\nversion = "[^"]+"/g,
                 (match) =>
                     match.replace(
                         /version = "[^"]+"/,

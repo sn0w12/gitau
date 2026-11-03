@@ -1,5 +1,5 @@
 //! Embedded scaffolding content for repository creation: .gitignore presets
-//! and permissive license texts, stored under `crates/git-backend/assets`.
+//! and permissive license texts, stored under `crates/git/assets`.
 //! Everything is static so dialogs work offline; the lists exposed over IPC
 //! are exactly the ids matched here.
 

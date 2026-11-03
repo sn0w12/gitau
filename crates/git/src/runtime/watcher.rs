@@ -79,7 +79,7 @@ pub fn spawn_watch(
     let stop = Arc::new(AtomicBool::new(false));
     let stop_clone = stop.clone();
     let thread = std::thread::Builder::new()
-        .name("git-backend-watch".into())
+        .name("git-watch".into())
         .spawn(move || {
             let mut burst: Vec<PathBuf> = Vec::new();
             loop {
