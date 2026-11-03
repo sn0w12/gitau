@@ -14,12 +14,12 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Form } from "@/components/ui/form";
+import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
 import { ScrollTextarea } from "@/components/ui/textarea";
 import { useAppServices } from "@/contexts/services-context";
 import type { GitHook } from "@/lib/backend/protocol";
 import { repositoryKeys } from "@/lib/backend/queries/query-keys";
 import { toastError } from "@/lib/toast-error";
-import { cn } from "@/lib/utils";
 
 /** Standard commit-lifecycle hooks in pipeline order, mirroring
  * `COMMIT_HOOK_NAMES` in crates/git-backend/src/engines/git2/hooks.rs; the
@@ -64,7 +64,7 @@ export function HookEditorDialog({
                 if (!next) onClose();
             }}
         >
-            <DialogPopup className="max-w-xl" data-testid="hook-editor-dialog">
+            <DialogPopup className="max-w-3xl" data-testid="hook-editor-dialog">
                 <HookEditorDialogBody repoId={repoId} hooks={hooks} />
             </DialogPopup>
         </Dialog>
@@ -165,43 +165,77 @@ function HookEditorDialogBody({
                     void handleSave();
                 }}
             >
-                <DialogPanel className="grid grid-cols-[9.5rem_1fr] gap-4">
-                    <ul className="flex flex-col gap-1">
-                        {STANDARD_HOOKS.map((name) => (
-                            <HookPickerRow
-                                key={name}
-                                name={name}
-                                hook={hooks.find((hook) => hook.name === name)}
-                                active={activeHook === name}
-                                onSelect={() => setActiveHook(name)}
-                            />
-                        ))}
-                    </ul>
-                    <Field className="min-w-0 gap-1.5">
-                        <FieldLabel>{activeHook} script</FieldLabel>
-                        {loading ? (
-                            <ScrollTextarea
-                                className="h-[12lh] font-mono"
-                                disabled
-                            />
-                        ) : (
-                            <ScrollTextarea
-                                value={entry.content}
-                                onChange={(event) =>
-                                    setByHook((prev) => ({
-                                        ...prev,
-                                        [activeHook]: {
-                                            ...prev[activeHook],
-                                            content: event.target.value,
-                                        },
-                                    }))
-                                }
-                                spellCheck={false}
-                                autoFocus
-                                className="h-[12lh] font-mono"
-                            />
-                        )}
-                    </Field>
+                <DialogPanel>
+                    <Tabs
+                        orientation="vertical"
+                        value={activeHook}
+                        onValueChange={(value) => {
+                            if (typeof value === "string") setActiveHook(value);
+                        }}
+                        className="gap-4"
+                    >
+                        <TabsList
+                            aria-label="Commit hooks"
+                            className="h-fit w-44 shrink-0 self-start p-1"
+                        >
+                            {STANDARD_HOOKS.map((name) => (
+                                <TabsTab
+                                    key={name}
+                                    value={name}
+                                    className="px-1.5 text-xs"
+                                >
+                                    <span className="min-w-0 truncate font-mono">
+                                        {name}
+                                    </span>
+                                    {hooks.some(
+                                        (hook) => hook.name === name
+                                    ) && (
+                                        <Check
+                                            data-testid={`hook-picker-${name}-installed`}
+                                            className="ml-auto size-3 shrink-0 text-success"
+                                        />
+                                    )}
+                                </TabsTab>
+                            ))}
+                        </TabsList>
+                        {STANDARD_HOOKS.map((name) => {
+                            const loaded = byHook[name];
+                            return (
+                                <TabsPanel
+                                    key={name}
+                                    value={name}
+                                    className="min-w-0"
+                                >
+                                    <Field className="gap-1.5">
+                                        <FieldLabel>{name} script</FieldLabel>
+                                        {loaded == null ? (
+                                            <ScrollTextarea
+                                                className="h-[12lh] font-mono"
+                                                disabled
+                                            />
+                                        ) : (
+                                            <ScrollTextarea
+                                                value={loaded.content}
+                                                onChange={(event) =>
+                                                    setByHook((prev) => ({
+                                                        ...prev,
+                                                        [name]: {
+                                                            ...prev[name],
+                                                            content:
+                                                                event.target
+                                                                    .value,
+                                                        },
+                                                    }))
+                                                }
+                                                spellCheck={false}
+                                                className="h-[12lh] font-mono"
+                                            />
+                                        )}
+                                    </Field>
+                                </TabsPanel>
+                            );
+                        })}
+                    </Tabs>
                 </DialogPanel>
                 <DialogFooter>
                     <DialogClose render={<Button variant="ghost" />}>
@@ -213,39 +247,5 @@ function HookEditorDialogBody({
                 </DialogFooter>
             </Form>
         </>
-    );
-}
-
-function HookPickerRow({
-    name,
-    hook,
-    active,
-    onSelect,
-}: {
-    name: string;
-    hook: GitHook | undefined;
-    active: boolean;
-    onSelect: () => void;
-}) {
-    return (
-        <li>
-            <button
-                type="button"
-                aria-pressed={active}
-                onClick={onSelect}
-                className={cn(
-                    "flex w-full cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs",
-                    active ? "bg-accent" : "hover:bg-accent/60"
-                )}
-            >
-                <span className="min-w-0 truncate font-mono">{name}</span>
-                {hook && (
-                    <Check
-                        data-testid={`hook-picker-${name}-installed`}
-                        className="ml-auto size-3 shrink-0 text-success"
-                    />
-                )}
-            </button>
-        </li>
     );
 }

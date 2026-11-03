@@ -358,8 +358,8 @@ describe("HookEditorDialog", () => {
         );
         expect(installed).toBe(true);
         expect(
-            [...document.querySelectorAll("li button")].some((el) =>
-                el.textContent!.includes("pre-commit")
+            [...document.querySelectorAll('[data-slot="tabs-tab"]')].some(
+                (el) => el.textContent!.includes("pre-commit")
             )
         ).toBe(true);
         view.unmount();
