@@ -6,7 +6,6 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use git::api::queries::DiffRequest;
 use git::engines::gix::diff;
 use git::engines::gix::syntax as highlight;
-use git::streaming::model::{DiffRow, DiffRowKind};
 
 fn lcg(seed: u64) -> impl FnMut() -> f64 {
     let mut state = seed;
@@ -25,14 +24,6 @@ const NAMES: &[&str] = &[
 fn word(next: &mut impl FnMut() -> f64, index: usize) -> String {
     let pick = NAMES[(next() * NAMES.len() as f64) as usize % NAMES.len()];
     format!("{pick}_{index}")
-}
-
-fn size_target(size: &str) -> usize {
-    match size {
-        "small" => 2_000,
-        "medium" => 24_000,
-        _ => 120_000,
-    }
 }
 
 /// A rust file of roughly `target` bytes mixing doc comments, block comments,
@@ -127,47 +118,6 @@ fn session_for(root: &std::path::Path) -> &'static git::engines::gix::GixSession
     S.get_or_init(|| git::engines::gix::GixSession::discover(root).unwrap())
 }
 
-/// Every line becomes a synthetic addition numbered on the new side only, so
-/// attach() parses exactly one full file.
-fn full_file_rows(text: &str) -> Vec<DiffRow> {
-    text.lines()
-        .enumerate()
-        .map(|(idx, line)| DiffRow {
-            kind: DiffRowKind::Addition,
-            old_lineno: None,
-            new_lineno: Some(idx as u32 + 1),
-            content: line.to_string(),
-            raw_hex: None,
-            spans: None,
-        })
-        .collect()
-}
-
-fn bench_full_file(c: &mut Criterion) {
-    c.bench_function("syntax-set-cold-init", |b| {
-        b.iter(|| black_box(two_face::syntax::extra_newlines().syntaxes().len()))
-    });
-
-    let mut group = c.benchmark_group("full-file-highlight");
-    for size in ["small", "medium", "large"] {
-        let text = rust_source(0x5eed, size_target(size));
-        group.bench_function(size, |b| {
-            b.iter(|| {
-                let mut rows = full_file_rows(&text);
-                highlight::attach(&mut rows, "corpus.rs", b"", text.as_bytes());
-                let spans: usize = rows
-                    .iter()
-                    .filter_map(|r| r.spans.as_ref())
-                    .map(|s| s.len() / 3)
-                    .sum();
-                assert!(spans > 0, "fixture must highlight");
-                black_box(spans)
-            })
-        });
-    }
-    group.finish();
-}
-
 fn bench_sections(c: &mut Criterion) {
     let root = fixture_repo();
     let session = session_for(root);
@@ -221,5 +171,5 @@ fn bench_sections(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_full_file, bench_sections);
+criterion_group!(benches, bench_sections);
 criterion_main!(benches);

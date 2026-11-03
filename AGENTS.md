@@ -84,7 +84,7 @@ Regenerate the settings TS contract after changing the Rust settings schema:
 cargo run -p gitau --bin export_settings --features devtools   # rewrites src/lib/settings/settings.generated.ts
 ```
 
-Benchmarks: `cargo bench -p git` (Criterion, `crates/git/benches/`).
+Benchmarks: `cargo bench --workspace` (Criterion; git benches in `crates/git/benches/`, with the highlighter and language benches in their own crates).
 
 ## Code conventions and common patterns
 

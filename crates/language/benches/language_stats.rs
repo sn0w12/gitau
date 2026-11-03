@@ -2,7 +2,7 @@ use std::hint::black_box;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, Criterion};
 
 use language::language_stats;
 

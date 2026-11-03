@@ -33,7 +33,7 @@ build-scan:
     npm run tauri build -- --config crates/tauri/tauri.scan.conf.json
 
 bench *args="":
-    cargo bench -p git{{ if args == "" { "" } else { " " + args } }}
+    cargo bench --workspace{{ if args == "" { "" } else { " " + args } }}
 
 trace *args="release":
     node scripts/boot-trace.mjs {{ args }}

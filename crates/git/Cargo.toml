@@ -36,7 +36,6 @@ fuzzy-matcher.workspace = true
 base64.workspace = true
 criterion.workspace = true
 tempfile.workspace = true
-two-face.workspace = true
 
 [[bench]]
 name = "status"
@@ -59,9 +58,5 @@ name = "huge"
 harness = false
 
 [[bench]]
-name = "highlight"
-harness = false
-
-[[bench]]
-name = "language_stats"
+name = "diff_highlight"
 harness = false

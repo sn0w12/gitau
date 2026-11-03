@@ -1752,7 +1752,6 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "trash",
- "two-face",
 ]
 
 [[package]]
@@ -2968,6 +2967,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 name = "highlight"
 version = "0.2.3"
 dependencies = [
+ "criterion",
  "serde",
  "syntect",
  "two-face",
@@ -3601,8 +3601,11 @@ dependencies = [
 name = "language"
 version = "0.2.3"
 dependencies = [
+ "criterion",
+ "git2",
  "gix",
  "serde",
+ "tempfile",
  "thiserror 2.0.21",
 ]
 
