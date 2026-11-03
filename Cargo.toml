@@ -8,6 +8,7 @@ members = [
     "crates/git",
     "crates/highlight",
     "crates/icons",
+    "crates/language",
     "crates/tauri",
 ]
 
@@ -42,6 +43,7 @@ keyring = { version = "3", features = [
     "apple-native",
     "sync-secret-service",
 ] }
+language = { path = "crates/language" }
 log = "0.4"
 notify = "8"
 pico-args = "0.5"
@@ -99,3 +101,4 @@ opt-level = 3
 lto = "thin"
 codegen-units = 16
 debug = false
+

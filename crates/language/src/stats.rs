@@ -7,13 +7,22 @@
 use std::sync::atomic::AtomicBool;
 
 use gix::bstr::ByteSlice;
-use gix::dir::EntryRef;
 use gix::dir::entry::Kind as DirKind;
 use gix::dir::entry::Status as DirStatus;
 use gix::dir::walk::{Action, Delegate, EmissionMode, ForDeletionMode};
+use gix::dir::EntryRef;
 
-use crate::domain::lang_colors::{Resolution, classify_language, color_for_language, resolve};
-use crate::error::{GitError, Result};
+use crate::lang_colors::{classify_language, color_for_language, resolve, Resolution};
+
+#[derive(Debug, thiserror::Error)]
+pub enum LanguageError {
+    #[error("failed to read the worktree index: {0}")]
+    Index(String),
+    #[error("worktree walk failed: {0}")]
+    Walk(String),
+}
+
+pub type Result<T> = std::result::Result<T, LanguageError>;
 
 /// One language's share of the worktree's code.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -43,14 +52,11 @@ const MAX_ENTRIES: usize = 200_000;
 
 /// Walks the worktree, respecting `.gitignore` rules, tracking tracked and
 /// untracked files. Bare repositories yield empty stats.
-pub fn language_stats(workdir: &std::path::Path) -> Result<LanguageStats> {
-    let session = crate::engines::gix::GixSession::discover(workdir)?;
-    let repo = session.handle();
-    if repo.workdir().is_none() {
+pub fn language_stats(repo: &gix::Repository) -> Result<LanguageStats> {
+    let Some(worktree) = repo.workdir().map(std::path::Path::to_path_buf) else {
         return Ok(LanguageStats::default());
-    }
-    let worktree = repo.workdir().expect("checked above").to_owned();
-    let index = crate::engines::gix::session::open_index(&repo)?;
+    };
+    let index = open_index(repo)?;
     // Sizes for tracked files come free with the index; only untracked
     // files pay a stat at classification time.
     let tracked_sizes: std::collections::HashMap<&gix::bstr::BStr, u32> = index
@@ -83,10 +89,28 @@ pub fn language_stats(workdir: &std::path::Path) -> Result<LanguageStats> {
     Ok(delegate.finish())
 }
 
-fn internal(err: impl std::fmt::Display) -> GitError {
-    GitError::Internal {
-        message: err.to_string(),
+fn internal(err: impl std::fmt::Display) -> LanguageError {
+    LanguageError::Walk(err.to_string())
+}
+
+fn open_index(repo: &gix::Repository) -> Result<gix::index::File> {
+    match repo.open_index() {
+        Ok(index) => Ok(index),
+        Err(err) if index_file_missing(&err) => Ok(gix::index::File::from_state(
+            gix::index::State::new(repo.object_hash()),
+            repo.index_path(),
+        )),
+        Err(err) => Err(LanguageError::Index(err.to_string())),
     }
+}
+
+fn index_file_missing(err: &gix::worktree::open_index::Error) -> bool {
+    matches!(
+        err,
+        gix::worktree::open_index::Error::IndexFile(gix::index::file::init::Error::Io(
+            err
+        )) if err.kind() == std::io::ErrorKind::NotFound
+    )
 }
 
 #[derive(Default)]

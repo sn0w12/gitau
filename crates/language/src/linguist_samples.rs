@@ -3,7 +3,7 @@
 //! line per sample, tab-separated: `file name<TAB>content`.
 
 #[cfg(test)]
-pub(crate) const SAMPLES: &str = include_str!("../../tests/linguist_samples.tsv");
+pub(crate) const SAMPLES: &str = include_str!("../tests/linguist_samples.tsv");
 
 /// Parses the corpus into `(file name, content)` pairs. Content is stored
 /// flattened, so only a record's first line survives; continuation lines

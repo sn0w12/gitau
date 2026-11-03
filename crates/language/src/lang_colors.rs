@@ -679,7 +679,11 @@ fn scan_text(bytes: &[u8]) -> Option<&str> {
 }
 
 fn filter_excluded(lang: &'static str) -> Option<&'static str> {
-    if lang.is_empty() { None } else { Some(lang) }
+    if lang.is_empty() {
+        None
+    } else {
+        Some(lang)
+    }
 }
 
 /// Interpreters for shebang scripts. Checked as the last path segment of
@@ -873,7 +877,7 @@ mod tests {
 
     #[test]
     fn tuning_matches_linguist_samples() {
-        let failures: Vec<String> = crate::domain::linguist_samples::parse_samples()
+        let failures: Vec<String> = crate::linguist_samples::parse_samples()
             .into_iter()
             .filter_map(|(name, text)| {
                 if classify_language(None, &name, text.as_bytes()).is_some() {

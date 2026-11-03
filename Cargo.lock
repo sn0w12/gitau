@@ -1742,6 +1742,7 @@ dependencies = [
  "highlight",
  "icons",
  "keyring",
+ "language",
  "log",
  "notify",
  "rayon",
@@ -3594,6 +3595,15 @@ checksum = "07293a4e297ac234359b510362495713f75ea345d5307140414f20c69ffeb087"
 dependencies = [
  "bitflags 2.13.2",
  "libc",
+]
+
+[[package]]
+name = "language"
+version = "0.2.3"
+dependencies = [
+ "gix",
+ "serde",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

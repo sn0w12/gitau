@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::engines::gix::language_stats::LanguageEntry;
+use language::LanguageEntry;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]

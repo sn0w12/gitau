@@ -1,0 +1,11 @@
+[package]
+name = "language"
+version.workspace = true
+edition = "2021"
+rust-version.workspace = true
+description = "Linguist-style worktree language detection, shares, and display colors"
+
+[dependencies]
+gix.workspace = true
+serde.workspace = true
+thiserror.workspace = true

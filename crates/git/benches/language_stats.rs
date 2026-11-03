@@ -4,7 +4,7 @@ use std::sync::OnceLock;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 
-use git::engines::gix::language_stats::language_stats;
+use language::language_stats;
 
 /// A few thousand files across common languages plus ignored noise and
 /// content-ambiguous files, sized so the walk plus classification is the
@@ -103,7 +103,8 @@ fn fixture_repo() -> &'static PathBuf {
 
 fn bench_language_stats(c: &mut Criterion) {
     let root = fixture_repo().clone();
-    let stats = language_stats(&root).unwrap();
+    let repo = gix::discover(&root).unwrap();
+    let stats = language_stats(&repo).unwrap();
     assert_eq!(
         stats.entries.first().expect("typescript dominant").language,
         "TypeScript"
@@ -112,7 +113,7 @@ fn bench_language_stats(c: &mut Criterion) {
 
     c.bench_function("language-stats/cold-3370-files", |b| {
         b.iter(|| {
-            let stats = language_stats(black_box(&root)).unwrap();
+            let stats = language_stats(black_box(&repo)).unwrap();
             black_box(stats.entries.len());
         })
     });

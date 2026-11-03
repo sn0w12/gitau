@@ -118,14 +118,7 @@ pub struct RemoveRepositoryResult {
     pub repo_root: String,
 }
 
-type LanguageStatsCache = Arc<
-    Mutex<
-        Vec<(
-            PathBuf,
-            Option<Vec<crate::engines::gix::language_stats::LanguageEntry>>,
-        )>,
-    >,
->;
+type LanguageStatsCache = Arc<Mutex<Vec<(PathBuf, Option<Vec<language::LanguageEntry>>)>>>;
 
 pub struct Backend {
     scheduler: Scheduler,
@@ -1762,10 +1755,7 @@ impl Backend {
 
     /// Language shares keyed by repo path, bounded FIFO cache; the backend
     /// is a process singleton, so one map covers all callers.
-    async fn cached_language_stats(
-        &self,
-        path: &Path,
-    ) -> Option<Vec<crate::engines::gix::language_stats::LanguageEntry>> {
+    async fn cached_language_stats(&self, path: &Path) -> Option<Vec<language::LanguageEntry>> {
         {
             let cache = self.language_stats_cache.lock().unwrap();
             if let Some((_, cached)) = cache.iter().find(|(key, _)| key == path) {
@@ -1776,7 +1766,9 @@ impl Backend {
         let stats = self
             .scheduler
             .run(&CancellationToken::new(), move || {
-                crate::engines::gix::language_stats::language_stats(&compute_path)
+                let session = crate::engines::gix::GixSession::discover(&compute_path)?;
+                language::language_stats(&session.handle())
+                    .map_err(|error| crate::error::GitError::internal(error.to_string()))
             })
             .await;
         let entries = stats

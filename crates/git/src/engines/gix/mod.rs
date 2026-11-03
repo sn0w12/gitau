@@ -1,5 +1,4 @@
 pub mod diff;
-pub mod language_stats;
 pub mod objects;
 pub mod session;
 pub mod status;

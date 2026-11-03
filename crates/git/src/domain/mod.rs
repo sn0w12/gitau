@@ -3,8 +3,6 @@ pub mod commits;
 pub mod graph;
 pub mod history;
 pub mod ids;
-pub(crate) mod lang_colors;
-pub(crate) mod linguist_samples;
 pub mod paths;
 pub mod readme;
 pub mod refs;
