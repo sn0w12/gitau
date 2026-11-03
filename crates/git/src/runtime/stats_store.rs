@@ -23,8 +23,8 @@
 use std::path::{Path, PathBuf};
 
 use crate::domain::history::{BucketSize, ChartBucket};
-use crate::runtime::disk::{fnv1a64, sanitize_component, write_atomic};
 use crate::runtime::history_cache::CommitStatPoint;
+use fs_util::{fnv1a64, sanitize_component, write_atomic};
 
 const POINTS_MAGIC: &[u8; 4] = b"GTCS";
 const POINTS_VERSION: u32 = 2;

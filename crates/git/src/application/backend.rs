@@ -2817,7 +2817,7 @@ fn origin_url(remotes: &[crate::api::remotes::RemoteInfo]) -> Option<String> {
 /// Cache key for the remote-info payloads, matching the `host/owner/repo`
 /// layout the icon cache uses.
 fn remote_info_cache_key(coords: &RemoteCoords) -> String {
-    let sanitize = crate::runtime::disk::sanitize_component;
+    let sanitize = fs_util::sanitize_component;
     format!(
         "{}/{}/{}",
         sanitize(&coords.host),
@@ -2904,7 +2904,7 @@ fn store_remote_info(dir: &Path, key: &str, info: &RemoteRepoInfo) {
         return;
     }
     if let Ok(json) = serde_json::to_vec(info) {
-        let _ = crate::runtime::disk::write_atomic(&path, &json);
+        let _ = fs_util::write_atomic(&path, &json);
     }
 }
 

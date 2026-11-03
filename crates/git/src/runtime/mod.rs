@@ -1,7 +1,6 @@
 pub mod cache;
 pub mod cancellation;
 pub mod clone_ops;
-pub mod disk;
 pub mod history_cache;
 pub mod invalidation;
 pub mod registry;
