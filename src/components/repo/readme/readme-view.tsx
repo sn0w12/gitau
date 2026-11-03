@@ -63,7 +63,7 @@ export function ReadmeView({ repoId }: { repoId: number }) {
             overscrollContain
             scrollbarGutter
         >
-            <article className="mx-auto w-full max-w-3xl px-6 py-8">
+            <article className="ui-selectable mx-auto w-full max-w-3xl px-6 py-8">
                 <CustomMarkdown
                     imageRepoId={repoId}
                     imageBasePath={imageBasePath}
