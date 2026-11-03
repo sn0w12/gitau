@@ -130,13 +130,7 @@ export function PullRequestsView({
                             </SelectTrigger>
                             <SelectPopup>
                                 <SelectItem value="none">
-                                    <span className="flex items-center gap-2">
-                                        <span
-                                            aria-hidden="true"
-                                            className="size-1.5 rounded-full bg-muted-foreground"
-                                        />
-                                        <span className="truncate">None</span>
-                                    </span>
+                                    <span className="truncate">None</span>
                                 </SelectItem>
                                 {labels.map((item) => (
                                     <SelectItem
