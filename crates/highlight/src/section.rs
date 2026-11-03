@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use syntect::highlighting::{FontStyle, HighlightIterator, HighlightState, Highlighter};
-use syntect::parsing::{ParseState, ScopeStack, SyntaxReference};
+use syntect::parsing::{ParseState, ScopeStack};
 
 use crate::style::{font_bits, hex, packed, LineRef, Style, StyleInterner};
-use crate::syntax::{detect_syntax, syntax_set};
+use crate::syntax::{detect_syntax, Grammar};
 use crate::themes::themes;
 use crate::{MAX_HIGHLIGHT_BYTES, NO_NEWLINE_MARKER};
 
@@ -16,6 +16,7 @@ use crate::{MAX_HIGHLIGHT_BYTES, NO_NEWLINE_MARKER};
 pub(crate) struct SideStream {
     pub(crate) lines: Vec<String>,
     state: ParseState,
+    set: &'static syntect::parsing::SyntaxSet,
     next: usize,
     light_state: HighlightState,
     dark_state: HighlightState,
@@ -27,7 +28,7 @@ pub(crate) struct SideStream {
 }
 
 impl SideStream {
-    pub(crate) fn new(text: &str, syntax: &'static SyntaxReference) -> SideStream {
+    pub(crate) fn new(text: &str, grammar: Grammar) -> SideStream {
         let themes = themes();
         let light_hl = Highlighter::new(&themes.light);
         let dark_hl = Highlighter::new(&themes.dark);
@@ -43,7 +44,8 @@ impl SideStream {
             .unwrap_or(syntect::highlighting::Color::WHITE);
         SideStream {
             lines: text.split_inclusive('\n').map(str::to_string).collect(),
-            state: ParseState::new(syntax),
+            state: ParseState::new(grammar.syntax),
+            set: grammar.set,
             next: 0,
             light_state: HighlightState::new(&light_hl, ScopeStack::new()),
             dark_state: HighlightState::new(&dark_hl, ScopeStack::new()),
@@ -82,7 +84,7 @@ impl SideStream {
     }
 
     fn feed_state(&mut self, line: &str) {
-        let Ok(ops) = self.state.parse_line(line, syntax_set()) else {
+        let Ok(ops) = self.state.parse_line(line, self.set) else {
             return;
         };
         // HighlightStates only advance when their iterator is drained; run
@@ -103,7 +105,7 @@ impl SideStream {
         content_len: usize,
         interner: &mut StyleInterner,
     ) -> Vec<u32> {
-        let Ok(ops) = self.state.parse_line(line, syntax_set()) else {
+        let Ok(ops) = self.state.parse_line(line, self.set) else {
             return Vec::new();
         };
         let light_iter = HighlightIterator::new(&mut self.light_state, &ops, line, &self.light_hl);
@@ -178,12 +180,12 @@ impl SectionHighlighter {
         if old.len() > MAX_HIGHLIGHT_BYTES || new.len() > MAX_HIGHLIGHT_BYTES {
             return None;
         }
-        let syntax = detect_syntax(path)?;
+        let grammar = detect_syntax(path)?;
         let old_text = std::str::from_utf8(old).ok()?;
         let new_text = std::str::from_utf8(new).ok()?;
         Some(SectionHighlighter {
-            old: (!old_text.is_empty()).then(|| SideStream::new(old_text, syntax)),
-            new: (!new_text.is_empty()).then(|| SideStream::new(new_text, syntax)),
+            old: (!old_text.is_empty()).then(|| SideStream::new(old_text, grammar)),
+            new: (!new_text.is_empty()).then(|| SideStream::new(new_text, grammar)),
             styles: StyleInterner::default(),
         })
     }

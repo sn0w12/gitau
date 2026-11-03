@@ -67,4 +67,25 @@ fn main() {
         assert!(highlight_snippet("plaintext", SOURCE).is_none());
         assert!(highlight_snippet("rs", "").is_none());
     }
+
+    #[test]
+    fn justfile_snippet_highlights() {
+        let source = "\
+set shell := [\"bash\", \"-cu\"]
+
+build target=\"debug\":
+    @echo \"building {{target}}\"
+    cargo build {{target}}
+";
+        let highlighted = highlight_snippet("justfile", source).expect("justfile highlights");
+        assert_eq!(
+            highlighted.spans_by_line.len(),
+            source.split_inclusive('\n').count()
+        );
+        assert!(!highlighted.styles.is_empty());
+        assert!(
+            !highlighted.spans_by_line[3].is_empty(),
+            "recipe body carries spans"
+        );
+    }
 }

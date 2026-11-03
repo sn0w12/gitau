@@ -144,7 +144,7 @@ export function TimelineReview({
 function languageFromPath(path: string): string {
     const name = path.split("/").pop() ?? "";
     const dot = name.lastIndexOf(".");
-    return dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+    return (dot > 0 ? name.slice(dot + 1) : name).toLowerCase();
 }
 
 /** An inline comment, with the diff hunk it was written against so the

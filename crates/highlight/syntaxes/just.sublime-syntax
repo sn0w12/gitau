@@ -1,0 +1,344 @@
+%YAML 1.2
+---
+# Ported from nefrob/vscode-just (MIT), syntaxes/just.tmLanguage.yml at
+# 43c8eab38e979c1b52f14ca033c0deb179a78def. Embedded-language shebang
+# blocks are omitted because this grammar parses in its own syntax set.
+name: Just
+scope: source.just
+file_extensions:
+  - justfile
+  - .justfile
+  - just
+
+variables:
+  valid_name: '[a-zA-Z_][a-zA-Z0-9_-]*'
+
+contexts:
+  main:
+    - include: comments
+    - include: imports
+    - include: modules
+    - include: aliases
+    - include: assignments
+    - include: builtins
+    - include: keywords
+    - include: expression-operators
+    - include: backticks
+    - include: strings
+    - include: parenthesis
+    - include: attributes
+    - include: recipes
+    - include: recipe-body
+    - include: escaping
+
+  comments:
+    - match: '#(?!\!).*$'
+      scope: comment.line.number-sign.just
+
+  imports:
+    - match: '(?x)^(import)(\?)?\s+'
+      captures:
+        1: keyword.other.reserved.just
+        2: punctuation.optional.just
+      push:
+        - include: strings
+        - match: '$\n?'
+          pop: 1
+
+  modules:
+    - match: '(?x)^(mod)(\?)?\s+({{valid_name}})(?=[$\s])'
+      captures:
+        1: keyword.other.reserved.just
+        2: punctuation.optional.just
+        3: variable.name.module.just
+      push:
+        - include: strings
+        - match: '$\n?'
+          pop: 1
+
+  aliases:
+    - match: |
+        (?x)
+          ^
+          (alias) \s+
+          ({{valid_name}}) \s*
+          (:=) \s*
+          ({{valid_name}})
+      captures:
+        1: keyword.other.reserved.just
+        2: variable.name.alias.just
+        3: keyword.operator.assignment.just
+        4: variable.other.just
+
+  assignments:
+    - include: variable-assignments
+    - include: setting-assignments
+
+  variable-assignments:
+    - match: '^(unexport)\s+({{valid_name}})'
+      captures:
+        1: keyword.other.reserved.just
+        2: variable.other.just
+    - match: |
+        (?x)
+          ^
+          (?: (export) \s+)?
+          ({{valid_name}}) \s*
+          (:=)
+      captures:
+        1: keyword.other.reserved.just
+        2: variable.other.just
+        3: keyword.operator.assignment.just
+      push:
+        - include: expression
+        - include: comments
+        - match: '$\n?'
+          pop: 1
+
+  setting-assignments:
+    - match: |
+        (?x)
+          ^
+          (set) \s+
+          ({{valid_name}}) \s*
+          (:=)?
+      captures:
+        1: keyword.other.reserved.just
+        2: variable.other.just
+        3: keyword.operator.assignment.just
+      push:
+        - include: expression
+        - include: comments
+        - match: '$\n?'
+          pop: 1
+
+  expression:
+    - include: backticks
+    - include: builtins
+    - include: control-keywords
+    - include: expression-operators
+    - include: parenthesis
+    - include: strings
+    - match: '\b{{valid_name}}\b'
+      scope: variable.other.just
+
+  builtins:
+    - match: |
+        (?x) \b(
+          HEX|HEXLOWER|HEXUPPER|PATH_SEP|PATH_VAR_SEP|CLEAR|NORMAL|BOLD|ITALIC|UNDERLINE|INVERT|HIDE|
+          STRIKETHROUGH|BLACK|RED|GREEN|YELLOW|BLUE|MAGENTA|CYAN|WHITE|BG_BLACK|
+          BG_RED|BG_GREEN|BG_YELLOW|BG_BLUE|BG_MAGENTA|BG_CYAN|BG_WHITE
+        )\b
+      scope: constant.language.const.just
+    - include: builtin-functions
+    - include: literals
+
+  builtin-functions:
+    - match: |
+        (?x) \b(
+          arch|num_cpus|os|os_family|shell|env_var|env_var_or_default|env|
+          is_dependency|invocation_directory|invocation_dir|invocation_directory_native|
+          invocation_dir_native|justfile|justfile_directory|justfile_dir|just_executable|
+          just_pid|source_file|source_directory|source_dir|module_file|module_directory|
+          module_dir|append|prepend|encode_uri_component|quote|replace|replace_regex|
+          trim|trim_end|trim_end_match|trim_end_matches|trim_start|trim_start_match|
+          trim_start_matches|capitalize|kebabcase|lowercamelcase|lowercase|
+          shoutykebabcase|shoutysnakecase|snakecase|titlecase|uppercamelcase|
+          uppercase|absolute_path|blake3|blake3_file|canonicalize|extension|
+          file_name|file_stem|parent_directory|parent_dir|without_extension|clean|join|
+          path_exists|error|assert|sha256|sha256_file|uuid|choose|datetime|
+          datetime_utc|semver_matches|style|cache_directory|cache_dir|config_directory|config_dir|
+          config_local_directory|config_local_dir|data_directory|data_dir|data_local_directory|
+          data_local_dir|executable_directory|executable_dir|home_directory|home_dir|which|require|read
+        )\b
+      scope: support.function.builtin.just
+
+  literals:
+    - include: boolean
+    - include: number
+
+  boolean:
+    - match: '\b(true|false)\b'
+      scope: constant.language.boolean.just
+
+  number:
+    - match: |
+        (?x)
+          (?<! [a-zA-Z_\-])(?:
+            \. \d+
+            |
+            \d+ \. \d+
+            |
+            \d+ \.
+            |
+            [1-9] \d*
+          )
+      scope: constant.numeric.just
+    - match: '\b[0-9]+[a-zA-Z_\-]+\b'
+      scope: invalid.illegal.name.just
+
+  keywords:
+    - include: reserved-keywords
+    - include: control-keywords
+
+  reserved-keywords:
+    - match: '^(alias|export|unexport|import|mod|set)\s+'
+      captures:
+        1: keyword.other.reserved.just
+
+  control-keywords:
+    - match: '\b(if|else)\b'
+      scope: keyword.control.conditional.just
+
+  parenthesis:
+    - match: '\('
+      push:
+        - include: expression
+        - include: parenthesis
+        - match: '\)'
+          pop: 1
+
+  expression-operators:
+    - match: '\+'
+      scope: keyword.operator.concat.just
+    - match: '/'
+      scope: keyword.operator.path-join.just
+    - match: '&&'
+      scope: keyword.operator.and.just
+    - match: '\|\|'
+      scope: keyword.operator.or.just
+    - match: '(==|=~|!=)'
+      scope: keyword.operator.equality.just
+
+  backticks:
+    - match: '```'
+      scope: string.interpolated.just
+      push:
+        - meta_scope: string.interpolated.just
+        - match: '```'
+          pop: 1
+    - match: '`[^`]*`'
+      scope: string.interpolated.just
+
+  strings:
+    - match: '([\"'']{1,3})[\{]+(\1)'
+      scope: string.quoted.double.indented.just
+    - match: '(f|x)?(""")'
+      captures:
+        1: constant.character.expanded.just
+        2: string.quoted.double.indented.just
+      push:
+        - meta_scope: string.quoted.double.indented.just
+        - match: '\\.(?:(?<=u)\{.+?\})?'
+          scope: constant.character.escape.just
+        - include: escaping
+        - match: '"""'
+          pop: 1
+    - match: '(f|x)?(")'
+      captures:
+        1: constant.character.expanded.just
+        2: string.quoted.double.just
+      push:
+        - meta_scope: string.quoted.double.just
+        - match: '\\.(?:(?<=u)\{.+?\})?'
+          scope: constant.character.escape.just
+        - include: escaping
+        - match: '"'
+          pop: 1
+    - match: "(f|x)?(''')"
+      captures:
+        1: constant.character.expanded.just
+        2: string.quoted.single.indented.just
+      push:
+        - meta_scope: string.quoted.single.indented.just
+        - include: escaping
+        - match: "'''"
+          pop: 1
+    - match: "(f|x)?(')"
+      captures:
+        1: constant.character.expanded.just
+        2: string.quoted.single.just
+      push:
+        - meta_scope: string.quoted.single.just
+        - include: escaping
+        - match: "'"
+          pop: 1
+
+  escaping:
+    - match: '(?<!\{)\{\{\{?(?!\{)'
+      scope: string.interpolated.escape.just
+      push:
+        - meta_scope: string.interpolated.escaping.just
+        - include: expression
+        - match: '\}\}'
+          scope: string.interpolated.escape.just
+          pop: 1
+
+  attributes:
+    - match: '^\[\s*([a-zA-Z_-]+).*\]\s*$'
+      captures:
+        1: support.function.system.just
+
+  recipes:
+    - match: '(?x)^(@_|_@|@|_)?({{valid_name}})(?=[^\n]*:[^=])'
+      captures:
+        1: keyword.other.recipe.prefix.just
+        2: entity.name.function.just
+      push: recipe-head
+
+  recipe-head:
+    - match: '[ \t]+'
+    - include: recipe-parameters
+    - match: ':'
+      scope: keyword.operator.recipe.end.just
+      set: recipe-dependencies
+    - match: '$\n?'
+      pop: 1
+
+  recipe-parameters:
+    - match: '[+*$](?=[a-zA-Z_])'
+      scope: keyword.other.recipe.variadic.just
+    - match: '([a-zA-Z_][a-zA-Z0-9_]*)(=)'
+      captures:
+        1: variable.parameter.recipe.just
+        2: keyword.operator.default.just
+      push: recipe-default
+    - match: '[a-zA-Z_][a-zA-Z0-9_]*'
+      scope: variable.parameter.recipe.just
+
+  recipe-default:
+    - include: expression
+    - match: '(?=[ \t:]|$)'
+      pop: 1
+
+  recipe-dependencies:
+    - match: '&&'
+      scope: keyword.operator.and.just
+    - match: '\([^)]*\)'
+      scope: meta.group.just
+    - match: '[a-zA-Z_][a-zA-Z0-9_-]*'
+      scope: entity.name.function.just
+    - match: '$\n?'
+      pop: 1
+
+  recipe-body:
+    - match: '^(?=[ \t])'
+      push: recipe-body-line
+
+  recipe-body-line:
+    - match: '^[ \t]+#!.*$'
+      scope: comment.line.number-sign.shebang.just
+    - match: '^[ \t]+(@)(-)?(?!-)'
+      captures:
+        1: keyword.operator.quiet.just
+        2: keyword.operator.error-suppression.just
+    - match: '^[ \t]+(-)(@)?(?!-)'
+      captures:
+        1: keyword.operator.error-suppression.just
+        2: keyword.operator.quiet.just
+    - include: escaping
+    - include: comments
+    - include: strings
+    - include: backticks
+    - match: '$\n?'
+      pop: 1
