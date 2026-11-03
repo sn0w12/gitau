@@ -4,8 +4,10 @@ members = [
     "crates/ansi",
     "crates/forge-core",
     "crates/forge-github",
+    "crates/fs-util",
     "crates/git",
     "crates/highlight",
+    "crates/icons",
     "crates/tauri",
 ]
 
@@ -22,6 +24,7 @@ criterion = "0.7"
 forge-core = { path = "crates/forge-core" }
 forge-github = { path = "crates/forge-github" }
 fontdb = "0.24"
+fs-util = { path = "crates/fs-util" }
 fuzzy-matcher = "0.3.7"
 git = { path = "crates/git" }
 git2 = { version = "0.21.0", features = [
@@ -33,6 +36,7 @@ git2 = { version = "0.21.0", features = [
 gix = { version = "0.87.0", features = ["status", "excludes"] }
 gix-status = { version = "0.34", features = ["parallel"] }
 highlight = { path = "crates/highlight" }
+icons = { path = "crates/icons" }
 keyring = { version = "3", features = [
     "windows-native",
     "apple-native",

@@ -4,7 +4,6 @@ pub mod domain;
 pub mod engines;
 pub mod error;
 pub mod global_ignore;
-pub mod icons;
 pub mod runtime;
 pub mod streaming;
 
@@ -14,4 +13,3 @@ pub use forge_core::{
     AccountProfile, AuthChallenge, Capabilities, ConnectionProfile, ForgeAccounts, ForgeProvider,
     ForgeRegistry, Org, ProviderDescriptor, PublishRepositoryRequest, PublishResult,
 };
-pub use icons::{CachedIcon, IconConfig, IconError, IconService};

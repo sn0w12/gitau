@@ -301,11 +301,11 @@ pub fn materialize(
                     .old_id
                     .is_some()
                     .then_some(crate::streaming::store::DiffImageSide {
-                        data_url: crate::icons::encode_data_url(&mime, old_bytes),
+                        data_url: icons::encode_data_url(&mime, old_bytes),
                     }),
                 new: (plan.new_id.is_some() || plan.worktree).then_some(
                     crate::streaming::store::DiffImageSide {
-                        data_url: crate::icons::encode_data_url(&mime, new_bytes),
+                        data_url: icons::encode_data_url(&mime, new_bytes),
                     },
                 ),
             })

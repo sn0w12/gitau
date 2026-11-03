@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use git::icons::{HttpFetcher, IconConfig, IconService};
 use git::{Backend, BackendConfig};
+use icons::{HttpFetcher, IconConfig, IconService};
 use serde::Serialize;
 
 use crate::session::SessionStore;

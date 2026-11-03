@@ -11,14 +11,15 @@ path = "src/lib.rs"
 
 [dependencies]
 ansi.workspace = true
-base64.workspace = true
 chrono.workspace = true
 forge-core.workspace = true
 forge-github.workspace = true
+fs-util.workspace = true
 git2.workspace = true
 gix.workspace = true
 gix-status.workspace = true
 highlight.workspace = true
+icons.workspace = true
 thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -27,7 +28,6 @@ tokio = { workspace = true, features = ["fs", "io-util", "process"] }
 notify.workspace = true
 keyring.workspace = true
 log.workspace = true
-reqwest.workspace = true
 rayon.workspace = true
 trash.workspace = true
 fuzzy-matcher.workspace = true

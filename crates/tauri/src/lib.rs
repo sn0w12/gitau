@@ -192,7 +192,7 @@ pub fn run() {
             tauri::async_runtime::spawn_blocking(move || {
                 let _span = boot_trace::span("rust.cache_cleanup");
                 let icons_removed =
-                    cleanup_icons.prune_old_entries(git::icons::IconConfig::default().prune_after);
+                    cleanup_icons.prune_old_entries(icons::IconConfig::default().prune_after);
                 let info_removed = cleanup_backend
                     .prune_remote_info_cache(git::REMOTE_INFO_PRUNE_AFTER);
                 let stats_removed = cleanup_backend

@@ -1435,6 +1435,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs-util"
+version = "0.2.3"
+dependencies = [
+ "tempfile",
+]
+
+[[package]]
 name = "futures-channel"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1727,16 +1734,17 @@ dependencies = [
  "criterion",
  "forge-core",
  "forge-github",
+ "fs-util",
  "fuzzy-matcher",
  "git2",
  "gix",
  "gix-status",
  "highlight",
+ "icons",
  "keyring",
  "log",
  "notify",
  "rayon",
- "reqwest 0.12.28",
  "serde",
  "serde_json",
  "tempfile",
@@ -1768,6 +1776,7 @@ dependencies = [
  "fontdb",
  "git",
  "highlight",
+ "icons",
  "log",
  "pico-args",
  "serde",
@@ -3111,6 +3120,20 @@ checksum = "d75e94d66081e4d8dcd098bd8dc5254800fea14a26389b298410158d834de167"
 dependencies = [
  "byteorder",
  "png",
+]
+
+[[package]]
+name = "icons"
+version = "0.2.3"
+dependencies = [
+ "base64 0.22.1",
+ "fs-util",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
 ]
 
 [[package]]

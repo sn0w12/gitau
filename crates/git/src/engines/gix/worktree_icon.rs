@@ -96,7 +96,7 @@ pub fn find_worktree_icon(workdir: &std::path::Path) -> Result<Option<WorktreeIc
     if bytes.len() > MAX_ICON_BYTES {
         return Ok(None);
     }
-    let Some(content_type) = crate::icons::sniff_image(&bytes) else {
+    let Some(content_type) = icons::sniff_image(&bytes) else {
         return Ok(None);
     };
 

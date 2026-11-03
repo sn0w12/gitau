@@ -507,10 +507,10 @@ impl Backend {
                     }
                     Err(error) => return Err(error.into()),
                 };
-                let Some(content_type) = crate::icons::sniff_image(&bytes) else {
+                let Some(content_type) = icons::sniff_image(&bytes) else {
                     return Ok(None);
                 };
-                Ok(Some(crate::icons::encode_data_url(content_type, &bytes)))
+                Ok(Some(icons::encode_data_url(content_type, &bytes)))
             })
             .await
     }
@@ -893,7 +893,7 @@ impl Backend {
     /// Probes the worktree for an icon file (favicon/logo/icon names,
     /// gitignored paths excluded) and returns it as a data URL, or `None`
     /// when the worktree holds nothing usable.
-    pub async fn worktree_icon(&self, id: RepoId) -> Result<Option<crate::icons::CachedIcon>> {
+    pub async fn worktree_icon(&self, id: RepoId) -> Result<Option<icons::CachedIcon>> {
         let entry = self.registry.get(id)?;
         let path = entry.canonical_path.clone();
         let key = format!("local:{}", path.display());
@@ -903,9 +903,9 @@ impl Backend {
                 crate::engines::gix::worktree_icon::find_worktree_icon(&path)
             })
             .await?;
-        Ok(icon.map(|icon| crate::icons::CachedIcon {
+        Ok(icon.map(|icon| icons::CachedIcon {
             key,
-            data_url: crate::icons::encode_data_url(icon.content_type, &icon.bytes),
+            data_url: icons::encode_data_url(icon.content_type, &icon.bytes),
             content_type: icon.content_type.to_owned(),
             fetched_at_ms: icon.modified_ms,
         }))
@@ -913,10 +913,7 @@ impl Backend {
 
     /// Worktree icon for a repository addressed by path (no open session
     /// required); mirrors `worktree_icon` for the id-based lookup.
-    pub async fn worktree_icon_for_path(
-        &self,
-        path: &Path,
-    ) -> Result<Option<crate::icons::CachedIcon>> {
+    pub async fn worktree_icon_for_path(&self, path: &Path) -> Result<Option<icons::CachedIcon>> {
         let probe = crate::engines::gix::GixSession::discover(path)?;
         let root = probe
             .workdir()
@@ -930,9 +927,9 @@ impl Backend {
                 crate::engines::gix::worktree_icon::find_worktree_icon(&root)
             })
             .await?;
-        Ok(icon.map(|icon| crate::icons::CachedIcon {
+        Ok(icon.map(|icon| icons::CachedIcon {
             key,
-            data_url: crate::icons::encode_data_url(icon.content_type, &icon.bytes),
+            data_url: icons::encode_data_url(icon.content_type, &icon.bytes),
             content_type: icon.content_type.to_owned(),
             fetched_at_ms: icon.modified_ms,
         }))

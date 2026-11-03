@@ -18,7 +18,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
-use crate::runtime::disk::{sanitize_component, write_atomic};
+use fs_util::{sanitize_component, write_atomic};
 
 #[derive(Debug, Clone)]
 pub struct IconConfig {
@@ -191,7 +191,7 @@ fn avatar_url_for(host: &str, owner: &str) -> String {
 
 /// Light magic-byte sniffing; some CDNs serve avatars as generic octet
 /// streams, so we trust bytes over headers.
-pub(crate) fn sniff_image(bytes: &[u8]) -> Option<&'static str> {
+pub fn sniff_image(bytes: &[u8]) -> Option<&'static str> {
     if sniff_svg(bytes) {
         return Some("image/svg+xml");
     }
@@ -239,7 +239,7 @@ fn sniff_svg(bytes: &[u8]) -> bool {
 }
 
 /// Encodes image bytes as a data URL the webview can use in `<img src>`.
-pub(crate) fn encode_data_url(content_type: &str, bytes: &[u8]) -> String {
+pub fn encode_data_url(content_type: &str, bytes: &[u8]) -> String {
     use base64::Engine as _;
     format!(
         "data:{content_type};base64,{}",
@@ -1126,7 +1126,7 @@ mod tests {
 
     /// Manual diagnostic: hits the real GitHub avatar endpoint through
     /// HttpFetcher. Run with:
-    /// `cargo test -p git-backend http_fetcher_fetches -- --ignored --nocapture`
+    /// `cargo test -p icons http_fetcher_fetches -- --ignored --nocapture`
     #[tokio::test]
     #[ignore = "requires network"]
     async fn http_fetcher_fetches_github_avatar() {
