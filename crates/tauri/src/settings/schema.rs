@@ -13,7 +13,7 @@ const SYNTAX_THEME_DARK_KEY: &str = "syntaxThemeDark";
 /// The select options mirror the highlighter's embedded theme registry so
 /// schema validation and theme resolution can never disagree.
 fn syntax_theme_options(dark: bool) -> Vec<SelectOption> {
-    git::engines::gix::highlight::theme_options()
+    highlight::theme_options()
         .filter(|(_, _, theme_dark)| *theme_dark == dark)
         .map(|(value, label, _)| SelectOption::new(value, label))
         .collect()
@@ -185,14 +185,14 @@ pub fn builtin() -> SettingsSchema {
                                 SYNTAX_THEME_LIGHT_KEY,
                                 "Syntax theme (light mode)",
                                 "Highlighting colors used when the app theme is light.",
-                                git::engines::gix::highlight::DEFAULT_LIGHT_THEME,
+                                highlight::DEFAULT_LIGHT_THEME,
                                 false,
                             ),
                             syntax_theme_select(
                                 SYNTAX_THEME_DARK_KEY,
                                 "Syntax theme (dark mode)",
                                 "Highlighting colors used when the app theme is dark.",
-                                git::engines::gix::highlight::DEFAULT_DARK_THEME,
+                                highlight::DEFAULT_DARK_THEME,
                                 true,
                             ),
                         ],

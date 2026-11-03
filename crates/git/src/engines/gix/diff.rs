@@ -182,7 +182,7 @@ fn cached_blob(repo: &gix::Repository, cache: &BlobCache, id: Oid) -> Result<Arc
 pub struct MaterializedSection {
     pub rows: Vec<DiffRow>,
     pub image: Option<crate::streaming::store::DiffImage>,
-    pub highlighter: Option<crate::engines::gix::highlight::SectionHighlighter>,
+    pub highlighter: Option<crate::engines::gix::syntax::SectionHighlighter>,
     /// Retrieved lazily during context expansion.
     pub source: crate::streaming::store::SectionSource,
     pub old_line_count: u32,
@@ -234,7 +234,7 @@ pub fn expand_context(
     let mut styles = Vec::new();
     if !rows.is_empty() {
         if let Some(mut highlighter) =
-            crate::engines::gix::highlight::SectionHighlighter::new(path, &bytes, &[])
+            crate::engines::gix::syntax::SectionHighlighter::new(path, &bytes, &[])
         {
             highlighter.highlight_rows(&mut rows);
             styles = highlighter.take_new_styles();
@@ -336,7 +336,7 @@ pub fn materialize(
         request.interhunk_lines,
         request.ignore_whitespace,
     );
-    let highlighter = crate::engines::gix::highlight::SectionHighlighter::new(
+    let highlighter = crate::engines::gix::syntax::SectionHighlighter::new(
         plan.meta.path.as_str(),
         old_bytes,
         new_bytes,

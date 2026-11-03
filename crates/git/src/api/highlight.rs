@@ -1,7 +1,5 @@
 use serde::Serialize;
 
-use crate::engines::gix::highlight;
-
 pub use ansi::TextStyle as SnippetStyle;
 
 /// Oversized fences render plain rather than stalling the UI thread.

@@ -18,6 +18,7 @@ forge-github.workspace = true
 git2.workspace = true
 gix.workspace = true
 gix-status.workspace = true
+highlight.workspace = true
 thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -28,8 +29,6 @@ keyring.workspace = true
 log.workspace = true
 reqwest.workspace = true
 rayon.workspace = true
-syntect.workspace = true
-two-face.workspace = true
 trash.workspace = true
 fuzzy-matcher.workspace = true
 
@@ -37,6 +36,7 @@ fuzzy-matcher.workspace = true
 base64.workspace = true
 criterion.workspace = true
 tempfile.workspace = true
+two-face.workspace = true
 
 [[bench]]
 name = "status"

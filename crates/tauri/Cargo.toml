@@ -31,6 +31,7 @@ tauri-build.workspace = true
 [dependencies]
 fontdb.workspace = true
 git.workspace = true
+highlight.workspace = true
 log.workspace = true
 pico-args.workspace = true
 tauri-plugin-dialog.workspace = true

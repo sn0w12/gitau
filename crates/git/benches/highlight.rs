@@ -5,7 +5,7 @@ use std::sync::OnceLock;
 use criterion::{Criterion, criterion_group, criterion_main};
 use git::api::queries::DiffRequest;
 use git::engines::gix::diff;
-use git::engines::gix::highlight;
+use git::engines::gix::syntax as highlight;
 use git::streaming::model::{DiffRow, DiffRowKind};
 
 fn lcg(seed: u64) -> impl FnMut() -> f64 {

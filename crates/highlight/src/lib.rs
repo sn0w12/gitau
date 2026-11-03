@@ -2,10 +2,47 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::OnceLock;
 
+use serde::Serialize;
 use syntect::highlighting::{FontStyle, HighlightIterator, HighlightState, Highlighter, Theme};
 use syntect::parsing::{ParseState, ScopeStack, SyntaxReference, SyntaxSet};
 
-use crate::streaming::model::{DiffRow, DiffRowKind, WireStyle};
+/// One resolved syntax-highlighting style covering both app themes. Spans
+/// reference entries by their 1-based position in the section's style table.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Style {
+    pub light: String,
+    pub dark: String,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub bold: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub italic: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub underline: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LineKind {
+    Context,
+    Addition,
+    Deletion,
+    Other,
+}
+
+impl LineKind {
+    fn is_highlightable(self) -> bool {
+        matches!(self, Self::Context | Self::Addition | Self::Deletion)
+    }
+}
+
+/// One diff line handed to [`SectionHighlighter::spans`]. Line numbers are
+/// 1-based and describe the side the line belongs to.
+pub struct LineRef<'a> {
+    pub kind: LineKind,
+    pub old_lineno: Option<u32>,
+    pub new_lineno: Option<u32>,
+    pub content: &'a str,
+}
 
 /// Files above this size render without highlighting rather than stalling
 /// section delivery.
@@ -427,12 +464,12 @@ fn font_bits(style: FontStyle) -> u8 {
 #[derive(Default)]
 struct StyleInterner {
     map: HashMap<(u32, u32, u8), u16>,
-    entries: Vec<WireStyle>,
+    entries: Vec<Style>,
     flushed: usize,
 }
 
 impl StyleInterner {
-    fn intern(&mut self, key: (u32, u32, u8), build: impl FnOnce() -> WireStyle) -> u16 {
+    fn intern(&mut self, key: (u32, u32, u8), build: impl FnOnce() -> Style) -> u16 {
         if let Some(&id) = self.map.get(&key) {
             return id;
         }
@@ -443,7 +480,7 @@ impl StyleInterner {
     }
 
     /// Styles appended since the previous call, for delta transport.
-    fn take_new(&mut self) -> Vec<WireStyle> {
+    fn take_new(&mut self) -> Vec<Style> {
         let new = self.entries[self.flushed..].to_vec();
         self.flushed = self.entries.len();
         new
@@ -583,7 +620,7 @@ impl SideStream {
                 packed(dark_style.foreground),
                 font_bits(light_style.font_style) | font_bits(dark_style.font_style),
             );
-            let id = interner.intern(key, || WireStyle {
+            let id = interner.intern(key, || Style {
                 light: hex(light_style.foreground),
                 dark: hex(dark_style.foreground),
                 bold: light_style.font_style.contains(FontStyle::BOLD)
@@ -629,78 +666,70 @@ impl SectionHighlighter {
         })
     }
 
-    /// Fills `spans` on every highlightable row in `rows` using full-file
-    /// grammar context. Rows that cannot be highlighted safely stay plain.
-    pub fn highlight_rows(&mut self, rows: &mut [DiffRow]) {
+    /// Returns spans aligned with `lines`; `None` keeps the line plain.
+    /// Context lines prefer the new side, matching byte-identical content on
+    /// both sides.
+    pub fn spans(&mut self, lines: &[LineRef<'_>]) -> Vec<Option<Vec<u32>>> {
         let mut need_old: HashSet<u32> = HashSet::new();
         let mut need_new: HashSet<u32> = HashSet::new();
-        for row in rows.iter() {
-            if !is_highlightable(&row.kind)
-                || row.content.is_empty()
-                || row.content == NO_NEWLINE_MARKER
+        for line in lines {
+            if !line.kind.is_highlightable()
+                || line.content.is_empty()
+                || line.content == NO_NEWLINE_MARKER
             {
                 continue;
             }
-            if let Some(lineno) = row.old_lineno {
+            if let Some(lineno) = line.old_lineno {
                 need_old.insert(lineno);
             }
-            if let Some(lineno) = row.new_lineno {
+            if let Some(lineno) = line.new_lineno {
                 need_new.insert(lineno);
             }
         }
 
-        // Old side fills gaps first; new side wins on context rows, matching
-        // byte-identical content on both sides.
+        let mut old_spans: HashMap<u32, Vec<u32>> = HashMap::new();
+        let mut new_spans: HashMap<u32, Vec<u32>> = HashMap::new();
         if !need_old.is_empty() {
             if let Some(side) = self.old.as_mut() {
-                for (lineno, spans) in side.advance(max_of(&need_old), &need_old, &mut self.styles)
-                {
-                    fill_rows(rows, lineno, &spans, false);
-                }
+                old_spans.extend(side.advance(max_of(&need_old), &need_old, &mut self.styles));
             }
         }
         if !need_new.is_empty() {
             if let Some(side) = self.new.as_mut() {
-                for (lineno, spans) in side.advance(max_of(&need_new), &need_new, &mut self.styles)
-                {
-                    fill_rows(rows, lineno, &spans, true);
-                }
+                new_spans.extend(side.advance(max_of(&need_new), &need_new, &mut self.styles));
             }
         }
+
+        lines
+            .iter()
+            .map(|line| {
+                if !line.kind.is_highlightable()
+                    || line.content.is_empty()
+                    || line.content == NO_NEWLINE_MARKER
+                {
+                    return None;
+                }
+                let spans = line
+                    .new_lineno
+                    .and_then(|lineno| new_spans.get(&lineno))
+                    .or_else(|| line.old_lineno.and_then(|lineno| old_spans.get(&lineno)))?;
+                let limit = line.content.len() as u32;
+                spans
+                    .chunks_exact(3)
+                    .all(|triple| triple[0] + triple[1] <= limit)
+                    .then(|| spans.clone())
+            })
+            .collect()
     }
 
     /// Style entries appended since the previous call, for delta transport.
-    pub fn take_new_styles(&mut self) -> Vec<WireStyle> {
+    pub fn take_new_styles(&mut self) -> Vec<Style> {
         self.styles.take_new()
     }
 }
 
 fn max_of(wanted: &HashSet<u32>) -> u32 {
     wanted.iter().copied().max().unwrap_or(0)
-}
-
-fn fill_rows(rows: &mut [DiffRow], lineno: u32, spans: &[u32], overwrite: bool) {
-    for row in rows.iter_mut() {
-        if !is_highlightable(&row.kind)
-            || row.content.is_empty()
-            || row.content == NO_NEWLINE_MARKER
-            || (row.spans.is_some() && !overwrite)
-        {
-            continue;
-        }
-        let matches = match (overwrite, row.new_lineno, row.old_lineno) {
-            (true, Some(new), _) => new == lineno,
-            (false, _, Some(old)) => old == lineno,
-            _ => false,
-        };
-        if !matches {
-            continue;
-        }
-        let limit = row.content.len() as u32;
-        if spans.chunks_exact(3).all(|t| t[0] + t[1] <= limit) {
-            row.spans = Some(spans.to_vec());
-        }
-    }
 }
 
 /// Fence tags with no grammar: highlighting would only echo the text
@@ -761,7 +790,7 @@ fn syntax_for_language(language: &str) -> Option<&'static SyntaxReference> {
 /// aligned with `text.split('\n')`: empty entries render plain.
 pub struct SnippetHighlight {
     pub spans_by_line: Vec<Vec<u32>>,
-    pub styles: Vec<WireStyle>,
+    pub styles: Vec<Style>,
 }
 
 /// Highlights `text` with full-text grammar context. Returns `None` for
@@ -790,27 +819,67 @@ pub fn highlight_snippet(language: &str, text: &str) -> Option<SnippetHighlight>
     })
 }
 
-/// Highlights every context/addition/deletion row in one call using
-/// full-file grammar context from both blobs. Convenience wrapper over
-/// [`SectionHighlighter`] for callers that buffer a whole section.
-pub fn attach(rows: &mut [DiffRow], path: &str, old: &[u8], new: &[u8]) -> Vec<WireStyle> {
-    let Some(mut highlighter) = SectionHighlighter::new(path, old, new) else {
-        return Vec::new();
-    };
-    highlighter.highlight_rows(rows);
-    highlighter.take_new_styles()
-}
-
-fn is_highlightable(kind: &DiffRowKind) -> bool {
-    matches!(
-        kind,
-        DiffRowKind::Context | DiffRowKind::Addition | DiffRowKind::Deletion
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct DiffRow {
+        kind: DiffRowKind,
+        old_lineno: Option<u32>,
+        new_lineno: Option<u32>,
+        content: String,
+        raw_hex: Option<String>,
+        spans: Option<Vec<u32>>,
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum DiffRowKind {
+        Context,
+        Addition,
+    }
+
+    fn lines_for<'a>(rows: &'a [DiffRow]) -> Vec<LineRef<'a>> {
+        rows.iter()
+            .map(|row| LineRef {
+                kind: match row.kind {
+                    DiffRowKind::Context => LineKind::Context,
+                    DiffRowKind::Addition => LineKind::Addition,
+                },
+                old_lineno: row.old_lineno,
+                new_lineno: row.new_lineno,
+                content: &row.content,
+            })
+            .collect()
+    }
+
+    fn attach(rows: &mut [DiffRow], path: &str, old: &[u8], new: &[u8]) -> Vec<Style> {
+        let Some(mut highlighter) = SectionHighlighter::new(path, old, new) else {
+            return Vec::new();
+        };
+        let lines = lines_for(rows);
+        let spans = highlighter.spans(&lines);
+        drop(lines);
+        for (row, spans) in rows.iter_mut().zip(spans) {
+            row.spans = spans;
+        }
+        highlighter.take_new_styles()
+    }
+
+    trait HighlightRows {
+        fn highlight_rows(&mut self, rows: &mut [DiffRow]);
+    }
+
+    impl HighlightRows for SectionHighlighter {
+        fn highlight_rows(&mut self, rows: &mut [DiffRow]) {
+            let lines = lines_for(rows);
+            let spans = self.spans(&lines);
+            drop(lines);
+            for (row, spans) in rows.iter_mut().zip(spans) {
+                row.spans = spans;
+            }
+        }
+    }
 
     const SOURCE: &str = "\
 fn main() {

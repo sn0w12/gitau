@@ -270,7 +270,7 @@ impl Backend {
     /// repository so already-materialized diffs restream with the new
     /// colors. Unknown keys fall back to the built-in defaults.
     pub fn apply_syntax_theme_setting(&self, light: &str, dark: &str) {
-        crate::engines::gix::highlight::set_theme_pair(light, dark);
+        highlight::set_theme_pair(light, dark);
         self.registry.bump_all_generations("syntaxTheme");
     }
 

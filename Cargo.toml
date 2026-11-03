@@ -5,6 +5,7 @@ members = [
     "crates/forge-core",
     "crates/forge-github",
     "crates/git",
+    "crates/highlight",
     "crates/tauri",
 ]
 
@@ -31,6 +32,7 @@ git2 = { version = "0.21.0", features = [
 ] }
 gix = { version = "0.87.0", features = ["status", "excludes"] }
 gix-status = { version = "0.34", features = ["parallel"] }
+highlight = { path = "crates/highlight" }
 keyring = { version = "3", features = [
     "windows-native",
     "apple-native",

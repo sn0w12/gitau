@@ -1,0 +1,11 @@
+[package]
+name = "highlight"
+version.workspace = true
+edition = "2021"
+rust-version.workspace = true
+description = "Syntect syntax highlighting for diff sections and markdown fences"
+
+[dependencies]
+serde.workspace = true
+syntect.workspace = true
+two-face.workspace = true

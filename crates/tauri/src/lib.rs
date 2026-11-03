@@ -214,7 +214,7 @@ pub fn run() {
             // off the main thread so the first diff paints fully styled.
             tauri::async_runtime::spawn_blocking(|| {
                 let _span = boot_trace::span("rust.warmup.highlight");
-                git::engines::gix::highlight::warm_up();
+                highlight::warm_up();
             });
 
             let mut rx = handle.state::<AppState>().backend.subscribe_invalidations();

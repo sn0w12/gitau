@@ -143,20 +143,7 @@ impl Serialize for SharedRows {
     }
 }
 
-/// One resolved syntax-highlighting style covering both app themes. Spans
-/// reference entries by their 1-based position in the section's style table.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WireStyle {
-    pub light: String,
-    pub dark: String,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub bold: bool,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub italic: bool,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub underline: bool,
-}
+pub use highlight::Style as WireStyle;
 
 /// Streaming protocol events. Serialized with a `event` tag for TS discriminated unions.
 #[derive(Debug, Clone, Serialize)]

@@ -235,7 +235,7 @@ pub fn conflict_file(repo: &Repository, path: &str, stage: u8) -> Result<Conflic
         });
     }
     let (mut rows, truncated) = context_rows(&data);
-    let styles = crate::engines::gix::highlight::attach(&mut rows, rel.as_str(), &data, &data)
+    let styles = crate::engines::gix::syntax::attach(&mut rows, rel.as_str(), &data, &data)
         .into_iter()
         .map(|style| ConflictStyle {
             light: style.light,
