@@ -20,8 +20,8 @@ export interface SettingsValues {
     fontDisplay: string;
     diffViewMode: "unified" | "split";
     imageDiffViewMode: "sideBySide" | "swipe" | "difference";
-    syntaxThemeLight: "catppuccinLatte" | "coldarkCold" | "github" | "gruvboxLight" | "inspiredGithub" | "monokaiExtendedLight" | "oneHalfLight" | "solarizedLight" | "base16OceanLight";
-    syntaxThemeDark: "catppuccinFrappe" | "catppuccinMacchiato" | "catppuccinMocha" | "coldarkDark" | "darkNeon" | "dracula" | "gruvboxDark" | "monokaiExtended" | "monokaiExtendedBright" | "monokaiExtendedOrigin" | "nord" | "oneHalfDark" | "solarizedDark" | "sublimeSnazzy" | "twoDark" | "base16EightiesDark" | "base16MochaDark" | "base16OceanDark" | "zenburn";
+    syntaxThemeLight: "gitauLight" | "catppuccinLatte" | "coldarkCold" | "github" | "gruvboxLight" | "inspiredGithub" | "monokaiExtendedLight" | "oneHalfLight" | "solarizedLight" | "base16OceanLight";
+    syntaxThemeDark: "gitauDark" | "catppuccinFrappe" | "catppuccinMacchiato" | "catppuccinMocha" | "coldarkDark" | "darkNeon" | "dracula" | "gruvboxDark" | "monokaiExtended" | "monokaiExtendedBright" | "monokaiExtendedOrigin" | "nord" | "oneHalfDark" | "solarizedDark" | "sublimeSnazzy" | "twoDark" | "base16EightiesDark" | "base16MochaDark" | "base16OceanDark" | "zenburn";
     editorCommand: string;
     terminalCommand: string;
     defaultBranchName: string;
