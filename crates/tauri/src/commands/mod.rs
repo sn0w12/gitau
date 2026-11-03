@@ -1,4 +1,4 @@
-use git_backend::error::{GitError, SerializedError};
+use git::error::{GitError, SerializedError};
 
 pub type CommandResult<T> = Result<T, SerializedError>;
 

@@ -1,0 +1,67 @@
+[package]
+name = "git"
+version.workspace = true
+edition = "2024"
+rust-version.workspace = true
+description = "Pure-Rust git engine backend powering the desktop client"
+
+[lib]
+name = "git"
+path = "src/lib.rs"
+
+[dependencies]
+ansi.workspace = true
+base64.workspace = true
+chrono.workspace = true
+forge-core.workspace = true
+forge-github.workspace = true
+git2.workspace = true
+gix.workspace = true
+gix-status.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["fs", "io-util", "process"] }
+notify.workspace = true
+keyring.workspace = true
+log.workspace = true
+reqwest.workspace = true
+rayon.workspace = true
+syntect.workspace = true
+two-face.workspace = true
+trash.workspace = true
+fuzzy-matcher.workspace = true
+
+[dev-dependencies]
+base64.workspace = true
+criterion.workspace = true
+tempfile.workspace = true
+
+[[bench]]
+name = "status"
+harness = false
+
+[[bench]]
+name = "diff"
+harness = false
+
+[[bench]]
+name = "history"
+harness = false
+
+[[bench]]
+name = "numstat"
+harness = false
+
+[[bench]]
+name = "huge"
+harness = false
+
+[[bench]]
+name = "highlight"
+harness = false
+
+[[bench]]
+name = "language_stats"
+harness = false

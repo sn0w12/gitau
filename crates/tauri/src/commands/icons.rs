@@ -1,6 +1,6 @@
 use crate::commands::{CommandResult, SerializedError};
 use crate::state::{to_repo_id, SharedState};
-use git_backend::icons::{CachedIcon, IconError};
+use git::icons::{CachedIcon, IconError};
 use std::path::Path;
 
 /// Resolves (and caches) the owner/org avatar for a git remote URL.

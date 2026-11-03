@@ -1,13 +1,13 @@
 use crate::commands::channel::channel_send;
 use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
-use git_backend::api::repository::{
+use git::api::repository::{
     CreateRepositoryRequest, GitignoreTemplateInfo, LicenseTemplateInfo, OpenRepositoryRequest,
     ReadmeContent,
 };
-use git_backend::application::RemoveRepositoryResult;
-use git_backend::domain::RepoSnapshot;
-use git_backend::engines::git2::workflows::StashEntry;
+use git::application::RemoveRepositoryResult;
+use git::domain::RepoSnapshot;
+use git::engines::git2::workflows::StashEntry;
 use std::path::Path;
 use tauri::ipc::Channel;
 use tauri::AppHandle;
@@ -16,7 +16,7 @@ use tauri::AppHandle;
 pub async fn git_open_repository(
     state: SharedState<'_>,
     request: OpenRepositoryRequest,
-) -> CommandResult<git_backend::application::OpenedRepository> {
+) -> CommandResult<git::application::OpenedRepository> {
     let path = std::path::PathBuf::from(&request.path);
     let span = crate::boot_trace::span_detailed("git.open_repository", request.path.as_str());
     let opened = state
@@ -91,7 +91,7 @@ pub async fn git_read_worktree_image(
 pub async fn git_init_repository(
     state: SharedState<'_>,
     request: CreateRepositoryRequest,
-) -> CommandResult<git_backend::application::CreateRepositoryResult> {
+) -> CommandResult<git::application::CreateRepositoryResult> {
     state
         .backend
         .create_repository(request)
@@ -126,15 +126,15 @@ pub async fn git_open_diff(
     app: AppHandle,
     state: SharedState<'_>,
     repo_id: u64,
-    request: Option<git_backend::api::queries::DiffRequest>,
-    on_event: Channel<git_backend::streaming::model::DiffEvent>,
+    request: Option<git::api::queries::DiffRequest>,
+    on_event: Channel<git::streaming::model::DiffEvent>,
 ) -> CommandResult<u64> {
     let (operation_id, rx) = state
         .backend
         .open_diff(
             to_repo_id(repo_id),
             request.unwrap_or_default(),
-            git_backend::runtime::cancellation::CancellationToken::new(),
+            git::runtime::cancellation::CancellationToken::new(),
         )
         .await
         .map_err(to_serialized)?;

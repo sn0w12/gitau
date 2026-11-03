@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use git_backend::Backend;
+use git::Backend;
 use serde_json::Value;
 
 use crate::commands::{to_session_serialized, CommandResult};

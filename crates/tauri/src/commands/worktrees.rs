@@ -1,9 +1,9 @@
 use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
-use git_backend::api::worktrees::{
+use git::api::worktrees::{
     WorktreeCreateRequest, WorktreeInfo, WorktreeLockRequest, WorktreeRemoveRequest,
 };
-use git_backend::domain::Generation;
+use git::domain::Generation;
 
 fn gen(value: Option<u64>) -> Option<Generation> {
     value.map(Generation)

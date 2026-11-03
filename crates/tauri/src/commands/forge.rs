@@ -1,13 +1,13 @@
 use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
-use git_backend::api::{
+use git::api::{
     AccountProfile, CheckRun, CheckRunDetail, CheckRunLog, CommitStatus, CreatePullRequestBody,
     IssueComment, IssueDetail, IssueEvent, Label, MergePullRequestBody, MergePullRequestResult,
     NotificationPage, Org, PublishRepositoryRequest, PublishResult, PullRequestCommit,
     PullRequestDetail, PullRequestReview, PullRequestReviewComment, RepoPermissions,
     SearchIssuePage, SearchPullRequestPage, UpdateIssueBody, UpdatePullRequestBody, WorkflowRun,
 };
-use git_backend::{AuthChallenge, ConnectionProfile, ProviderDescriptor};
+use git::{AuthChallenge, ConnectionProfile, ProviderDescriptor};
 
 /// Providers this build can talk to, with their capabilities, for the UI to
 /// gate views and build the provider picker.
@@ -107,7 +107,7 @@ pub async fn forge_publish_repository(
                 description,
                 private: private.unwrap_or(true),
             },
-            expected_generation.map(git_backend::domain::Generation),
+            expected_generation.map(git::domain::Generation),
         )
         .await
         .map_err(to_serialized)
