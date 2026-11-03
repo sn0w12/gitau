@@ -52,7 +52,13 @@ import {
 } from "@/hooks/repositories/use-repository-queries";
 import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
 import { usePushMutation } from "@/lib/backend/mutations/repository-mutations";
-import { pickRepoRemote } from "@/lib/forge/repo-coords";
+import type {
+    BranchInfo,
+    Capabilities,
+    ProviderDescriptor,
+    RemoteInfo,
+} from "@/lib/backend/protocol";
+import { pickRepoRemote, type RemoteCoords } from "@/lib/forge/repo-coords";
 import { pickBaseBranch } from "@/lib/repositories/default-branch";
 import { toastError } from "@/lib/toast-error";
 
@@ -97,15 +103,16 @@ function CreatePullForm({
     onClose: () => void;
 }) {
     const { coords, data: remotes } = useRepoCoords(repoId);
+    const target = forgeTarget(coords);
     const providers = useForgeProviders();
     const capabilities = useRepoCapabilities(repoId);
-    const account = useForgeAccount(coords?.provider ?? null);
+    const account = useForgeAccount(target.provider);
     const listing = useRepoListing(repoId);
     const snapshot = useRepositorySnapshot(repoId);
     const labelOptions = useRepoLabels(
-        coords?.provider ?? null,
-        coords?.owner ?? null,
-        coords?.repo ?? null
+        target.provider,
+        target.owner,
+        target.repo
     );
     const push = usePushMutation(repoId);
     const create = useCreatePullRequest();
@@ -134,54 +141,39 @@ function CreatePullForm({
     const [draft, setDraft] = useState(false);
     const [labels, setLabels] = useState<LabelOption[]>([]);
 
-    const headValue =
-        head ??
-        (initialHead != null && names.includes(initialHead)
-            ? initialHead
-            : null) ??
-        currentName ??
-        names[0] ??
-        "";
-    const baseValue = base ?? pickBaseBranch(names, headValue);
-    const titleValue = title ?? headValue;
+    const { headValue, baseValue, titleValue } = resolveDraftValues({
+        head,
+        base,
+        title,
+        initialHead,
+        names,
+        currentName,
+    });
 
     const headBranch = branches.find((branch) => branch.name === headValue);
-    const ahead = headBranch?.upstream?.ahead ?? 0;
-    const needsPush =
-        headBranch != null && (headBranch.upstream == null || ahead > 0);
-    const pushRemote =
-        pickRepoRemote(remotes ?? [], providers.data ?? [])?.name ?? "origin";
-
-    const providerLabel =
-        providers.data?.find((entry) => entry.id === coords?.provider)?.label ??
-        coords?.provider ??
-        "the provider";
-    const unsupported = capabilities != null && !capabilities.pullRequestsWrite;
-
-    const notice =
-        coords == null
-            ? "No remote of this repository points at a provider this build knows, so there is nowhere to open a pull request."
-            : unsupported
-              ? `${providerLabel} cannot open pull requests from this build.`
-              : account.data == null
-                ? `Connect a ${providerLabel} account first: open Account from the sidebar and sign in.`
-                : names.length < 2
-                  ? "This repository needs a second branch to merge into."
-                  : null;
-
-    const canSubmit =
-        notice == null &&
-        headValue !== "" &&
-        baseValue !== "" &&
-        baseValue !== headValue &&
-        titleValue.trim().length > 0 &&
-        !push.isPending &&
-        !create.pending;
+    const pushRemote = pushRemoteName(remotes, providers.data);
+    const pushNotice = pushNoticeText(headBranch, pushRemote);
+    const providerName = providerDisplayName(providers.data, target.provider);
+    const notice = pullBlockReason({
+        hasCoords: coords != null,
+        providerName,
+        capabilities,
+        connected: account.data != null,
+        branchCount: names.length,
+    });
+    const busy = push.isPending || create.pending;
+    const canSubmit = canCreatePull({
+        notice,
+        head: headValue,
+        base: baseValue,
+        title: titleValue,
+        busy,
+    });
 
     const handleSubmit = async () => {
         if (!canSubmit || coords == null) return;
         try {
-            if (needsPush) {
+            if (pushNotice != null) {
                 await push.mutateAsync({
                     remote: pushRemote,
                     refspecs: [headValue],
@@ -210,9 +202,6 @@ function CreatePullForm({
         }
     };
 
-    const branchItems = (values: string[]) =>
-        values.map((name) => ({ value: name, label: name }));
-
     return (
         <>
             <DialogHeader>
@@ -233,173 +222,32 @@ function CreatePullForm({
                 <DialogPanel className="flex flex-col gap-3">
                     {notice == null ? (
                         <>
-                            <div className="grid grid-cols-2 gap-3">
-                                <Field>
-                                    <FieldLabel>Head</FieldLabel>
-                                    <Select
-                                        value={headValue}
-                                        onValueChange={(next) => {
-                                            if (typeof next !== "string")
-                                                return;
-                                            setHead(next);
-                                            if (baseValue === next)
-                                                setBase(null);
-                                        }}
-                                        items={branchItems(names)}
-                                    >
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectPopup>
-                                            {names.map((name) => (
-                                                <SelectItem
-                                                    key={name}
-                                                    value={name}
-                                                >
-                                                    {name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectPopup>
-                                    </Select>
-                                </Field>
-                                <Field>
-                                    <FieldLabel>Base</FieldLabel>
-                                    <Select
-                                        value={baseValue}
-                                        onValueChange={(next) => {
-                                            if (typeof next === "string")
-                                                setBase(next);
-                                        }}
-                                        items={branchItems(
-                                            names.filter(
-                                                (name) => name !== headValue
-                                            )
-                                        )}
-                                    >
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectPopup>
-                                            {names
-                                                .filter(
-                                                    (name) => name !== headValue
-                                                )
-                                                .map((name) => (
-                                                    <SelectItem
-                                                        key={name}
-                                                        value={name}
-                                                    >
-                                                        {name}
-                                                    </SelectItem>
-                                                ))}
-                                        </SelectPopup>
-                                    </Select>
-                                </Field>
-                            </div>
-                            <Field>
-                                <FieldLabel>Title</FieldLabel>
-                                <Input
-                                    value={titleValue}
-                                    onChange={(event) =>
-                                        setTitle(event.target.value)
-                                    }
-                                    autoFocus
-                                />
-                            </Field>
-                            <Field>
-                                <FieldLabel>Description</FieldLabel>
-                                <Textarea
-                                    value={description}
-                                    onChange={(event) =>
-                                        setDescription(event.target.value)
-                                    }
-                                    rows={4}
-                                    placeholder="Optional"
-                                />
-                            </Field>
-                            <Field>
-                                <FieldLabel>Labels</FieldLabel>
-                                <Combobox
-                                    multiple
-                                    items={labelItems}
-                                    value={labels}
-                                    onValueChange={(value) =>
-                                        setLabels(value as LabelOption[])
-                                    }
-                                >
-                                    <ComboboxChips startAddon={<Tag />}>
-                                        <ComboboxValue>
-                                            {(value: LabelOption[]) => (
-                                                <>
-                                                    {value.map((label) => (
-                                                        <ComboboxChip
-                                                            key={label.value}
-                                                            aria-label={
-                                                                label.label
-                                                            }
-                                                        >
-                                                            <LabelBadge
-                                                                label={{
-                                                                    name: label.label,
-                                                                    color: label.color,
-                                                                }}
-                                                            />
-                                                        </ComboboxChip>
-                                                    ))}
-                                                    <ComboboxChipsInput
-                                                        aria-label="Select labels"
-                                                        placeholder={
-                                                            value.length > 0
-                                                                ? undefined
-                                                                : "None"
-                                                        }
-                                                    />
-                                                </>
-                                            )}
-                                        </ComboboxValue>
-                                    </ComboboxChips>
-                                    <ComboboxPopup>
-                                        <ComboboxEmpty>
-                                            No labels found.
-                                        </ComboboxEmpty>
-                                        <ComboboxList>
-                                            {(item: LabelOption) => (
-                                                <ComboboxItem
-                                                    key={item.value}
-                                                    value={item}
-                                                >
-                                                    <LabelBadge
-                                                        label={{
-                                                            name: item.label,
-                                                            color: item.color,
-                                                        }}
-                                                    />
-                                                </ComboboxItem>
-                                            )}
-                                        </ComboboxList>
-                                    </ComboboxPopup>
-                                </Combobox>
-                            </Field>
-                            <Field>
-                                <FieldLabel>
-                                    <Checkbox
-                                        checked={draft}
-                                        onCheckedChange={(checked) =>
-                                            setDraft(checked === true)
-                                        }
-                                    />
-                                    Draft
-                                </FieldLabel>
-                            </Field>
-                            {needsPush ? (
+                            <BranchFields
+                                names={names}
+                                head={headValue}
+                                onHeadChange={(next) => {
+                                    setHead(next);
+                                    if (baseValue === next) setBase(null);
+                                }}
+                                base={baseValue}
+                                onBaseChange={setBase}
+                            />
+                            <PullDetailsFields
+                                title={titleValue}
+                                onTitleChange={setTitle}
+                                description={description}
+                                onDescriptionChange={setDescription}
+                                labelItems={labelItems}
+                                labels={labels}
+                                onLabelsChange={setLabels}
+                                draft={draft}
+                                onDraftChange={setDraft}
+                            />
+                            {pushNotice != null && (
                                 <p className="text-sm text-muted-foreground">
-                                    {headBranch?.upstream == null
-                                        ? `The branch will be pushed to ${pushRemote} before the pull request opens.`
-                                        : `${ahead} unpushed ${
-                                              ahead === 1 ? "commit" : "commits"
-                                          } will be pushed to ${pushRemote} first.`}
+                                    {pushNotice}
                                 </p>
-                            ) : null}
+                            )}
                         </>
                     ) : (
                         <p className="text-sm text-muted-foreground">
@@ -411,15 +259,316 @@ function CreatePullForm({
                     <DialogClose render={<Button variant="ghost" />}>
                         Cancel
                     </DialogClose>
-                    <Button
-                        type="submit"
-                        disabled={!canSubmit}
-                        loading={push.isPending || create.pending}
-                    >
+                    <Button type="submit" disabled={!canSubmit} loading={busy}>
                         Create pull request
                     </Button>
                 </DialogFooter>
             </Form>
         </>
     );
+}
+
+function BranchFields({
+    names,
+    head,
+    base,
+    onHeadChange,
+    onBaseChange,
+}: {
+    names: string[];
+    head: string;
+    base: string;
+    onHeadChange: (next: string) => void;
+    onBaseChange: (next: string) => void;
+}) {
+    const baseNames = names.filter((name) => name !== head);
+    return (
+        <div className="grid grid-cols-2 gap-3">
+            <Field>
+                <FieldLabel>Head</FieldLabel>
+                <Select
+                    value={head}
+                    onValueChange={(next) => {
+                        if (typeof next === "string") onHeadChange(next);
+                    }}
+                    items={branchItems(names)}
+                >
+                    <SelectTrigger className="w-full">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup>
+                        {names.map((name) => (
+                            <SelectItem key={name} value={name}>
+                                {name}
+                            </SelectItem>
+                        ))}
+                    </SelectPopup>
+                </Select>
+            </Field>
+            <Field>
+                <FieldLabel>Base</FieldLabel>
+                <Select
+                    value={base}
+                    onValueChange={(next) => {
+                        if (typeof next === "string") onBaseChange(next);
+                    }}
+                    items={branchItems(baseNames)}
+                >
+                    <SelectTrigger className="w-full">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup>
+                        {baseNames.map((name) => (
+                            <SelectItem key={name} value={name}>
+                                {name}
+                            </SelectItem>
+                        ))}
+                    </SelectPopup>
+                </Select>
+            </Field>
+        </div>
+    );
+}
+
+function PullDetailsFields({
+    title,
+    onTitleChange,
+    description,
+    onDescriptionChange,
+    labelItems,
+    labels,
+    onLabelsChange,
+    draft,
+    onDraftChange,
+}: {
+    title: string;
+    onTitleChange: (next: string) => void;
+    description: string;
+    onDescriptionChange: (next: string) => void;
+    labelItems: LabelOption[];
+    labels: LabelOption[];
+    onLabelsChange: (next: LabelOption[]) => void;
+    draft: boolean;
+    onDraftChange: (next: boolean) => void;
+}) {
+    return (
+        <>
+            <Field>
+                <FieldLabel>Title</FieldLabel>
+                <Input
+                    value={title}
+                    onChange={(event) => onTitleChange(event.target.value)}
+                    autoFocus
+                />
+            </Field>
+            <Field>
+                <FieldLabel>Description</FieldLabel>
+                <Textarea
+                    value={description}
+                    onChange={(event) =>
+                        onDescriptionChange(event.target.value)
+                    }
+                    rows={4}
+                    placeholder="Optional"
+                />
+            </Field>
+            <Field>
+                <FieldLabel>Labels</FieldLabel>
+                <Combobox
+                    multiple
+                    items={labelItems}
+                    value={labels}
+                    onValueChange={(value) =>
+                        onLabelsChange(value as LabelOption[])
+                    }
+                >
+                    <ComboboxChips startAddon={<Tag />}>
+                        <ComboboxValue>
+                            {(value: LabelOption[]) => (
+                                <>
+                                    {value.map((label) => (
+                                        <ComboboxChip
+                                            key={label.value}
+                                            aria-label={label.label}
+                                        >
+                                            <LabelBadge
+                                                label={{
+                                                    name: label.label,
+                                                    color: label.color,
+                                                }}
+                                            />
+                                        </ComboboxChip>
+                                    ))}
+                                    <ComboboxChipsInput
+                                        aria-label="Select labels"
+                                        placeholder={
+                                            value.length > 0
+                                                ? undefined
+                                                : "None"
+                                        }
+                                    />
+                                </>
+                            )}
+                        </ComboboxValue>
+                    </ComboboxChips>
+                    <ComboboxPopup>
+                        <ComboboxEmpty>No labels found.</ComboboxEmpty>
+                        <ComboboxList>
+                            {(item: LabelOption) => (
+                                <ComboboxItem key={item.value} value={item}>
+                                    <LabelBadge
+                                        label={{
+                                            name: item.label,
+                                            color: item.color,
+                                        }}
+                                    />
+                                </ComboboxItem>
+                            )}
+                        </ComboboxList>
+                    </ComboboxPopup>
+                </Combobox>
+            </Field>
+            <Field>
+                <FieldLabel>
+                    <Checkbox
+                        checked={draft}
+                        onCheckedChange={(checked) =>
+                            onDraftChange(checked === true)
+                        }
+                    />
+                    Draft
+                </FieldLabel>
+            </Field>
+        </>
+    );
+}
+
+function forgeTarget(coords: RemoteCoords | null): {
+    provider: string | null;
+    owner: string | null;
+    repo: string | null;
+} {
+    return {
+        provider: coords?.provider ?? null,
+        owner: coords?.owner ?? null,
+        repo: coords?.repo ?? null,
+    };
+}
+
+function resolveDraftValues({
+    head,
+    base,
+    title,
+    initialHead,
+    names,
+    currentName,
+}: {
+    head: string | null;
+    base: string | null;
+    title: string | null;
+    initialHead: string | undefined;
+    names: string[];
+    currentName: string | null;
+}): { headValue: string; baseValue: string; titleValue: string } {
+    const headValue = head ?? defaultHead(initialHead, names, currentName);
+    return {
+        headValue,
+        baseValue: base ?? pickBaseBranch(names, headValue),
+        titleValue: title ?? headValue,
+    };
+}
+
+function defaultHead(
+    initialHead: string | undefined,
+    names: string[],
+    currentName: string | null
+): string {
+    if (initialHead != null && names.includes(initialHead)) return initialHead;
+    return currentName ?? names[0] ?? "";
+}
+
+function pushRemoteName(
+    remotes: RemoteInfo[] | undefined,
+    providers: ProviderDescriptor[] | undefined
+): string {
+    return pickRepoRemote(remotes ?? [], providers ?? [])?.name ?? "origin";
+}
+
+function pushNoticeText(
+    head: BranchInfo | undefined,
+    remote: string
+): string | null {
+    if (head == null) return null;
+    if (head.upstream == null) {
+        return `The branch will be pushed to ${remote} before the pull request opens.`;
+    }
+    const ahead = head.upstream.ahead;
+    if (ahead === 0) return null;
+    return `${ahead} unpushed ${
+        ahead === 1 ? "commit" : "commits"
+    } will be pushed to ${remote} first.`;
+}
+
+function providerDisplayName(
+    providers: ProviderDescriptor[] | undefined,
+    providerId: string | null
+): string {
+    if (providerId == null) return "the provider";
+    const known = providers?.find((entry) => entry.id === providerId)?.label;
+    return known ?? providerId;
+}
+
+function pullBlockReason({
+    hasCoords,
+    providerName,
+    capabilities,
+    connected,
+    branchCount,
+}: {
+    hasCoords: boolean;
+    providerName: string;
+    capabilities: Capabilities | null;
+    connected: boolean;
+    branchCount: number;
+}): string | null {
+    if (!hasCoords) {
+        return "No remote of this repository points at a provider this build knows, so there is nowhere to open a pull request.";
+    }
+    if (capabilities != null && !capabilities.pullRequestsWrite) {
+        return `${providerName} cannot open pull requests from this build.`;
+    }
+    if (!connected) {
+        return `Connect a ${providerName} account first: open Account from the sidebar and sign in.`;
+    }
+    if (branchCount < 2) {
+        return "This repository needs a second branch to merge into.";
+    }
+    return null;
+}
+
+function canCreatePull({
+    notice,
+    head,
+    base,
+    title,
+    busy,
+}: {
+    notice: string | null;
+    head: string;
+    base: string;
+    title: string;
+    busy: boolean;
+}): boolean {
+    return (
+        notice == null &&
+        head !== "" &&
+        base !== "" &&
+        base !== head &&
+        title.trim().length > 0 &&
+        !busy
+    );
+}
+
+function branchItems(names: string[]): { value: string; label: string }[] {
+    return names.map((name) => ({ value: name, label: name }));
 }
