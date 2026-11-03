@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use git_backend::icons::{HttpFetcher, IconConfig, IconService};
-use git_backend::{Backend, BackendConfig};
+use git::{Backend, BackendConfig};
+use icons::{HttpFetcher, IconConfig, IconService};
 use serde::Serialize;
 
 use crate::session::SessionStore;
@@ -43,6 +43,6 @@ impl Default for AppState {
 pub type SharedState<'a> = tauri::State<'a, AppState>;
 
 #[inline]
-pub fn to_repo_id(value: u64) -> git_backend::domain::RepoId {
-    git_backend::domain::RepoId(value)
+pub fn to_repo_id(value: u64) -> git::domain::RepoId {
+    git::domain::RepoId(value)
 }

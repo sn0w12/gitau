@@ -1,0 +1,9 @@
+[package]
+name = "fs-util"
+version.workspace = true
+edition = "2021"
+rust-version.workspace = true
+description = "Atomic file writes, cache-key sanitizing, and FNV hashing for disk caches"
+
+[dependencies]
+tempfile.workspace = true

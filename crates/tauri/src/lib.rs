@@ -192,11 +192,11 @@ pub fn run() {
             tauri::async_runtime::spawn_blocking(move || {
                 let _span = boot_trace::span("rust.cache_cleanup");
                 let icons_removed =
-                    cleanup_icons.prune_old_entries(git_backend::icons::IconConfig::default().prune_after);
+                    cleanup_icons.prune_old_entries(icons::IconConfig::default().prune_after);
                 let info_removed = cleanup_backend
-                    .prune_remote_info_cache(git_backend::REMOTE_INFO_PRUNE_AFTER);
+                    .prune_remote_info_cache(git::REMOTE_INFO_PRUNE_AFTER);
                 let stats_removed = cleanup_backend
-                    .prune_history_stats_cache(git_backend::HISTORY_STATS_PRUNE_AFTER);
+                    .prune_history_stats_cache(git::HISTORY_STATS_PRUNE_AFTER);
                 if icons_removed > 0 || info_removed > 0 || stats_removed > 0 {
                     log::info!(
                         "cache cleanup removed {icons_removed} icons, {info_removed} repo-info entries, {stats_removed} history stat files"
@@ -214,7 +214,7 @@ pub fn run() {
             // off the main thread so the first diff paints fully styled.
             tauri::async_runtime::spawn_blocking(|| {
                 let _span = boot_trace::span("rust.warmup.highlight");
-                git_backend::engines::gix::highlight::warm_up();
+                highlight::warm_up();
             });
 
             let mut rx = handle.state::<AppState>().backend.subscribe_invalidations();

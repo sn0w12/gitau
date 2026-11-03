@@ -27,7 +27,7 @@ import { repositoryKeys } from "@/lib/backend/queries/query-keys";
 import { toastError } from "@/lib/toast-error";
 
 /** Standard commit-lifecycle hooks in pipeline order, mirroring
- * `COMMIT_HOOK_NAMES` in crates/git-backend/src/engines/git2/hooks.rs; the
+ * `COMMIT_HOOK_NAMES` in crates/git/src/engines/git2/hooks.rs; the
  * backend rejects any other name. */
 const STANDARD_HOOKS = [
     "pre-commit",

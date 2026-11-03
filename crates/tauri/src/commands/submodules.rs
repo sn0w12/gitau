@@ -1,7 +1,7 @@
 use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
-use git_backend::api::submodules::{SubmoduleAddRequest, SubmoduleInfo, SubmoduleUpdateRequest};
-use git_backend::domain::Generation;
+use git::api::submodules::{SubmoduleAddRequest, SubmoduleInfo, SubmoduleUpdateRequest};
+use git::domain::Generation;
 
 fn gen(value: Option<u64>) -> Option<Generation> {
     value.map(Generation)

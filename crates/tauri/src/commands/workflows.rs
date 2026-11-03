@@ -1,12 +1,12 @@
 use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
-use git_backend::api::mutations::{
+use git::api::mutations::{
     ConflictFile, MergeAbortRequest, MergeContinueRequest, MergeRequest, OperationState,
     ResolveConflictRequest, ResolveSide, RevertRequest, StashAction, StashPopRequest,
     StashPushRequest,
 };
-use git_backend::domain::{Generation, ObjectId, RevisionSpec};
-use git_backend::engines::git2::workflows::{StashEntry, WorkflowOutcome};
+use git::domain::{Generation, ObjectId, RevisionSpec};
+use git::engines::git2::workflows::{StashEntry, WorkflowOutcome};
 
 fn spec(value: String) -> Result<RevisionSpec, crate::commands::SerializedError> {
     RevisionSpec::parse(&value).map_err(to_serialized)
@@ -37,7 +37,7 @@ pub async fn git_merge(
                 message,
             },
             gen(expected_generation),
-            git_backend::runtime::cancellation::CancellationToken::new(),
+            git::runtime::cancellation::CancellationToken::new(),
         )
         .await
         .map_err(to_serialized)
@@ -98,7 +98,7 @@ pub async fn git_start_rebase(
             spec(upstream)?,
             onto,
             gen(expected_generation),
-            git_backend::runtime::cancellation::CancellationToken::new(),
+            git::runtime::cancellation::CancellationToken::new(),
         )
         .await
         .map_err(to_serialized)
@@ -115,7 +115,7 @@ pub async fn git_continue_rebase(
         .continue_rebase(
             to_repo_id(repo_id),
             gen(expected_generation),
-            git_backend::runtime::cancellation::CancellationToken::new(),
+            git::runtime::cancellation::CancellationToken::new(),
         )
         .await
         .map_err(to_serialized)
@@ -214,7 +214,7 @@ pub async fn git_conflict_file(
             to_repo_id(repo_id),
             path,
             stage,
-            git_backend::runtime::cancellation::CancellationToken::new(),
+            git::runtime::cancellation::CancellationToken::new(),
         )
         .await
         .map_err(to_serialized)

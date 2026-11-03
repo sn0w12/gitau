@@ -1,8 +1,8 @@
 use crate::commands::channel::forward_channel;
 use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
-use git_backend::api::changes::{DiscardRequest, StageRequest, StatusOptions};
-use git_backend::domain::{Generation, StatusReport};
+use git::api::changes::{DiscardRequest, StageRequest, StatusOptions};
+use git::domain::{Generation, StatusReport};
 use tauri::ipc::Channel;
 
 #[tauri::command]
@@ -17,7 +17,7 @@ pub async fn git_status(
         .status(
             to_repo_id(repo_id),
             options.unwrap_or_default(),
-            git_backend::runtime::cancellation::CancellationToken::new(),
+            git::runtime::cancellation::CancellationToken::new(),
         )
         .await
         .map_err(to_serialized)?;
@@ -98,10 +98,10 @@ pub async fn git_commit(
     author_name: Option<String>,
     author_email: Option<String>,
     expected_generation: Option<u64>,
-    on_event: Channel<git_backend::api::hooks::CommitHookEvent>,
-) -> CommandResult<git_backend::api::mutations::CommitExecution> {
+    on_event: Channel<git::api::hooks::CommitHookEvent>,
+) -> CommandResult<git::api::mutations::CommitExecution> {
     let author = match (author_name, author_email) {
-        (Some(name), Some(email)) => Some(git_backend::domain::Signature {
+        (Some(name), Some(email)) => Some(git::domain::Signature {
             name,
             email,
             time_seconds: 0,
@@ -114,7 +114,7 @@ pub async fn git_commit(
         .backend
         .commit(
             to_repo_id(repo_id),
-            git_backend::api::mutations::CommitRequest {
+            git::api::mutations::CommitRequest {
                 message,
                 author,
                 stage_all: stage_all.unwrap_or(false),
@@ -139,12 +139,12 @@ pub async fn git_amend_commit(
     repo_id: u64,
     message: Option<String>,
     expected_generation: Option<u64>,
-) -> CommandResult<git_backend::domain::CommitSummary> {
+) -> CommandResult<git::domain::CommitSummary> {
     state
         .backend
         .amend_commit(
             to_repo_id(repo_id),
-            git_backend::api::mutations::AmendRequest {
+            git::api::mutations::AmendRequest {
                 message,
                 author: None,
             },

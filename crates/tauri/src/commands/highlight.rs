@@ -1,4 +1,4 @@
-use git_backend::api::highlight::HighlightedSnippet;
+use git::api::highlight::HighlightedSnippet;
 
 use crate::commands::CommandResult;
 use crate::state::SharedState;
