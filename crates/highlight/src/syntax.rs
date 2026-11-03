@@ -4,7 +4,23 @@ use syntect::parsing::{SyntaxDefinition, SyntaxReference, SyntaxSet, SyntaxSetBu
 
 /// Extension spellings that resolve to a different extension whose grammar
 /// is the correct one for the language.
-const EXTENSION_ALIASES: &[(&str, &str)] = &[("ph", "php"), ("jsonc", "json")];
+const EXTENSION_ALIASES: &[(&str, &str)] = &[
+    ("containerfile", "dockerfile"),
+    ("dockerignore", "gitignore"),
+    ("eslintignore", "gitignore"),
+    ("helmignore", "gitignore"),
+    ("json5", "json"),
+    ("jsonc", "json"),
+    ("jsonl", "json"),
+    ("mdx", "md"),
+    ("ndjson", "json"),
+    ("npmignore", "gitignore"),
+    ("ph", "php"),
+    ("postcss", "css"),
+    ("prettierignore", "gitignore"),
+    ("vscodeignore", "gitignore"),
+    ("webmanifest", "json"),
+];
 
 /// Carries the owning syntax set: `parse_line` requires the set the grammar
 /// was loaded from.
@@ -103,22 +119,80 @@ const PLAIN_LANGUAGES: &[&str] = &[
 
 /// Full language names resolving to a different extension lookup.
 const LANGUAGE_ALIASES: &[(&str, &str)] = &[
+    ("apache", "htaccess"),
+    ("arm", "s"),
+    ("assembly", "asm"),
+    ("batch", "bat"),
+    ("batchfile", "bat"),
     ("c#", "cs"),
     ("c++", "cpp"),
+    ("cargo", "toml"),
+    ("cplusplus", "cpp"),
     ("csharp", "cs"),
+    ("cuda", "cpp"),
+    ("dash", "sh"),
+    ("deno", "ts"),
     ("docker", "Dockerfile"),
+    ("docker-compose", "yaml"),
     ("dockerfile", "Dockerfile"),
+    ("ecmascript", "js"),
+    ("editorconfig", "ini"),
+    ("elisp", "el"),
+    ("emacs-lisp", "el"),
+    ("f#", "fs"),
+    ("fortran", "f90"),
+    ("fsharp", "fs"),
+    ("gitdiff", "diff"),
     ("golang", "go"),
     ("javascript", "js"),
+    ("javascriptreact", "jsx"),
     ("jsonc", "json"),
+    ("jsonl", "json"),
+    ("ksh", "sh"),
+    ("lean4", "lean"),
     ("makefile", "Makefile"),
+    ("mariadb", "sql"),
     ("markdown", "md"),
+    ("mdx", "md"),
+    ("mssql", "sql"),
+    ("mysql", "sql"),
+    ("ndjson", "json"),
+    ("node", "js"),
+    ("nodejs", "js"),
+    ("nvim", "vim"),
+    ("objc", "objective-c"),
+    ("objectivec", "objective-c"),
+    ("octave", "matlab"),
+    ("plpgsql", "sql"),
+    ("plsql", "sql"),
+    ("posix", "sh"),
+    ("postgres", "sql"),
+    ("postgresql", "sql"),
     ("powershell", "ps1"),
+    ("proto3", "proto"),
+    ("psql", "sql"),
+    ("pwsh", "ps1"),
     ("python", "py"),
+    ("python2", "py"),
+    ("python3", "py3"),
+    ("rscript", "r"),
+    ("regex", "re"),
+    ("regexp", "re"),
+    ("registry", "reg"),
     ("ruby", "rb"),
     ("rust", "rs"),
+    ("scheme", "scm"),
     ("shell", "sh"),
+    ("shellscript", "sh"),
+    ("sqlite", "sql"),
+    ("sqlite3", "sql"),
+    ("sshconfig", "ssh_config"),
+    ("sshd", "sshd_config"),
+    ("starlark", "bazel"),
+    ("tsql", "sql"),
     ("typescript", "ts"),
+    ("typescriptreact", "tsx"),
+    ("vimscript", "vim"),
     ("zsh", "sh"),
 ];
 
@@ -132,6 +206,7 @@ pub(crate) fn syntax_for_language(language: &str) -> Option<Grammar> {
     }
     let aliased = LANGUAGE_ALIASES
         .iter()
+        .chain(EXTENSION_ALIASES)
         .find(|(from, _)| *from == lang)
         .map(|(_, to)| *to)
         .unwrap_or(lang.as_str());
@@ -225,6 +300,23 @@ mod tests {
     }
 
     #[test]
+    fn every_alias_resolves() {
+        for (from, to) in LANGUAGE_ALIASES {
+            assert!(
+                syntax_for_language(from).is_some(),
+                "language alias {from:?} -> {to:?} does not resolve"
+            );
+        }
+        for (from, to) in EXTENSION_ALIASES {
+            let path = format!("sample.{from}");
+            assert!(
+                detect_syntax(&path).is_some(),
+                "extension alias {from:?} -> {to:?} does not resolve"
+            );
+        }
+    }
+
+    #[test]
     fn fence_tags_resolve_to_grammars() {
         for tag in [
             "rs",
@@ -236,9 +328,56 @@ mod tests {
             "shell",
             "csharp",
             "bash",
+            "zsh",
+            "fish",
             "diff",
             "cmake",
+            "makefile",
+            "dockerfile",
+            "justfile",
+            "just",
+            "yaml",
+            "yml",
+            "json",
+            "toml",
+            "html",
+            "css",
+            "scss",
+            "sass",
+            "less",
+            "sql",
+            "go",
+            "java",
+            "kotlin",
+            "swift",
+            "c",
+            "cpp",
+            "http",
+            "nginx",
+            "graphql",
+            "proto",
+            "vue",
+            "svelte",
             "zig",
+            "nix",
+            "lua",
+            "dart",
+            "elixir",
+            "ex",
+            "erlang",
+            "haskell",
+            "clojure",
+            "scala",
+            "groovy",
+            "perl",
+            "julia",
+            "matlab",
+            "vim",
+            "powershell",
+            "ps1",
+            "batch",
+            "csv",
+            "tsv",
             "Dockerfile",
         ] {
             assert!(
