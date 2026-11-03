@@ -80,11 +80,13 @@ export function CodeBlock({
     text,
     title,
     diff = false,
+    className,
 }: {
     language?: string;
     text: string;
     title?: string;
     diff?: boolean;
+    className?: string;
 }) {
     const snippet = useHighlightedSnippet(language, text);
     const data = snippet.data;
@@ -93,7 +95,7 @@ export function CodeBlock({
     const hasLanguage = language !== undefined && language !== "plaintext";
 
     return (
-        <Frame className="group/code relative">
+        <Frame className={cn("group/code relative", className)}>
             {(hasLanguage || title) && (
                 <FrameHeader className="ui-selectable flex flex-row gap-2 px-2.5 py-1 font-mono text-xs">
                     {title && (

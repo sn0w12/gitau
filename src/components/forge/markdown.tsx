@@ -168,7 +168,7 @@ const components = {
             <h1
                 {...props}
                 className={cn(
-                    "mt-3 mb-1 border-b pb-1 text-lg font-semibold first:mt-0",
+                    "mt-3 mb-1 border-b pb-1 font-display text-5xl font-extralight first:mt-0",
                     props.className
                 )}
             />
@@ -179,7 +179,7 @@ const components = {
             <h2
                 {...props}
                 className={cn(
-                    "mt-3 mb-1 border-b pb-1 text-base font-semibold first:mt-0",
+                    "mt-3 mb-1 border-b pb-1 text-xl font-semibold first:mt-0",
                     props.className
                 )}
             />
@@ -190,7 +190,7 @@ const components = {
             <h3
                 {...props}
                 className={cn(
-                    "mt-2 mb-1 font-semibold first:mt-0",
+                    "mt-2 mb-1 text-lg font-semibold first:mt-0",
                     props.className
                 )}
             />
@@ -270,7 +270,12 @@ const components = {
         return isMermaid(lang) ? (
             <MermaidDiagram text={text} />
         ) : (
-            <CodeBlock language={lang} text={text} title={title} />
+            <CodeBlock
+                language={lang}
+                text={text}
+                title={title}
+                className="my-2"
+            />
         );
     },
     // The renderer wraps a fence with `file=`/`title=` info in a
@@ -284,7 +289,10 @@ const components = {
     },
     code(props) {
         return (
-            <code {...props} className="rounded bg-muted px-0.5 font-mono" />
+            <code
+                {...props}
+                className="rounded inline-code-bg [box-decoration-break:clone] px-0.5 font-mono [-webkit-box-decoration-break:clone]"
+            />
         );
     },
     table({ children }) {
@@ -304,7 +312,7 @@ const components = {
         return <TableRow {...props} />;
     },
     th(props) {
-        return <TableHead {...props} className="whitespace-normal" />;
+        return <TableHead {...props} className="h-7 whitespace-normal" />;
     },
     td(props) {
         return <TableCell {...props} className="whitespace-normal" />;
