@@ -33,6 +33,7 @@ import {
     snapshotQuery,
     statusQuery,
     stashQuery,
+    worktreeImageQuery,
     worktreesQuery,
 } from "@/lib/backend/queries/repository-queries";
 import { expectOk } from "@/lib/backend/transport/result";
@@ -64,6 +65,17 @@ export function useRepoReadme(repoId: number | undefined) {
     return useQuery({
         ...readmeQuery({ backend }, repoId ?? 0),
         enabled: hasValidRepoId(repoId),
+    });
+}
+
+export function useRepoImage(
+    repoId: number | undefined,
+    path: string | undefined
+) {
+    const { backend } = useAppServices();
+    return useQuery({
+        ...worktreeImageQuery({ backend }, repoId ?? 0, path ?? ""),
+        enabled: hasValidRepoId(repoId) && !!path,
     });
 }
 

@@ -52,6 +52,10 @@ export function ReadmeView({ repoId }: { repoId: number }) {
         );
     }
 
+    const imageBasePath = readme.data.path.includes("/")
+        ? readme.data.path.slice(0, readme.data.path.lastIndexOf("/"))
+        : "";
+
     return (
         <ScrollArea
             className="min-h-0 flex-1"
@@ -60,7 +64,12 @@ export function ReadmeView({ repoId }: { repoId: number }) {
             scrollbarGutter
         >
             <article className="mx-auto w-full max-w-3xl px-6 py-8">
-                <CustomMarkdown>{readme.data.content}</CustomMarkdown>
+                <CustomMarkdown
+                    imageRepoId={repoId}
+                    imageBasePath={imageBasePath}
+                >
+                    {readme.data.content}
+                </CustomMarkdown>
             </article>
         </ScrollArea>
     );

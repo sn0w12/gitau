@@ -482,6 +482,39 @@ impl Backend {
             .await
     }
 
+    /// Resolves a worktree-relative image into a `data:` URL. `None` when the
+    /// repository is bare, the file is missing, larger than
+    /// [`MAX_WORKTREE_IMAGE_BYTES`], or not a recognized image format.
+    pub async fn worktree_image(&self, id: RepoId, path: &str) -> Result<Option<String>> {
+        let entry = self.registry.get(id)?;
+        let Some(workdir) = entry.gix.workdir().map(Path::to_path_buf) else {
+            return Ok(None);
+        };
+        let relative = RelativePath::parse(path)?;
+        self.scheduler
+            .run(&CancellationToken::new(), move || {
+                let full = workdir.join(relative.to_path_buf());
+                let Ok(metadata) = std::fs::metadata(&full) else {
+                    return Ok(None);
+                };
+                if !metadata.is_file() || metadata.len() > MAX_WORKTREE_IMAGE_BYTES as u64 {
+                    return Ok(None);
+                }
+                let bytes = match std::fs::read(&full) {
+                    Ok(bytes) => bytes,
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        return Ok(None);
+                    }
+                    Err(error) => return Err(error.into()),
+                };
+                let Some(content_type) = crate::icons::sniff_image(&bytes) else {
+                    return Ok(None);
+                };
+                Ok(Some(crate::icons::encode_data_url(content_type, &bytes)))
+            })
+            .await
+    }
+
     pub fn clear_repository_caches(&self, id: RepoId) -> Result<()> {
         let entry = self.registry.get(id)?;
         entry.clear_cache();
@@ -2710,6 +2743,10 @@ fn commit_detail_blocking(
         total_deletions,
     })
 }
+
+/// Ceiling for a README image served to the webview; anything larger falls
+/// back to its alt text rather than shipping megabytes over IPC.
+const MAX_WORKTREE_IMAGE_BYTES: usize = 10 * 1024 * 1024;
 
 const README_NAMES: [&str; 6] = [
     "README.md",

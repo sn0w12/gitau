@@ -58,6 +58,22 @@ export function readmeQuery(deps: RepositoryQueryDeps, repoId: number) {
     });
 }
 
+export function worktreeImageQuery(
+    deps: RepositoryQueryDeps,
+    repoId: number,
+    path: string
+) {
+    return queryOptions({
+        queryKey: repositoryKeys.image(repoId, path),
+        queryFn: async () =>
+            expectOk(
+                await deps.backend.repositories.worktreeImage(repoId, path)
+            ),
+        staleTime: 60_000,
+        gcTime: 10 * 60_000,
+    });
+}
+
 export function statusQuery(
     deps: RepositoryQueryDeps,
     repoId: number,

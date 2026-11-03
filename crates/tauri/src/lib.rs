@@ -254,6 +254,7 @@ pub fn run() {
             commands::repository::git_remove_repository,
             commands::repository::git_repository_snapshot,
             commands::repository::git_readme,
+            commands::repository::git_read_worktree_image,
             commands::repository::git_init_repository,
             commands::repository::git_list_gitignore_templates,
             commands::repository::git_list_licenses,

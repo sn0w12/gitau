@@ -120,6 +120,10 @@ function createRawBackendClient() {
                 invokeCommand<ReadmeContent | null>("git_readme", {
                     args: { repoId },
                 }),
+            worktreeImage: (repoId: number, path: string) =>
+                invokeCommand<string | null>("git_read_worktree_image", {
+                    args: { repoId, path },
+                }),
             create: (request: CreateRepositoryRequest) =>
                 invokeCommand<CreateRepositoryResult>("git_init_repository", {
                     args: { request },

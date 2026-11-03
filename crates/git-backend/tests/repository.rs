@@ -52,6 +52,57 @@ async fn readme_is_none_without_a_recognized_file() {
 }
 
 #[tokio::test]
+async fn worktree_image_encodes_a_data_url() {
+    const PNG: [u8; 12] = [
+        0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x00,
+    ];
+    let repo = TestRepo::init("readme-image");
+    repo.initial_commit(&[("README.md", "# hello\n")]);
+    std::fs::create_dir_all(repo.root.join("docs")).unwrap();
+    std::fs::write(repo.root.join("docs/pic.png"), PNG).unwrap();
+
+    let backend = Backend::new(BackendConfig::default());
+    let opened = backend.open_repository(&repo.root).await.unwrap();
+
+    let url = backend
+        .worktree_image(opened.id, "docs/pic.png")
+        .await
+        .unwrap()
+        .expect("data url");
+    assert_eq!(url, "data:image/png;base64,iVBORw0KGgoAAAAA");
+}
+
+#[tokio::test]
+async fn worktree_image_skips_missing_non_image_and_escaping_paths() {
+    let repo = TestRepo::init("readme-image-none");
+    repo.initial_commit(&[("README.md", "# hello\n"), ("notes.txt", "text\n")]);
+
+    let backend = Backend::new(BackendConfig::default());
+    let opened = backend.open_repository(&repo.root).await.unwrap();
+
+    assert!(
+        backend
+            .worktree_image(opened.id, "missing.png")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        backend
+            .worktree_image(opened.id, "notes.txt")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        backend
+            .worktree_image(opened.id, "../outside.png")
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
 async fn open_repository_from_subdirectory_deduplicates() {
     let repo = TestRepo::init("dedupe");
     repo.initial_commit(&[("src/lib.rs", "pub fn f() {}")]);

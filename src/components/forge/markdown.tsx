@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import { useForgeProviders } from "@/hooks/forge/use-forge-account";
+import { useRepoImage } from "@/hooks/repositories/use-repository-queries";
 import { isTrustedImageSource } from "@/lib/forge/image-hosts";
 import { ALERT_TAG, githubMarkdownExtension } from "@/lib/markdown/github";
 import {
@@ -61,6 +62,80 @@ function isMermaid(lang: string | undefined): boolean {
 
 const InsideLinkContext = createContext(false);
 const ImageHostsContext = createContext<readonly string[]>([]);
+
+interface LocalImageSource {
+    repoId: number;
+    basePath: string;
+}
+
+const LocalImagesContext = createContext<LocalImageSource | null>(null);
+
+const ABSOLUTE_SRC = /^[a-z][a-z0-9+.-]*:/i;
+
+function isAbsoluteSrc(src: string): boolean {
+    return ABSOLUTE_SRC.test(src) || src.startsWith("//");
+}
+
+/**
+ * Resolves a markdown image source against the repository root, or returns
+ * `null` for an absolute source or one that climbs out of the worktree.
+ */
+function repoImagePath(src: string, basePath: string): string | null {
+    let decoded = src;
+    try {
+        decoded = decodeURIComponent(src);
+    } catch {
+        decoded = src;
+    }
+    if (isAbsoluteSrc(decoded)) return null;
+    const path = decoded.split(/[?#]/, 1)[0] ?? "";
+    const segments = path.startsWith("/")
+        ? []
+        : basePath.split("/").filter(Boolean);
+    for (const part of path.split("/")) {
+        if (part === "" || part === ".") continue;
+        if (part === "..") {
+            if (segments.length === 0) return null;
+            segments.pop();
+            continue;
+        }
+        segments.push(part);
+    }
+    return segments.length > 0 ? segments.join("/") : null;
+}
+
+function LocalImage({
+    repoId,
+    path,
+    alt,
+    title,
+    width,
+    height,
+}: {
+    repoId: number;
+    path: string | null;
+    alt?: string;
+    title?: string;
+    width?: string | number;
+    height?: string | number;
+}) {
+    const image = useRepoImage(repoId, path ?? undefined);
+    if (!path || !image.data) {
+        return alt ? (
+            <span className="text-muted-foreground">{alt}</span>
+        ) : null;
+    }
+    return (
+        <img
+            src={image.data}
+            alt={alt ?? ""}
+            title={title}
+            width={width}
+            height={height}
+            className="max-w-full rounded-md"
+        />
+    );
+}
 
 const components = {
     a(props) {
@@ -276,9 +351,25 @@ const components = {
     img({ children: _voidChildren, ...props }) {
         const insideLink = useContext(InsideLinkContext);
         const imageHosts = useContext(ImageHostsContext);
+        const localImages = useContext(LocalImagesContext);
         const src = props.src || "";
         if (isTrustedImageSource(src, imageHosts)) {
             return <img {...props} className="max-w-full rounded-md" />;
+        }
+        const localPath = localImages
+            ? repoImagePath(src, localImages.basePath)
+            : null;
+        if (localImages && !isAbsoluteSrc(src)) {
+            return (
+                <LocalImage
+                    repoId={localImages.repoId}
+                    path={localPath}
+                    alt={props.alt}
+                    title={props.title}
+                    width={props.width}
+                    height={props.height}
+                />
+            );
         }
         const href = linkHref(src);
         if (!href) return null;
@@ -311,11 +402,17 @@ export function CustomMarkdown({
     children,
     owner,
     repo,
+    imageRepoId,
+    imageBasePath,
 }: {
     children: React.ComponentProps<typeof Markdown>["children"];
     /** Repository the message belongs to; `#123` only links when both are set. */
     owner?: string;
     repo?: string;
+    /** Repository whose worktree serves relative `<img>` sources. */
+    imageRepoId?: number;
+    /** Directory of the rendered document, used to resolve relative images. */
+    imageBasePath?: string;
 }) {
     const extensions = useMemo(
         () => [
@@ -336,23 +433,32 @@ export function CustomMarkdown({
         () => (providers.data ?? []).flatMap((provider) => provider.imageHosts),
         [providers.data]
     );
+    const localImages = useMemo(
+        () =>
+            imageRepoId === undefined
+                ? null
+                : { repoId: imageRepoId, basePath: imageBasePath ?? "" },
+        [imageRepoId, imageBasePath]
+    );
     return (
         <ImageHostsContext value={imageHosts}>
-            <div className="min-w-0 break-words">
-                <Markdown
-                    extensions={extensions}
-                    components={components}
-                    // Required so the parser can tell real html from escaped
-                    // `\<b>` text. It is safe because `safeHtmlExtension`
-                    // rewrites every html node before the renderer sees one,
-                    // so the renderer's innerHTML branch stays unreachable.
-                    allowHtml
-                >
-                    {typeof children === "string"
-                        ? normalizeHtmlBlocks(children)
-                        : children}
-                </Markdown>
-            </div>
+            <LocalImagesContext value={localImages}>
+                <div className="min-w-0 break-words">
+                    <Markdown
+                        extensions={extensions}
+                        components={components}
+                        // Required so the parser can tell real html from escaped
+                        // `\<b>` text. It is safe because `safeHtmlExtension`
+                        // rewrites every html node before the renderer sees one,
+                        // so the renderer's innerHTML branch stays unreachable.
+                        allowHtml
+                    >
+                        {typeof children === "string"
+                            ? normalizeHtmlBlocks(children)
+                            : children}
+                    </Markdown>
+                </div>
+            </LocalImagesContext>
         </ImageHostsContext>
     );
 }
