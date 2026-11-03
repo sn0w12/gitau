@@ -20,15 +20,25 @@ curl -fsSL https://raw.githubusercontent.com/sn0w12/gitau/master/scripts/install
 - Rust 1.85+
 - The platform dependencies from the [Tauri prerequisites guide](https://tauri.app/start/prerequisites/).
 
+### Optional
+
+- [Just](https://github.com/casey/just)
+
 ### Commands
 
 ```bash
 npm install
-npm run tauri dev -- --config crates/tauri/tauri.dev.conf.json   # desktop app with hot reload
-npm run tauri build          # installer bundle
+just dev    # npm run tauri dev -- --config crates/tauri/tauri.dev.conf.json
+just build  # npm run tauri build
 ```
 
 Run the full gate set before opening a pull request:
+
+```bash
+just ci
+```
+
+or
 
 ```bash
 npm run format:check
@@ -45,5 +55,5 @@ After changing the Rust settings schema, regenerate the frontend settings
 contract:
 
 ```bash
-cargo run -p gitau --bin export_settings --features devtools
+just settings # cargo run -p gitau --bin export_settings --features devtools
 ```
