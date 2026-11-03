@@ -1,5 +1,7 @@
-set shell := ["pwsh", "-NoLogo", "-Command"]
 set dotenv-load := false
+
+[windows]
+set shell := ["pwsh", "-NoLogo", "-Command"]
 
 ci *args="":
     node scripts/ci.mjs{{ if args == "" { "" } else { " " + args } }}
