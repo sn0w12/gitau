@@ -104,13 +104,27 @@ pub fn history_page(
         // and `has_more` count only matching commits. Matching reads only
         // the cheap commit header (not diff stats), keeping the first search
         // cheap; later identical searches reuse cached summaries.
+        //
+        // Each match is one object lookup, so the scan fans out across the
+        // pool: on a long history the serial version spends the whole search
+        // waiting on one commit read at a time.
         let filtered: Option<Vec<git2::Oid>> = if search.is_empty() {
             None
         } else {
+            let git_dir: PathBuf = repo.path().to_path_buf();
+            let results: Vec<Result<(git2::Oid, bool)>> = list
+                .par_iter()
+                .map(|oid| {
+                    local::with_repository(&git_dir, |wrepo| {
+                        Ok((*oid, commit_matches_search(wrepo, *oid, &search)?))
+                    })
+                })
+                .collect();
             let mut matches = Vec::new();
-            for oid in list.iter() {
-                if commit_matches_search(repo, *oid, &search)? {
-                    matches.push(*oid);
+            for result in results {
+                let (oid, matched) = result?;
+                if matched {
+                    matches.push(oid);
                 }
             }
             Some(matches)

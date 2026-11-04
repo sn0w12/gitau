@@ -1,15 +1,43 @@
+use std::collections::HashMap;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 use gix::ThreadSafeRepository;
 
 use crate::domain::{HeadState, ObjectId, ShaKind};
 use crate::error::{GitError, Result};
 
+/// Above this many entries the verdict map is dropped wholesale. A verdict is
+/// a pure function of the blob id, so losing one costs a re-read and never
+/// produces a wrong answer.
+const BINARY_VERDICT_CAPACITY: usize = 16_384;
+
+/// Binary-ness of blobs seen by this session, keyed by blob id. Blob content
+/// is immutable, so verdicts outlive a single diff operation; re-enumerating
+/// the same change (every filesystem event does) skips decompressing it again.
+#[derive(Clone, Default)]
+pub struct BinaryVerdicts(Arc<Mutex<HashMap<gix::hash::ObjectId, bool>>>);
+
+impl BinaryVerdicts {
+    pub(crate) fn get(&self, id: gix::hash::ObjectId) -> Option<bool> {
+        self.0.lock().unwrap().get(&id).copied()
+    }
+
+    pub(crate) fn insert(&self, id: gix::hash::ObjectId, binary: bool) {
+        let mut verdicts = self.0.lock().unwrap();
+        if verdicts.len() >= BINARY_VERDICT_CAPACITY {
+            verdicts.clear();
+        }
+        verdicts.insert(id, binary);
+    }
+}
+
 /// Read-optimized session on top of gitoxide.
 #[derive(Clone)]
 pub struct GixSession {
     tsr: ThreadSafeRepository,
     workdir: Option<std::path::PathBuf>,
+    binary_verdicts: BinaryVerdicts,
 }
 
 /// The on-disk index, re-read on every call. gix's shared index snapshot is
@@ -77,7 +105,11 @@ impl GixSession {
         match gix::ThreadSafeRepository::discover_opts(input, Default::default(), trust_map) {
             Ok(tsr) => {
                 let workdir = tsr.work_dir().map(std::path::Path::to_path_buf);
-                Ok(Self { tsr, workdir })
+                Ok(Self {
+                    tsr,
+                    workdir,
+                    binary_verdicts: BinaryVerdicts::default(),
+                })
             }
             Err(_) => Err(GitError::NotARepository {
                 path: input.to_owned(),
@@ -91,6 +123,10 @@ impl GixSession {
             crate::global_ignore::warn_once(format!("global gitignore not applied: {error}"));
         }
         repo
+    }
+
+    pub(crate) fn binary_verdicts(&self) -> &BinaryVerdicts {
+        &self.binary_verdicts
     }
 
     /// Thread-local handle for parallel status work. Carries the same

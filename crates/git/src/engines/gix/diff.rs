@@ -93,10 +93,10 @@ pub fn enumerate(
     }
     raw.sort_by(|a, b| a.path.cmp(&b.path));
 
+    let binaries = sniff_binaries(session, blobs, &raw);
     let mut plans = Vec::with_capacity(raw.len());
-    for (section_id, delta) in raw.into_iter().enumerate() {
+    for (section_id, (delta, binary)) in raw.into_iter().zip(binaries).enumerate() {
         let image = is_image_path(delta.path.as_bytes());
-        let binary = sniff_delta_binary(session, blobs, &delta);
         plans.push(SectionPlan {
             meta: SectionMeta {
                 section_id: section_id as u32,
@@ -730,24 +730,64 @@ fn is_binary(bytes: &[u8]) -> bool {
 
 /// Best-effort binary sniff for `enumerate`, so `Started.sections[].binary`
 /// is correct before materialization. Failures mean text, never an error.
-fn sniff_delta_binary(session: &GixSession, blobs: &BlobCache, delta: &Renamed) -> bool {
-    if is_image_path(delta.path.as_bytes()) {
-        return blob_or_worktree_is_binary(session, blobs, delta);
+///
+/// The sniff is the only I/O left after enumeration and it is per-file
+/// independent, so it runs on a few scoped threads: a wide working tree
+/// otherwise pays one open (worktree) plus one blob decompression per changed
+/// file on the calling thread before `Started` can be sent.
+fn sniff_binaries(session: &GixSession, blobs: &BlobCache, deltas: &[Renamed]) -> Vec<bool> {
+    let mut binaries = vec![false; deltas.len()];
+    if deltas.is_empty() {
+        return binaries;
     }
-    blob_or_worktree_is_binary(session, blobs, delta)
+    let workers = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .clamp(1, 4)
+        .min(deltas.len());
+    if workers == 1 {
+        let mut repo = None;
+        for (slot, delta) in binaries.iter_mut().zip(deltas) {
+            *slot = sniff_delta_binary(session, blobs, delta, &mut repo);
+        }
+        return binaries;
+    }
+    let chunk_size = deltas.len().div_ceil(workers);
+    std::thread::scope(|scope| {
+        for (chunk, slots) in deltas
+            .chunks(chunk_size)
+            .zip(binaries.chunks_mut(chunk_size))
+        {
+            scope.spawn(move || {
+                // Verdicts are cached per session, so a repeat enumeration
+                // never needs an object database here at all.
+                let mut repo = None;
+                for (slot, delta) in slots.iter_mut().zip(chunk) {
+                    *slot = sniff_delta_binary(session, blobs, delta, &mut repo);
+                }
+            });
+        }
+    });
+    binaries
 }
 
-fn blob_or_worktree_is_binary(session: &GixSession, blobs: &BlobCache, delta: &Renamed) -> bool {
-    let repo = session.handle();
-    if let Some(id) = delta.old_id {
-        if blob_is_binary(&repo, blobs, id) {
-            return true;
-        }
+fn sniff_delta_binary(
+    session: &GixSession,
+    blobs: &BlobCache,
+    delta: &Renamed,
+    repo: &mut Option<gix::Repository>,
+) -> bool {
+    if let Some(binary) = delta
+        .old_id
+        .and_then(|id| blob_is_binary(session, blobs, id, repo))
+    {
+        return binary;
     }
-    if let Some(id) = delta.new_id {
-        if blob_is_binary(&repo, blobs, id) {
-            return true;
-        }
+    if let Some(binary) = delta
+        .new_id
+        .and_then(|id| blob_is_binary(session, blobs, id, repo))
+    {
+        return binary;
     }
     if delta.worktree && !delta.symlink {
         return worktree_prefix_is_binary(session, delta.path.as_bytes());
@@ -755,14 +795,27 @@ fn blob_or_worktree_is_binary(session: &GixSession, blobs: &BlobCache, delta: &R
     false
 }
 
-fn blob_is_binary(repo: &gix::Repository, cache: &BlobCache, id: Oid) -> bool {
-    if let Some(data) = cache.lock().unwrap().get(&id) {
-        return is_binary(data);
+fn blob_is_binary(
+    session: &GixSession,
+    cache: &BlobCache,
+    id: Oid,
+    repo: &mut Option<gix::Repository>,
+) -> Option<bool> {
+    let verdicts = session.binary_verdicts();
+    if let Some(binary) = verdicts.get(id) {
+        return Some(binary);
     }
-    match repo.find_blob(id) {
-        Ok(blob) => is_binary(blob.data.as_bytes()),
-        Err(_) => false,
-    }
+    // Reading through the job cache keeps the materialization pass from
+    // decompressing the same blob a second time.
+    let data = cached_blob(
+        repo.get_or_insert_with(|| session.thread_local()),
+        cache,
+        id,
+    )
+    .ok()?;
+    let binary = is_binary(&data);
+    verdicts.insert(id, binary);
+    Some(binary)
 }
 
 fn worktree_prefix_is_binary(session: &GixSession, path: &[u8]) -> bool {
@@ -1332,6 +1385,18 @@ fn has_gitmodules(repo: &gix::Repository, index: &gix::index::File) -> bool {
         .any(|entry| entry.path(index) == BStr::new(b".gitmodules"))
 }
 
+/// Every gix status worker opens its own repository handle, attribute stack
+/// and dirwalk before touching an entry, so a wide pool on a small index
+/// spends its time on setup. Sizing the pool by the entry count keeps the
+/// large-tree case on every core while a small tree stops paying for threads
+/// that each handle a couple of files.
+fn status_thread_limit(entries: usize) -> Option<usize> {
+    let available = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    Some(entries.div_ceil(32).clamp(1, available))
+}
+
 fn run_index_worktree_status<S>(
     repo: &gix::Repository,
     index: &gix::index::File,
@@ -1371,11 +1436,14 @@ fn worktree_changes(
         options.set_emit_ignored(None);
         options
     };
+    // A scoped request only walks the selected paths, so size the pool by the
+    // scope instead of by the whole index.
+    let work_items = scope.map_or(index.entries().len(), <[String]>::len);
     let options = gix::status::index_worktree::Options {
         sorting: Some(Sorting::ByPathCaseSensitive),
         dirwalk_options: Some(dirwalk_options),
         rewrites: Some(rewrites()),
-        thread_limit: None,
+        thread_limit: status_thread_limit(work_items),
     };
     // `:(top,literal)` anchors each pattern at the worktree root (gix
     // normalizes bare patterns against the process CWD) and disables glob

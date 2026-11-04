@@ -103,3 +103,8 @@ lto = "thin"
 codegen-units = 16
 debug = false
 
+[profile.profiling]
+inherits = "bench"
+debug = 2
+strip = false
+
