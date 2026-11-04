@@ -24,7 +24,7 @@ pub fn highlight_snippet(language: &str, text: &str) -> Option<SnippetHighlight>
     let syntax = syntax_for_language(language)?;
     let mut stream = SideStream::new(text, syntax);
     let mut interner = StyleInterner::default();
-    let line_count = stream.lines.len() as u32;
+    let line_count = stream.line_count() as u32;
     let wanted: HashSet<u32> = (1..=line_count).collect();
     let mut by_line: HashMap<u32, Vec<u32>> = stream
         .advance(line_count, &wanted, &mut interner)

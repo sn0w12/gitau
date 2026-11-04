@@ -1,59 +1,113 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
 
 use syntect::highlighting::{FontStyle, HighlightIterator, HighlightState, Highlighter};
 use syntect::parsing::{ParseState, ScopeStack};
 
 use crate::style::{font_bits, hex, packed, LineRef, Style, StyleInterner};
 use crate::syntax::{detect_syntax, Grammar};
-use crate::themes::themes;
+use crate::themes::{themes, Themes};
 use crate::{MAX_HIGHLIGHT_BYTES, NO_NEWLINE_MARKER};
+
+/// Theme selectors only change when the user switches theme, so the two
+/// highlighters (which clone and sort every selector in the theme) are built
+/// once per theme snapshot instead of once per side of every section.
+struct Highlighters {
+    light: Highlighter<'static>,
+    dark: Highlighter<'static>,
+}
+
+static HIGHLIGHTERS: Mutex<Option<(&'static Themes, &'static Highlighters)>> = Mutex::new(None);
+
+fn cached_highlighters(theme_pair: &'static Themes) -> &'static Highlighters {
+    let mut slot = HIGHLIGHTERS.lock().unwrap();
+    if let Some((cached_themes, highlighters)) = *slot {
+        if std::ptr::eq(cached_themes, theme_pair) {
+            return highlighters;
+        }
+    }
+    // Same lifetime rule as the theme snapshots themselves: a superseded
+    // pair stays alive for the process rather than risking a dangling borrow.
+    let highlighters: &'static Highlighters = Box::leak(Box::new(Highlighters {
+        light: Highlighter::new(&theme_pair.light),
+        dark: Highlighter::new(&theme_pair.dark),
+    }));
+    *slot = Some((theme_pair, highlighters));
+    highlighters
+}
 
 /// One side's resumable parser: grammar state and position persist across
 /// calls so a section can be highlighted chunk-by-chunk, each call paying
 /// only the lines that call needs (the parse-state checkpoint pattern from
 /// syntect's docs).
 pub(crate) struct SideStream {
-    pub(crate) lines: Vec<String>,
+    /// The side's text, shared so a line slice can outlive `&mut self` during
+    /// a parse without copying the line.
+    text: Arc<str>,
+    /// Byte offset where each line starts; line `i` ends at the next offset.
+    line_starts: Vec<u32>,
     state: ParseState,
     set: &'static syntect::parsing::SyntaxSet,
     next: usize,
     light_state: HighlightState,
     dark_state: HighlightState,
-    // 'static: theme snapshots are leaked, never freed.
-    light_hl: Highlighter<'static>,
-    dark_hl: Highlighter<'static>,
+    // 'static: theme snapshots and their highlighters are leaked, never freed.
+    light_hl: &'static Highlighter<'static>,
+    dark_hl: &'static Highlighter<'static>,
     default_light: syntect::highlighting::Color,
     default_dark: syntect::highlighting::Color,
 }
 
+fn line_starts(text: &str) -> Vec<u32> {
+    let mut starts = Vec::with_capacity(text.len() / 32 + 1);
+    starts.push(0);
+    for (index, byte) in text.bytes().enumerate() {
+        if byte == b'\n' {
+            starts.push((index + 1) as u32);
+        }
+    }
+    if starts.last() == Some(&(text.len() as u32)) && starts.len() > 1 {
+        starts.pop();
+    }
+    if text.is_empty() {
+        starts.clear();
+    }
+    starts
+}
+
 impl SideStream {
     pub(crate) fn new(text: &str, grammar: Grammar) -> SideStream {
-        let themes = themes();
-        let light_hl = Highlighter::new(&themes.light);
-        let dark_hl = Highlighter::new(&themes.dark);
-        let default_light = themes
+        let theme_pair = themes();
+        let highlighters = cached_highlighters(theme_pair);
+        let default_light = theme_pair
             .light
             .settings
             .foreground
             .unwrap_or(syntect::highlighting::Color::WHITE);
-        let default_dark = themes
+        let default_dark = theme_pair
             .dark
             .settings
             .foreground
             .unwrap_or(syntect::highlighting::Color::WHITE);
         SideStream {
-            lines: text.split_inclusive('\n').map(str::to_string).collect(),
+            line_starts: line_starts(text),
+            text: Arc::from(text),
             state: ParseState::new(grammar.syntax),
             set: grammar.set,
             next: 0,
-            light_state: HighlightState::new(&light_hl, ScopeStack::new()),
-            dark_state: HighlightState::new(&dark_hl, ScopeStack::new()),
-            light_hl,
-            dark_hl,
+            light_state: HighlightState::new(&highlighters.light, ScopeStack::new()),
+            dark_state: HighlightState::new(&highlighters.dark, ScopeStack::new()),
+            light_hl: &highlighters.light,
+            dark_hl: &highlighters.dark,
             default_light,
             default_dark,
         }
+    }
+
+    /// Number of lines in this side, matching `split_inclusive('\n')`.
+    pub(crate) fn line_count(&self) -> usize {
+        self.line_starts.len()
     }
 
     /// Advances grammar state through `upto` (1-based inclusive) and returns
@@ -66,17 +120,23 @@ impl SideStream {
         interner: &mut StyleInterner,
     ) -> Vec<(u32, Vec<u32>)> {
         let mut produced = Vec::new();
-        while self.next < self.lines.len() && self.next < upto as usize {
-            let line = self.lines[self.next].clone();
+        let text = Arc::clone(&self.text);
+        while self.next < self.line_starts.len() && self.next < upto as usize {
+            let start = self.line_starts[self.next] as usize;
+            let end = self
+                .line_starts
+                .get(self.next + 1)
+                .map_or(text.len(), |next| *next as usize);
+            let line = &text[start..end];
             let content_len = line.trim_end_matches(['\r', '\n']).len();
             let lineno = (self.next + 1) as u32;
             if wanted.contains(&lineno) {
-                let spans = self.style_line(&line, content_len, interner);
+                let spans = self.style_line(line, content_len, interner);
                 if !spans.is_empty() {
                     produced.push((lineno, spans));
                 }
             } else {
-                self.feed_state(&line);
+                self.feed_state(line);
             }
             self.next += 1;
         }
@@ -89,8 +149,8 @@ impl SideStream {
         };
         // HighlightStates only advance when their iterator is drained; run
         // both to completion without emitting anything.
-        let mut light = HighlightIterator::new(&mut self.light_state, &ops, line, &self.light_hl);
-        let mut dark = HighlightIterator::new(&mut self.dark_state, &ops, line, &self.dark_hl);
+        let mut light = HighlightIterator::new(&mut self.light_state, &ops, line, self.light_hl);
+        let mut dark = HighlightIterator::new(&mut self.dark_state, &ops, line, self.dark_hl);
         while light.next().is_some() {
             dark.next();
         }
@@ -108,8 +168,8 @@ impl SideStream {
         let Ok(ops) = self.state.parse_line(line, self.set) else {
             return Vec::new();
         };
-        let light_iter = HighlightIterator::new(&mut self.light_state, &ops, line, &self.light_hl);
-        let mut dark_iter = HighlightIterator::new(&mut self.dark_state, &ops, line, &self.dark_hl);
+        let light_iter = HighlightIterator::new(&mut self.light_state, &ops, line, self.light_hl);
+        let mut dark_iter = HighlightIterator::new(&mut self.dark_state, &ops, line, self.dark_hl);
 
         let mut spans: Vec<u32> = Vec::with_capacity(16);
         let mut offset = 0usize;
@@ -192,10 +252,12 @@ impl SectionHighlighter {
 
     /// Returns spans aligned with `lines`; `None` keeps the line plain.
     /// Context lines prefer the new side, matching byte-identical content on
-    /// both sides.
+    /// both sides, so the old side is only asked for lines that have no new
+    /// line number.
     pub fn spans(&mut self, lines: &[LineRef<'_>]) -> Vec<Option<Vec<u32>>> {
         let mut need_old: HashSet<u32> = HashSet::new();
         let mut need_new: HashSet<u32> = HashSet::new();
+        let new_available = self.new.is_some();
         for line in lines {
             if !line.kind.is_highlightable()
                 || line.content.is_empty()
@@ -203,16 +265,18 @@ impl SectionHighlighter {
             {
                 continue;
             }
-            if let Some(lineno) = line.old_lineno {
-                need_old.insert(lineno);
-            }
-            if let Some(lineno) = line.new_lineno {
+            if let Some(lineno) = line.new_lineno.filter(|_| new_available) {
                 need_new.insert(lineno);
+            } else if let Some(lineno) = line.old_lineno {
+                need_old.insert(lineno);
             }
         }
 
         let mut old_spans: HashMap<u32, Vec<u32>> = HashMap::new();
         let mut new_spans: HashMap<u32, Vec<u32>> = HashMap::new();
+        // syntect's ParseState caches an onig Region (a raw pointer), so it is
+        // not Send: a side cannot be handed to another thread. The sections
+        // themselves are already highlighted in parallel by the caller's pool.
         if !need_old.is_empty() {
             if let Some(side) = self.old.as_mut() {
                 old_spans.extend(side.advance(max_of(&need_old), &need_old, &mut self.styles));
@@ -233,15 +297,17 @@ impl SectionHighlighter {
                 {
                     return None;
                 }
+                // Each lineno appears at most once in the output, so the span
+                // vector moves out instead of being cloned per row.
                 let spans = line
                     .new_lineno
-                    .and_then(|lineno| new_spans.get(&lineno))
-                    .or_else(|| line.old_lineno.and_then(|lineno| old_spans.get(&lineno)))?;
+                    .and_then(|lineno| new_spans.remove(&lineno))
+                    .or_else(|| line.old_lineno.and_then(|lineno| old_spans.remove(&lineno)))?;
                 let limit = line.content.len() as u32;
                 spans
                     .chunks_exact(3)
                     .all(|triple| triple[0] + triple[1] <= limit)
-                    .then(|| spans.clone())
+                    .then_some(spans)
             })
             .collect()
     }
