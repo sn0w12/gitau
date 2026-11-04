@@ -1,6 +1,7 @@
 use fs_util::sanitize_component;
 
 use crate::error::IconError;
+use crate::source::OwnerIconSource;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IconPlan {
@@ -11,13 +12,49 @@ pub struct IconPlan {
 
 /// Derives the cache key + remote URL for a git remote string. Supports
 /// `https://`, `http://`, and scp-like `git@host:owner/repo(.git)` forms.
-pub fn plan_from_remote(remote: &str) -> Result<IconPlan, IconError> {
+/// Returns `None` when no provider supplies an icon URL for the host.
+pub fn plan_from_remote(
+    remote: &str,
+    source: &dyn OwnerIconSource,
+) -> Result<Option<IconPlan>, IconError> {
     let trimmed = remote.trim();
     if trimmed.is_empty() {
         return Err(IconError::InvalidRemote(remote.to_owned()));
     }
 
-    let without_git_suffix = trimmed.strip_suffix(".git").unwrap_or(trimmed);
+    let (host, owner) = split_remote(trimmed)?;
+
+    let host = host.to_ascii_lowercase();
+    let owner = owner.to_ascii_lowercase();
+    let host_key = sanitize_component(&host);
+    let owner_key = sanitize_component(&owner);
+    if host_key.is_empty() || owner_key.is_empty() {
+        return Err(IconError::InvalidRemote(remote.to_owned()));
+    }
+
+    let Some(url) = source.icon_url(&host, &owner) else {
+        return Ok(None);
+    };
+
+    Ok(Some(IconPlan {
+        key: format!("{host_key}/{owner_key}"),
+        url,
+    }))
+}
+
+/// Rebuilds a plan from a cached `{host}/{owner}` key and the current
+/// provider URL, so refresh uses the provider's latest endpoint.
+pub(crate) fn plan_from_key(key: &str, source: &dyn OwnerIconSource) -> Option<IconPlan> {
+    let (host, owner) = split_key(key);
+    let url = source.icon_url(host, owner)?;
+    Some(IconPlan {
+        key: key.to_owned(),
+        url,
+    })
+}
+
+fn split_remote(remote: &str) -> Result<(&str, &str), IconError> {
+    let without_git_suffix = remote.strip_suffix(".git").unwrap_or(remote);
 
     // Split off scheme if present.
     let (scheme, rest) = match without_git_suffix.split_once("://") {
@@ -29,13 +66,11 @@ pub fn plan_from_remote(remote: &str) -> Result<IconPlan, IconError> {
         if scheme != "https" && scheme != "http" {
             return Err(IconError::InvalidRemote(remote.to_owned()));
         }
-        let (host, path) = rest
-            .split_once(['/'])
-            .ok_or_else(|| IconError::InvalidRemote(remote.to_owned()))?;
-        (host, path)
+        rest.split_once(['/'])
+            .ok_or_else(|| IconError::InvalidRemote(remote.to_owned()))?
     } else {
         // scp-like syntax: git@github.com:owner/repo
-        if !trimmed.contains('@') || !without_git_suffix.contains(':') {
+        if !remote.contains('@') || !without_git_suffix.contains(':') {
             return Err(IconError::InvalidRemote(remote.to_owned()));
         }
         let after_user = without_git_suffix.split_once('@').unwrap().1;
@@ -44,45 +79,12 @@ pub fn plan_from_remote(remote: &str) -> Result<IconPlan, IconError> {
             .ok_or_else(|| IconError::InvalidRemote(remote.to_owned()))?
     };
 
-    let host = sanitize_component(&host.to_ascii_lowercase());
     let owner = path
         .split('/')
         .find(|segment| !segment.is_empty())
         .ok_or_else(|| IconError::InvalidRemote(remote.to_owned()))?;
-    // Owners are case-insensitively unique on the providers we special-case,
-    // so normalize to keep one cache entry per owner.
-    let owner = sanitize_component(&owner.to_lowercase());
-    if host.is_empty() || owner.is_empty() {
-        return Err(IconError::InvalidRemote(remote.to_owned()));
-    }
 
-    let url = avatar_url_for(&host, &owner);
-
-    Ok(IconPlan {
-        key: format!("{host}/{owner}"),
-        url,
-    })
-}
-
-/// Provider-specific owner/org avatar endpoints. Anything unrecognized
-/// falls back to the site favicon.
-fn avatar_url_for(host: &str, owner: &str) -> String {
-    let is_github = host == "github.com" || host.ends_with(".github.com");
-    let is_gitlab =
-        host == "gitlab.com" || host.contains(".gitlab.") || host.starts_with("gitlab.");
-    let is_bitbucket = host == "bitbucket.org";
-
-    if is_github {
-        // Works for users and orgs; redirects to the CDN avatar.
-        format!("https://{host}/{owner}.png?size=128")
-    } else if is_gitlab {
-        // Serves the namespace's avatar, or an identicon when none exists.
-        format!("https://{host}/{owner}.png")
-    } else if is_bitbucket {
-        format!("https://bitbucket.org/account/{owner}/avatar/128/")
-    } else {
-        format!("https://{host}/favicon.ico")
-    }
+    Ok((host, owner))
 }
 
 pub(crate) fn split_key(key: &str) -> (&str, &str) {
@@ -107,56 +109,58 @@ pub(crate) fn file_name_of_key(key: &str) -> String {
 mod tests {
     use super::*;
 
+    struct FakeSource;
+
+    impl OwnerIconSource for FakeSource {
+        fn icon_url(&self, host: &str, owner: &str) -> Option<String> {
+            (host == "github.com").then(|| format!("https://github.com/{owner}.png?size=128"))
+        }
+    }
+
     #[test]
     fn plans_github_https_remotes() {
-        let plan = plan_from_remote("https://github.com/Facebook/react.git").unwrap();
+        let plan = plan_from_remote("https://github.com/Facebook/react.git", &FakeSource)
+            .unwrap()
+            .unwrap();
         assert_eq!(plan.key, "github.com/facebook");
         assert_eq!(plan.url, "https://github.com/facebook.png?size=128");
     }
 
     #[test]
     fn plans_handle_suffixes_and_slashes() {
-        let plan = plan_from_remote("https://github.com/rust-lang/rust/").unwrap();
+        let plan = plan_from_remote("https://github.com/rust-lang/rust/", &FakeSource)
+            .unwrap()
+            .unwrap();
         assert_eq!(plan.key, "github.com/rust-lang");
     }
 
     #[test]
     fn plans_scp_like_remotes() {
-        let plan = plan_from_remote("git@github.com:tokio-rs/tokio.git").unwrap();
+        let plan = plan_from_remote("git@github.com:tokio-rs/tokio.git", &FakeSource)
+            .unwrap()
+            .unwrap();
         assert_eq!(plan.key, "github.com/tokio-rs");
         assert_eq!(plan.url, "https://github.com/tokio-rs.png?size=128");
     }
 
     #[test]
-    fn supports_gitlab_and_bitbucket() {
-        let gitlab = plan_from_remote("https://gitlab.com/gitlab-org/gitlab.git").unwrap();
-        assert_eq!(gitlab.key, "gitlab.com/gitlab-org");
-        assert_eq!(gitlab.url, "https://gitlab.com/gitlab-org.png");
-
-        let scp = plan_from_remote("git@gitlab.com:kernel-team/linux.git").unwrap();
-        assert_eq!(scp.url, "https://gitlab.com/kernel-team.png");
-
-        let self_hosted = plan_from_remote("https://gitlab.company.dev/team/app.git").unwrap();
-        assert_eq!(self_hosted.url, "https://gitlab.company.dev/team.png");
-
-        let bitbucket = plan_from_remote("https://bitbucket.org/atlassian/atlaskit.git").unwrap();
-        assert_eq!(
-            bitbucket.url,
-            "https://bitbucket.org/account/atlassian/avatar/128/"
-        );
-    }
-
-    #[test]
-    fn unknown_hosts_fall_back_to_favicon() {
-        let plan = plan_from_remote("https://git.example.org/team/project.git").unwrap();
-        assert_eq!(plan.key, "git.example.org/team");
-        assert_eq!(plan.url, "https://git.example.org/favicon.ico");
+    fn hosts_without_a_provider_have_no_plan() {
+        for remote in [
+            "https://gitlab.com/gitlab-org/gitlab.git",
+            "https://bitbucket.org/atlassian/atlaskit.git",
+            "https://git.example.org/team/project.git",
+        ] {
+            assert_eq!(plan_from_remote(remote, &FakeSource).unwrap(), None);
+        }
     }
 
     #[test]
     fn rejects_invalid_remotes() {
         for bad in ["", "not-a-url", "ftp://host/x/y", "https://", "git@host"] {
-            assert!(plan_from_remote(bad).is_err(), "`{bad}` should not plan");
+            assert!(
+                plan_from_remote(bad, &FakeSource).is_err(),
+                "`{bad}` should not plan"
+            );
         }
     }
 
@@ -166,7 +170,9 @@ mod tests {
         assert!(!evil.contains('/'));
         assert_ne!(evil, "..");
 
-        let plan = plan_from_remote("https://github.com/../etc/passwd").unwrap();
+        let plan = plan_from_remote("https://github.com/../etc/passwd", &FakeSource)
+            .unwrap()
+            .unwrap();
         assert!(plan.key.starts_with("github.com/"));
         assert!(!plan.key.contains(".."));
     }

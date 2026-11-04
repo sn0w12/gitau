@@ -1043,11 +1043,11 @@ function createRawBackendClient() {
 
         icons: {
             resolve: (remoteUrl: string) =>
-                invokeCommand<CachedIcon>("icon_resolve", {
+                invokeCommand<CachedIcon | null>("icon_resolve", {
                     args: { remoteUrl },
                 }),
             refresh: (remoteUrl: string) =>
-                invokeCommand<CachedIcon>("icon_refresh", {
+                invokeCommand<CachedIcon | null>("icon_refresh", {
                     args: { remoteUrl },
                 }),
             byRepo: (repoId: number) =>

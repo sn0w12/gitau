@@ -56,6 +56,12 @@ pub trait ForgeProvider: Send + Sync {
         self.hosts().iter().any(|h| h.eq_ignore_ascii_case(host))
     }
 
+    /// URL of the owner's icon on this provider, or `None` when it serves
+    /// none.
+    fn owner_icon_url(&self, _host: &str, _owner: &str) -> Option<String> {
+        None
+    }
+
     /// Parses `(host, owner, repo)` out of a remote URL, or `None` when the
     /// URL belongs to another provider.
     fn parse_remote(&self, url: &str) -> Option<(String, String, String)>;

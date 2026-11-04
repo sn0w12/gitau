@@ -264,7 +264,7 @@ export function useRemoteIcon(remoteUrl: string | undefined) {
         gcTime: 60 * 60_000,
         retry: false,
         refetchOnWindowFocus: false,
-        queryFn: async (): Promise<CachedIcon> =>
+        queryFn: async (): Promise<CachedIcon | null> =>
             expectOk(await backend.icons.resolve(remoteUrl as string)),
     });
 }

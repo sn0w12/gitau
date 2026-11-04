@@ -36,6 +36,12 @@ impl ForgeRegistry {
             .find(|provider| provider.matches_host(host))
     }
 
+    /// The owner icon URL from the provider that serves `host`. `None` when
+    /// no provider recognizes the host or the provider serves no icon.
+    pub fn owner_icon_url(&self, host: &str, owner: &str) -> Option<String> {
+        self.by_host(host)?.owner_icon_url(host, owner)
+    }
+
     pub fn descriptors(&self) -> Vec<ProviderDescriptor> {
         self.providers
             .iter()
@@ -68,5 +74,62 @@ impl ForgeRegistry {
             }
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::capabilities::Capabilities;
+
+    struct FakeProvider {
+        id: &'static str,
+        hosts: &'static [&'static str],
+    }
+
+    impl ForgeProvider for FakeProvider {
+        fn id(&self) -> &'static str {
+            self.id
+        }
+
+        fn label(&self) -> &'static str {
+            self.id
+        }
+
+        fn capabilities(&self) -> Capabilities {
+            Capabilities::default()
+        }
+
+        fn hosts(&self) -> &'static [&'static str] {
+            self.hosts
+        }
+
+        fn owner_icon_url(&self, host: &str, owner: &str) -> Option<String> {
+            Some(format!("https://{host}/{owner}.png"))
+        }
+
+        fn parse_remote(&self, _url: &str) -> Option<(String, String, String)> {
+            None
+        }
+    }
+
+    fn registry() -> ForgeRegistry {
+        ForgeRegistry::new(vec![Arc::new(FakeProvider {
+            id: "fake",
+            hosts: &["example.com"],
+        })])
+    }
+
+    #[test]
+    fn delegates_owner_icons_to_the_matching_provider() {
+        assert_eq!(
+            registry().owner_icon_url("example.com", "owner"),
+            Some("https://example.com/owner.png".to_owned())
+        );
+    }
+
+    #[test]
+    fn unregistered_hosts_have_no_owner_icon() {
+        assert_eq!(registry().owner_icon_url("other.com", "owner"), None);
     }
 }

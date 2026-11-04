@@ -4,9 +4,13 @@ use icons::{CachedIcon, IconError};
 use std::path::Path;
 
 /// Resolves (and caches) the owner/org avatar for a git remote URL.
-/// Returns a data URL ready for `<img src>`.
+/// Returns a data URL ready for `<img src>`, or `None` when no forge
+/// provider supplies an icon for the remote.
 #[tauri::command]
-pub async fn icon_resolve(state: SharedState<'_>, remote_url: String) -> CommandResult<CachedIcon> {
+pub async fn icon_resolve(
+    state: SharedState<'_>,
+    remote_url: String,
+) -> CommandResult<Option<CachedIcon>> {
     state.icons.resolve(&remote_url).await.map_err(|error| {
         log::warn!("icon resolve failed for `{remote_url}`: {error}");
         to_serialized(error)
@@ -15,7 +19,10 @@ pub async fn icon_resolve(state: SharedState<'_>, remote_url: String) -> Command
 
 /// Forces a revalidation of one remote's icon right now, bypassing TTL.
 #[tauri::command]
-pub async fn icon_refresh(state: SharedState<'_>, remote_url: String) -> CommandResult<CachedIcon> {
+pub async fn icon_refresh(
+    state: SharedState<'_>,
+    remote_url: String,
+) -> CommandResult<Option<CachedIcon>> {
     state
         .icons
         .force_refresh(&remote_url)
@@ -29,7 +36,7 @@ pub async fn icon_refresh(state: SharedState<'_>, remote_url: String) -> Command
 /// Resolves the icon for an open repository. An icon file found in the
 /// worktree (favicon/logo/icon names, gitignored paths excluded) wins;
 /// otherwise the owner avatar of the origin remote is used. `None` means
-/// the repo has no worktree icon and no remote to fall back to.
+/// the repo has no worktree icon and no provider supplies a remote icon.
 #[tauri::command]
 pub async fn git_repo_icon(
     state: SharedState<'_>,
@@ -58,15 +65,10 @@ pub async fn git_repo_icon(
         return Ok(None);
     };
 
-    state
-        .icons
-        .resolve(&remote_url)
-        .await
-        .map(Some)
-        .map_err(|error| {
-            log::warn!("repo icon fallback failed for `{remote_url}`: {error}");
-            to_serialized(error)
-        })
+    state.icons.resolve(&remote_url).await.map_err(|error| {
+        log::warn!("repo icon fallback failed for `{remote_url}`: {error}");
+        to_serialized(error)
+    })
 }
 
 /// Resolves the icon for a repository addressed by path, mirroring
@@ -100,15 +102,10 @@ pub async fn git_repo_icon_by_path(
         return Ok(None);
     };
 
-    state
-        .icons
-        .resolve(&remote_url)
-        .await
-        .map(Some)
-        .map_err(|error| {
-            log::warn!("repo icon fallback failed for `{remote_url}`: {error}");
-            to_serialized(error)
-        })
+    state.icons.resolve(&remote_url).await.map_err(|error| {
+        log::warn!("repo icon fallback failed for `{remote_url}`: {error}");
+        to_serialized(error)
+    })
 }
 
 fn to_serialized(error: IconError) -> SerializedError {

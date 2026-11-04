@@ -7,7 +7,9 @@ pub mod global_ignore;
 pub mod runtime;
 pub mod streaming;
 
-pub use application::{Backend, BackendConfig, HISTORY_STATS_PRUNE_AFTER, REMOTE_INFO_PRUNE_AFTER};
+pub use application::{
+    Backend, BackendConfig, ForgeIconSource, HISTORY_STATS_PRUNE_AFTER, REMOTE_INFO_PRUNE_AFTER,
+};
 pub use error::{GitError, Result};
 pub use forge_core::{
     AccountProfile, AuthChallenge, Capabilities, ConnectionProfile, ForgeAccounts, ForgeProvider,

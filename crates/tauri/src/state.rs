@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use git::{Backend, BackendConfig};
+use git::{Backend, BackendConfig, ForgeIconSource};
 use icons::{HttpFetcher, IconConfig, IconService};
 use serde::Serialize;
 
@@ -27,13 +27,18 @@ pub struct PreOpenedRepo {
 
 impl Default for AppState {
     fn default() -> Self {
+        let backend = Arc::new(Backend::new(BackendConfig::default()));
+        let icon_source = Arc::new(ForgeIconSource::new(Arc::clone(
+            backend.forge_accounts().registry(),
+        )));
         Self {
-            backend: Arc::new(Backend::new(BackendConfig::default())),
+            backend,
             settings: Arc::new(SettingsStore::new(crate::settings::schema::builtin())),
             session: Arc::new(SessionStore::new()),
             icons: Arc::new(IconService::new(
                 IconConfig::default(),
                 Arc::new(HttpFetcher::default()),
+                icon_source,
             )),
             startup_repos: Arc::new(tokio::sync::OnceCell::new()),
         }

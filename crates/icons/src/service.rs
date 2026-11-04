@@ -11,7 +11,10 @@ use crate::config::IconConfig;
 use crate::error::IconError;
 use crate::fetcher::IconFetcher;
 use crate::image::{encode_data_url, sniff_image};
-use crate::plan::{entry_file_name, file_name_of_key, plan_from_remote, split_key, IconPlan};
+use crate::plan::{
+    entry_file_name, file_name_of_key, plan_from_key, plan_from_remote, split_key, IconPlan,
+};
+use crate::source::OwnerIconSource;
 
 struct ServiceState {
     cache_dir: Option<std::path::PathBuf>,
@@ -23,16 +26,22 @@ struct ServiceState {
 pub struct IconService {
     config: IconConfig,
     fetcher: Arc<dyn IconFetcher>,
+    source: Arc<dyn OwnerIconSource>,
     state: Mutex<ServiceState>,
     /// key -> notify handle; deduplicates concurrent fetches per key.
     inflight: Mutex<HashMap<String, Arc<tokio::sync::Notify>>>,
 }
 
 impl IconService {
-    pub fn new(config: IconConfig, fetcher: Arc<dyn IconFetcher>) -> Self {
+    pub fn new(
+        config: IconConfig,
+        fetcher: Arc<dyn IconFetcher>,
+        source: Arc<dyn OwnerIconSource>,
+    ) -> Self {
         Self {
             config,
             fetcher,
+            source,
             state: Mutex::new(ServiceState {
                 cache_dir: None,
                 entries: HashMap::new(),
@@ -52,13 +61,19 @@ impl IconService {
     /// Resolves the icon for a git remote URL. Fresh bytes are served from
     /// disk; missing entries are fetched; stale entries are served
     /// immediately while a refresh runs in the background
-    /// (stale-while-revalidate).
-    pub async fn resolve(self: &Arc<Self>, remote_url: &str) -> Result<CachedIcon, IconError> {
-        let plan = plan_from_remote(remote_url)?;
+    /// (stale-while-revalidate). `None` means no provider supplies an icon
+    /// URL for the remote.
+    pub async fn resolve(
+        self: &Arc<Self>,
+        remote_url: &str,
+    ) -> Result<Option<CachedIcon>, IconError> {
+        let Some(plan) = plan_from_remote(remote_url, &*self.source)? else {
+            return Ok(None);
+        };
 
         loop {
             if let Some(cached) = self.fresh_entry(&plan.key)? {
-                return Ok(cached);
+                return Ok(Some(cached));
             }
 
             // Stale bytes are better than none: kick off the refresh in the
@@ -70,27 +85,32 @@ impl IconService {
                 tokio::spawn(async move {
                     let _ = service.fetch_with_dedup(background_plan).await;
                 });
-                return self
-                    .read_cached(&plan.key)?
-                    .ok_or(IconError::NotInitialized);
+                return Ok(Some(
+                    self.read_cached(&plan.key)?
+                        .ok_or(IconError::NotInitialized)?,
+                ));
             }
 
             if let Err(error) = self.fetch_with_dedup(plan.clone()).await {
                 // A concurrent leader may have written a fresh entry while
                 // we were waiting; prefer serving that.
                 if let Some(cached) = self.fresh_entry(&plan.key)? {
-                    return Ok(cached);
+                    return Ok(Some(cached));
                 }
                 return Err(error);
             }
         }
     }
 
-    pub async fn force_refresh(&self, remote_url: &str) -> Result<CachedIcon, IconError> {
-        let plan = plan_from_remote(remote_url)?;
+    pub async fn force_refresh(&self, remote_url: &str) -> Result<Option<CachedIcon>, IconError> {
+        let Some(plan) = plan_from_remote(remote_url, &*self.source)? else {
+            return Ok(None);
+        };
         self.fetch_with_dedup(plan.clone()).await?;
-        self.read_cached(&plan.key)?
-            .ok_or(IconError::NotInitialized)
+        Ok(Some(
+            self.read_cached(&plan.key)?
+                .ok_or(IconError::NotInitialized)?,
+        ))
     }
 
     /// Revalidates every entry older than `entry_ttl`. Failures keep the
@@ -98,20 +118,22 @@ impl IconService {
     /// failed keys for logging/tests.
     pub async fn refresh_stale(&self) -> (usize, usize) {
         let now = now_ms();
-        let stale: Vec<(String, String)> = {
+        let stale: Vec<String> = {
             let state = self.lock_state();
             state
                 .entries
                 .iter()
                 .filter(|(_, meta)| meta.is_stale(self.config.entry_ttl, now))
-                .map(|(key, meta)| (key.clone(), meta.url.clone()))
+                .map(|(key, _)| key.clone())
                 .collect()
         };
 
         let mut refreshed = 0;
         let mut failed = 0;
-        for (key, url) in stale {
-            let plan = IconPlan { key, url };
+        for key in stale {
+            let Some(plan) = plan_from_key(&key, &*self.source) else {
+                continue;
+            };
             if self.fetch_with_dedup(plan).await.is_ok() {
                 refreshed += 1;
             } else {
@@ -360,6 +382,14 @@ mod tests {
         0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
     ];
 
+    struct FakeSource;
+
+    impl OwnerIconSource for FakeSource {
+        fn icon_url(&self, host: &str, owner: &str) -> Option<String> {
+            (host == "github.com").then(|| format!("https://github.com/{owner}.png?size=128"))
+        }
+    }
+
     struct FakeFetcher {
         state: Mutex<FakeState>,
     }
@@ -426,7 +456,7 @@ mod tests {
             entry_ttl: Duration::from_secs(3600),
             ..IconConfig::default()
         };
-        let service = Arc::new(IconService::new(config, fetcher));
+        let service = Arc::new(IconService::new(config, fetcher, Arc::new(FakeSource)));
         service.initialize(dir.to_path_buf());
         service
     }
@@ -442,6 +472,7 @@ mod tests {
         let first = service
             .resolve("https://github.com/octocat/hello-world.git")
             .await
+            .unwrap()
             .unwrap();
 
         assert_eq!(first.key, "github.com/octocat");
@@ -461,6 +492,19 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(fetcher.call_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn hosts_without_a_provider_resolve_to_none_without_fetching() {
+        let dir = tempfile::tempdir().unwrap();
+        let fetcher = Arc::new(FakeFetcher::with_responses(HashMap::new()));
+        let service = service_in(dir.path(), Arc::clone(&fetcher) as _);
+
+        assert!(matches!(
+            service.resolve("https://gitlab.com/team/repo.git").await,
+            Ok(None)
+        ));
+        assert_eq!(fetcher.call_count(), 0);
     }
 
     #[tokio::test]
@@ -540,6 +584,7 @@ mod tests {
         let icon = service
             .resolve("https://github.com/octo/repo.git")
             .await
+            .unwrap()
             .unwrap();
         assert_eq!(icon.fetched_at_ms, 0); // stale copy served immediately
 
@@ -555,6 +600,7 @@ mod tests {
         let refreshed = service
             .resolve("https://github.com/octo/repo.git")
             .await
+            .unwrap()
             .unwrap();
         assert_ne!(refreshed.fetched_at_ms, 0);
     }
