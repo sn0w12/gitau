@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { HookChecker } from "@/components/repo/changes/hook-checker";
 import { HookEditorDialog } from "@/components/repo/changes/hook-editor-dialog";
+import { ToastProvider } from "@/components/ui/toast";
 import { AppServicesContext } from "@/contexts/services-context";
 import type { HookRunner } from "@/hooks/repositories/use-commit-hooks";
 import type {
@@ -16,6 +17,7 @@ import type {
 } from "@/lib/backend/protocol";
 import type { BackendClient } from "@/lib/backend/transport/client";
 import type { Result } from "@/lib/backend/transport/result";
+import { seedSettingsForTests } from "@/stores/settings-store";
 
 (
     globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -46,6 +48,7 @@ interface BackendFixture {
     queryClient: QueryClient;
     readCalls: () => string[];
     writeCalls: () => { hook: string; content: string }[];
+    editorCalls: () => { path: string; relativePath?: string }[];
 }
 
 function backendWith({
@@ -58,6 +61,7 @@ function backendWith({
     let list = hooksList;
     const readCalls: string[] = [];
     const writeCalls: { hook: string; content: string }[] = [];
+    const editorCalls: { path: string; relativePath?: string }[] = [];
 
     const read = async (
         _repoId: number,
@@ -111,6 +115,15 @@ function backendWith({
             read,
             write,
         },
+        editor: {
+            openInEditor: (
+                path: string,
+                relativePath?: string
+            ): Promise<Result<void>> => {
+                editorCalls.push({ path, relativePath });
+                return Promise.resolve({ ok: true, value: undefined });
+            },
+        },
     };
 
     return {
@@ -120,6 +133,7 @@ function backendWith({
         }),
         readCalls: () => readCalls,
         writeCalls: () => writeCalls,
+        editorCalls: () => editorCalls,
     };
 }
 
@@ -134,7 +148,7 @@ function renderWith(
         root.render(
             <AppServicesContext.Provider value={fixture}>
                 <QueryClientProvider client={fixture.queryClient}>
-                    {ui}
+                    <ToastProvider>{ui}</ToastProvider>
                 </QueryClientProvider>
             </AppServicesContext.Provider>
         );
@@ -196,6 +210,7 @@ function idleRunner(): HookRunner {
 describe("HookEditorDialog", () => {
     beforeEach(() => {
         document.body.innerHTML = "";
+        seedSettingsForTests({ editorCommand: "code" });
     });
 
     it("opens from the popover's edit button and loads the active hook", async () => {
@@ -257,12 +272,7 @@ describe("HookEditorDialog", () => {
         });
         const view = renderWith(
             fixture,
-            <HookEditorDialog
-                repoId={7}
-                hooks={[PRE_COMMIT]}
-                open
-                onClose={() => {}}
-            />
+            <HookEditorDialog repoId={7} open onClose={() => {}} />
         );
         await flush();
         expect(
@@ -348,20 +358,74 @@ describe("HookEditorDialog", () => {
         expect(fixture.writeCalls()).toEqual([
             { hook: "pre-commit", content: "#!/bin/sh\necho hi\n" },
         ]);
-        // The picker row now shows the installed glyph and the popover list
-        // refetched after invalidation.
-        const installed = await waitFor(
-            () =>
-                document.querySelector(
-                    '[data-testid="hook-picker-pre-commit-installed"]'
-                ) != null
-        );
-        expect(installed).toBe(true);
         expect(
-            [...document.querySelectorAll("li button")].some((el) =>
-                el.textContent!.includes("pre-commit")
+            [...document.querySelectorAll('[data-slot="tabs-tab"]')].some(
+                (el) => el.textContent!.includes("pre-commit")
             )
         ).toBe(true);
+        view.unmount();
+    });
+
+    it("opens an installed hook in the configured editor", async () => {
+        const fixture = backendWith({
+            hooksList: [PRE_COMMIT],
+            contents: { "pre-commit": "#!/bin/sh\necho lint\n" },
+        });
+        const view = renderWith(
+            fixture,
+            <HookEditorDialog repoId={7} open onClose={() => {}} />
+        );
+        await flush();
+
+        const button = document.querySelector<HTMLButtonElement>(
+            '[aria-label="Open pre-commit in editor"]'
+        );
+        expect(button?.hasAttribute("disabled")).toBe(false);
+
+        await click(button!);
+        expect(fixture.editorCalls()).toEqual([
+            { path: "/repo/.git/hooks/pre-commit", relativePath: undefined },
+        ]);
+        view.unmount();
+    });
+
+    it("keeps a missing hook out of the editor", async () => {
+        const fixture = backendWith({ hooksList: [], contents: {} });
+        const view = renderWith(
+            fixture,
+            <HookEditorDialog repoId={7} open onClose={() => {}} />
+        );
+        await flush();
+
+        const button = document.querySelector<HTMLButtonElement>(
+            '[aria-label="Open pre-commit in editor"]'
+        );
+        expect(button?.hasAttribute("disabled")).toBe(true);
+
+        await click(button!);
+        expect(fixture.editorCalls()).toHaveLength(0);
+        view.unmount();
+    });
+
+    it("disables the button until an editor command is set", async () => {
+        seedSettingsForTests({ editorCommand: "" });
+        const fixture = backendWith({
+            hooksList: [PRE_COMMIT],
+            contents: { "pre-commit": "#!/bin/sh\necho lint\n" },
+        });
+        const view = renderWith(
+            fixture,
+            <HookEditorDialog repoId={7} open onClose={() => {}} />
+        );
+        await flush();
+
+        const button = document.querySelector<HTMLButtonElement>(
+            '[aria-label="Open pre-commit in editor"]'
+        );
+        expect(button?.hasAttribute("disabled")).toBe(true);
+
+        await click(button!);
+        expect(fixture.editorCalls()).toHaveLength(0);
         view.unmount();
     });
 });

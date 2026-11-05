@@ -1,4 +1,4 @@
-use git_backend::api::history::{
+use git::api::history::{
     BlameQuery, CommitDetailQuery, FileAtRevisionQuery, HistoryChartQuery, HistoryPageQuery,
 };
 use tauri::ipc::Channel;
@@ -6,10 +6,8 @@ use tauri::ipc::Channel;
 use crate::commands::channel::channel_send;
 use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
-use git_backend::domain::history::{
-    BlameResult, FileContent, HistoryChart, HistoryPage, RepoListing,
-};
-use git_backend::streaming::store::RangeResult;
+use git::domain::history::{BlameResult, FileContent, HistoryChart, HistoryPage, RepoListing};
+use git::streaming::store::RangeResult;
 
 #[tauri::command]
 pub async fn git_history_page(
@@ -23,7 +21,7 @@ pub async fn git_history_page(
         .history_page(
             to_repo_id(repo_id),
             query.unwrap_or_default(),
-            git_backend::runtime::cancellation::CancellationToken::new(),
+            git::runtime::cancellation::CancellationToken::new(),
         )
         .await
         .map_err(to_serialized)?;
@@ -45,7 +43,7 @@ pub async fn git_history_chart(
         .history_chart(
             to_repo_id(repo_id),
             query.unwrap_or_default(),
-            git_backend::runtime::cancellation::CancellationToken::new(),
+            git::runtime::cancellation::CancellationToken::new(),
         )
         .await
         .map_err(to_serialized)?;
@@ -58,9 +56,9 @@ pub async fn git_commit_detail(
     repo_id: u64,
     revision: String,
     detect_renames: Option<bool>,
-) -> CommandResult<git_backend::domain::CommitDetail> {
+) -> CommandResult<git::domain::CommitDetail> {
     let query = CommitDetailQuery {
-        revision: git_backend::domain::RevisionSpec::parse(&revision).map_err(to_serialized)?,
+        revision: git::domain::RevisionSpec::parse(&revision).map_err(to_serialized)?,
         detect_renames: detect_renames.unwrap_or(true),
     };
     let detail = state
@@ -79,7 +77,7 @@ pub async fn git_file_at_revision(
     path: String,
 ) -> CommandResult<FileContent> {
     let query = FileAtRevisionQuery {
-        revision: git_backend::domain::RevisionSpec::parse(&revision).map_err(to_serialized)?,
+        revision: git::domain::RevisionSpec::parse(&revision).map_err(to_serialized)?,
         path,
     };
     state
@@ -97,7 +95,7 @@ pub async fn git_blame(
     revision: Option<String>,
 ) -> CommandResult<BlameResult> {
     let revision = match revision {
-        Some(spec) => Some(git_backend::domain::RevisionSpec::parse(&spec).map_err(to_serialized)?),
+        Some(spec) => Some(git::domain::RevisionSpec::parse(&spec).map_err(to_serialized)?),
         None => None,
     };
     let query = BlameQuery {
@@ -125,14 +123,33 @@ pub async fn git_list_branches_and_tags(
 }
 
 #[tauri::command]
+pub async fn git_branch_ahead_behind(
+    state: SharedState<'_>,
+    repo_id: u64,
+    head: String,
+    base: String,
+) -> CommandResult<git::domain::AheadBehind> {
+    state
+        .backend
+        .branch_ahead_behind(
+            to_repo_id(repo_id),
+            head,
+            base,
+            git::runtime::cancellation::CancellationToken::new(),
+        )
+        .await
+        .map_err(to_serialized)
+}
+
+#[tauri::command]
 pub fn git_read_diff_image(
     state: SharedState<'_>,
     operation_id: u64,
     section_id: u32,
-) -> CommandResult<Option<git_backend::streaming::store::DiffImage>> {
+) -> CommandResult<Option<git::streaming::store::DiffImage>> {
     state
         .backend
-        .read_diff_image(git_backend::domain::OperationId(operation_id), section_id)
+        .read_diff_image(git::domain::OperationId(operation_id), section_id)
         .map_err(to_serialized)
 }
 
@@ -145,11 +162,7 @@ pub fn git_read_diff_range(
 ) -> CommandResult<RangeResult> {
     state
         .backend
-        .read_diff_range(
-            git_backend::domain::OperationId(operation_id),
-            start_row,
-            max_rows,
-        )
+        .read_diff_range(git::domain::OperationId(operation_id), start_row, max_rows)
         .map_err(to_serialized)
 }
 
@@ -161,11 +174,11 @@ pub fn git_read_diff_context(
     old_start: u32,
     new_start: u32,
     count: u32,
-) -> CommandResult<git_backend::api::queries::DiffContextResult> {
+) -> CommandResult<git::api::queries::DiffContextResult> {
     state
         .backend
         .read_diff_context(
-            git_backend::domain::OperationId(operation_id),
+            git::domain::OperationId(operation_id),
             section_id,
             old_start,
             new_start,
@@ -178,15 +191,15 @@ pub fn git_read_diff_context(
 pub async fn git_open_graph(
     state: SharedState<'_>,
     repo_id: u64,
-    query: Option<git_backend::api::graph::GraphQuery>,
-    on_event: Channel<git_backend::streaming::model::GraphEvent>,
+    query: Option<git::api::graph::GraphQuery>,
+    on_event: Channel<git::streaming::model::GraphEvent>,
 ) -> CommandResult<u64> {
     let (operation_id, rx) = state
         .backend
         .open_graph(
             to_repo_id(repo_id),
             query.unwrap_or_default(),
-            git_backend::runtime::cancellation::CancellationToken::new(),
+            git::runtime::cancellation::CancellationToken::new(),
         )
         .await
         .map_err(to_serialized)?;
@@ -209,14 +222,10 @@ pub fn git_read_graph_range(
     operation_id: u64,
     start_row: u64,
     max_rows: u32,
-) -> CommandResult<git_backend::streaming::graph::GraphRangeResult> {
+) -> CommandResult<git::streaming::graph::GraphRangeResult> {
     state
         .backend
-        .read_graph_range(
-            git_backend::domain::OperationId(operation_id),
-            start_row,
-            max_rows,
-        )
+        .read_graph_range(git::domain::OperationId(operation_id), start_row, max_rows)
         .map_err(to_serialized)
 }
 
@@ -224,6 +233,6 @@ pub fn git_read_graph_range(
 pub fn git_cancel_operation(state: SharedState<'_>, operation_id: u64) -> CommandResult<bool> {
     state
         .backend
-        .cancel_operation(git_backend::domain::OperationId(operation_id))
+        .cancel_operation(git::domain::OperationId(operation_id))
         .map_err(to_serialized)
 }

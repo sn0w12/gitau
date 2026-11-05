@@ -1,9 +1,9 @@
 use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
-use git_backend::api::mutations::{
+use git::api::mutations::{
     BranchCreateRequest, CheckoutMode, CheckoutRequest, ResetKind, ResetRequest, TagCreateRequest,
 };
-use git_backend::domain::{BranchInfo, Generation, RevisionSpec, TagInfo};
+use git::domain::{BranchInfo, Generation, RevisionSpec, TagInfo};
 
 fn spec(value: String) -> Result<RevisionSpec, crate::commands::SerializedError> {
     RevisionSpec::parse(&value).map_err(to_serialized)

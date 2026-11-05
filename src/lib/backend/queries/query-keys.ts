@@ -3,10 +3,15 @@ import type { HistoryChartQuery, StatusOptions } from "../protocol";
 export const repositoryKeys = {
     all: (repoId: number) => ["repository", repoId] as const,
     snapshot: (repoId: number) => ["repository", repoId, "snapshot"] as const,
+    readme: (repoId: number) => ["repository", repoId, "readme"] as const,
+    image: (repoId: number, path: string) =>
+        ["repository", repoId, "image", path] as const,
     operation: (repoId: number) => ["repository", repoId, "operation"] as const,
     status: (repoId: number, options?: StatusOptions) =>
         ["repository", repoId, "status", options ?? {}] as const,
     listing: (repoId: number) => ["repository", repoId, "listing"] as const,
+    aheadBehind: (repoId: number, head: string, base: string) =>
+        ["repository", repoId, "aheadBehind", head, base] as const,
     remoteInfo: (repoId: number) =>
         ["repository", repoId, "remoteInfo"] as const,
     remotes: (repoId: number) => ["repository", repoId, "remotes"] as const,

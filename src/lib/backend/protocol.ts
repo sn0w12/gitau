@@ -46,6 +46,11 @@ export interface CreateRepositoryRequest {
 /** Created repository plus the canonical path to open it by later. */
 export type CreateRepositoryResult = OpenedRepository & { path: string };
 
+export interface ReadmeContent {
+    path: string;
+    content: string;
+}
+
 /**
  * Outcome of removing a repository: the closed backend session id (absent
  * when the repo had no open session) and the canonical repo root the
@@ -264,6 +269,11 @@ export interface BranchInfo {
     target: Oid;
     isHead: boolean;
     upstream?: UpstreamRef;
+}
+
+export interface AheadBehind {
+    ahead: number;
+    behind: number;
 }
 
 export interface TagInfo {

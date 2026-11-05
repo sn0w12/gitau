@@ -12,13 +12,6 @@ import {
 } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import {
-    Sheet,
-    SheetDescription,
-    SheetHeader,
-    SheetPopup,
-    SheetTitle,
-} from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/hooks/use-media-query";
@@ -27,7 +20,6 @@ import { cn } from "@/lib/utils";
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE: number = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = "16rem";
-const SIDEBAR_WIDTH_MOBILE = "18rem";
 const SIDEBAR_WIDTH_ICON = "calc(var(--spacing) * 5)";
 
 type SidebarMenuButtonVariant = ButtonProps["variant"];
@@ -174,7 +166,7 @@ export function Sidebar({
     variant?: "sidebar" | "floating" | "inset";
     collapsible?: "offcanvas" | "icon" | "none";
 }): React.ReactElement {
-    const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
+    const { state } = useSidebar();
 
     if (collapsible === "none") {
         return (
@@ -191,38 +183,9 @@ export function Sidebar({
         );
     }
 
-    if (isMobile) {
-        return (
-            <Sheet onOpenChange={setOpenMobile} open={openMobile} {...props}>
-                <SheetPopup
-                    className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
-                    data-mobile="true"
-                    data-sidebar="sidebar"
-                    data-slot="sidebar"
-                    side={side}
-                    style={
-                        {
-                            "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
-                        } as React.CSSProperties
-                    }
-                >
-                    <SheetHeader className="sr-only">
-                        <SheetTitle>Sidebar</SheetTitle>
-                        <SheetDescription>
-                            Displays the mobile sidebar.
-                        </SheetDescription>
-                    </SheetHeader>
-                    <div className="flex h-full w-full flex-col">
-                        {children}
-                    </div>
-                </SheetPopup>
-            </Sheet>
-        );
-    }
-
     return (
         <div
-            className="group peer hidden text-sidebar-foreground md:block"
+            className="group peer block text-sidebar-foreground"
             data-collapsible={state === "collapsed" ? collapsible : ""}
             data-side={side}
             data-slot="sidebar"
@@ -243,7 +206,7 @@ export function Sidebar({
             />
             <div
                 className={cn(
-                    "fixed relative inset-y-0 z-10 hidden h-full w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex",
+                    "fixed relative inset-y-0 z-10 flex h-full w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear",
                     side === "left"
                         ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
                         : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
@@ -331,9 +294,9 @@ export function SidebarInset({
         <main
             className={cn(
                 "relative flex min-w-0 flex-1 flex-col overflow-hidden bg-background",
-                "peer-data-[variant=inset]:mt-0 md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:mt-0 md:peer-data-[variant=inset]:rounded-[calc(var(--radius)+1px)] md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2",
-                "md:peer-data-[variant=inset]:filter-[drop-shadow(0_0_1px_oklab(from_rgb(0_0_0_/_0.1)_l_a_b_/_15%))]",
-                "dark:md:peer-data-[variant=inset]:filter-[drop-shadow(0_0_1px_oklab(from_rgb(255_255_255_/_0.1)_l_a_b_/_30%))]",
+                "peer-data-[variant=inset]:m-2 peer-data-[variant=inset]:ms-0 peer-data-[variant=inset]:mt-0 peer-data-[variant=inset]:rounded-[calc(var(--radius)+1px)] peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2",
+                "peer-data-[variant=inset]:filter-[drop-shadow(0_0_1px_oklab(from_rgb(0_0_0_/_0.1)_l_a_b_/_15%))]",
+                "dark:peer-data-[variant=inset]:filter-[drop-shadow(0_0_1px_oklab(from_rgb(255_255_255_/_0.1)_l_a_b_/_30%))]",
                 className
             )}
             style={{}}

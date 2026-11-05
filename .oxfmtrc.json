@@ -8,7 +8,8 @@
         "src/lib/settings/settings.generated.ts",
         "crates/tauri-plugin-prevent-default/assets",
         "crates/tauri-plugin-snap-layout/dist-js",
-        "crates/tauri-plugin-snap-layout/permissions"
+        "crates/tauri-plugin-snap-layout/permissions",
+        "crates/highlight/syntaxes/**"
     ],
     "printWidth": 80,
     "trailingComma": "es5",

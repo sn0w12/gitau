@@ -81,6 +81,7 @@ export function useRepoViewAccess(
             graph: true,
             issues: unresolved,
             pulls: unresolved,
+            readme: true,
         };
     }
     return {
@@ -88,6 +89,7 @@ export function useRepoViewAccess(
         graph: true,
         issues: capabilityAllows(capabilities, "issues"),
         pulls: capabilityAllows(capabilities, "pullRequests"),
+        readme: true,
     };
 }
 

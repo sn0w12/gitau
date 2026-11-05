@@ -1,11 +1,11 @@
 use crate::commands::channel::channel_send;
 use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
-use git_backend::api::remotes::{
+use git::api::remotes::{
     CloneEvent, CloneRequest, CredentialRequest, FetchRequest, GitPullRequest, PushOutcome,
     PushRequest, RemoteAddRequest, RemoteInfo,
 };
-use git_backend::engines::git2::workflows::WorkflowOutcome;
+use git::engines::git2::workflows::WorkflowOutcome;
 use std::path::Path;
 use tauri::ipc::Channel;
 
@@ -52,7 +52,7 @@ pub async fn git_add_remote(
                 url,
                 fetch_refspec: None,
             },
-            expected_generation.map(git_backend::domain::Generation),
+            expected_generation.map(git::domain::Generation),
         )
         .await
         .map_err(to_serialized)
@@ -70,7 +70,7 @@ pub async fn git_remove_remote(
         .remove_remote(
             to_repo_id(repo_id),
             name,
-            expected_generation.map(git_backend::domain::Generation),
+            expected_generation.map(git::domain::Generation),
         )
         .await
         .map_err(to_serialized)
@@ -90,7 +90,7 @@ pub async fn git_set_remote_url(
             to_repo_id(repo_id),
             name,
             url,
-            expected_generation.map(git_backend::domain::Generation),
+            expected_generation.map(git::domain::Generation),
         )
         .await
         .map_err(to_serialized)
@@ -114,7 +114,7 @@ pub async fn git_fetch(
                 credential,
                 ..Default::default()
             },
-            git_backend::runtime::cancellation::CancellationToken::new(),
+            git::runtime::cancellation::CancellationToken::new(),
         )
         .await
         .map_err(to_serialized)
@@ -141,7 +141,7 @@ pub async fn git_push(
                 set_upstream: set_upstream.unwrap_or(false),
                 credential,
             },
-            git_backend::runtime::cancellation::CancellationToken::new(),
+            git::runtime::cancellation::CancellationToken::new(),
         )
         .await
         .map_err(to_serialized)
@@ -170,8 +170,8 @@ pub async fn git_pull(
                 rebase: rebase.unwrap_or(false),
                 credential,
             },
-            expected_generation.map(git_backend::domain::Generation),
-            git_backend::runtime::cancellation::CancellationToken::new(),
+            expected_generation.map(git::domain::Generation),
+            git::runtime::cancellation::CancellationToken::new(),
         )
         .await
         .map_err(to_serialized)
@@ -189,7 +189,7 @@ pub async fn git_clone(
         .backend
         .open_clone(
             request,
-            git_backend::runtime::cancellation::CancellationToken::new(),
+            git::runtime::cancellation::CancellationToken::new(),
         )
         .await
         .map_err(to_serialized)?;

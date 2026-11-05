@@ -76,6 +76,9 @@ export function useRepoShortcuts({
     useSettingHotkey(REPO_VIEW_SHORTCUTS.pulls, showView("pulls"), {
         enabled: enabled && access.pulls,
     });
+    useSettingHotkey(REPO_VIEW_SHORTCUTS.readme, showView("readme"), {
+        enabled,
+    });
     useSettingHotkey(
         "filterChangesShortcut",
         () => focusInChangesPanel("#changes-filter-input"),

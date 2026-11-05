@@ -18,7 +18,7 @@
 //!    UI reads to hide the views and actions it cannot offer.
 //! 2. Declare the hosts it serves and implement `parse_remote` so a local
 //!    remote resolves to `(host, owner, repo)`, plus `web_url` for the page
-//!    kinds it can address.
+//!    kinds it can address and `owner_icon_url` if it serves owner avatars.
 //! 3. Add the crate to the registry in the backend. Connections, tokens, and
 //!    the profile cache are keyed by `(provider, host)` and need nothing from
 //!    the provider beyond `hosts`, the `legacy_*` hooks for an upgrade from a

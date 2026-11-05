@@ -107,7 +107,11 @@ const PULL = {
 } as unknown as PullRequestDetail;
 
 function backendWith(
-    options: { pullRequestsWrite?: boolean; featurePublished?: boolean } = {}
+    options: {
+        pullRequestsWrite?: boolean;
+        featurePublished?: boolean;
+        ahead?: number;
+    } = {}
 ) {
     const createCalls: {
         provider: string;
@@ -145,6 +149,12 @@ function backendWith(
             listBranchesAndTags: async (): Promise<Result<RepoListing>> => ({
                 ok: true,
                 value: listingWith(options.featurePublished ?? false),
+            }),
+            aheadBehind: async (): Promise<
+                Result<{ ahead: number; behind: number }>
+            > => ({
+                ok: true,
+                value: { ahead: options.ahead ?? 1, behind: 0 },
             }),
         },
         remotes: {
@@ -428,6 +438,29 @@ describe("CreatePullDialog", () => {
         );
         expect(explained).toBe(true);
         expect(labeledControl("Title")).toBeNull();
+        view.unmount();
+    });
+
+    it("blocks creation when the branch is not ahead of the base", async () => {
+        seedSettingsForTests({});
+        const services = backendWith({ ahead: 0 });
+        const view = renderWith(services);
+        await flush();
+
+        const explained = await waitFor(() =>
+            document.body.textContent?.includes(
+                "feature/thing has no commits ahead of main yet"
+            )
+        );
+        expect(explained).toBe(true);
+
+        const create = [...document.body.querySelectorAll("button")].find(
+            (button) => button.textContent?.trim() === "Create pull request"
+        );
+        expect(create?.hasAttribute("disabled")).toBe(true);
+
+        await clickButtonWithText("Create pull request");
+        expect(services.createCalls).toHaveLength(0);
         view.unmount();
     });
 });

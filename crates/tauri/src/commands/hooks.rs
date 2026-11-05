@@ -8,7 +8,7 @@ use crate::state::{to_repo_id, SharedState};
 pub async fn git_list_commit_hooks(
     state: SharedState<'_>,
     repo_id: u64,
-) -> CommandResult<Vec<git_backend::api::hooks::HookInfo>> {
+) -> CommandResult<Vec<git::api::hooks::HookInfo>> {
     state
         .backend
         .list_commit_hooks(to_repo_id(repo_id))
@@ -24,8 +24,8 @@ pub async fn git_run_commit_hook_streamed(
     state: SharedState<'_>,
     repo_id: u64,
     hook: String,
-    on_event: Channel<git_backend::api::hooks::HookOutputChunk>,
-) -> CommandResult<git_backend::api::hooks::HookRunResult> {
+    on_event: Channel<git::api::hooks::HookOutputChunk>,
+) -> CommandResult<git::api::hooks::HookRunResult> {
     let (sender, forward) = forward_channel(on_event);
 
     let result = state
@@ -43,7 +43,7 @@ pub async fn git_read_commit_hook(
     state: SharedState<'_>,
     repo_id: u64,
     hook: String,
-) -> CommandResult<git_backend::api::hooks::HookContent> {
+) -> CommandResult<git::api::hooks::HookContent> {
     state
         .backend
         .read_commit_hook(to_repo_id(repo_id), hook)

@@ -19,6 +19,7 @@ import { CommitGraphView } from "./history/commit-graph-view";
 import { HistoryChartView } from "./history/history-chart-view";
 import { IssuesView } from "./issues/issues-view";
 import { PullRequestsView } from "./pulls/pulls-view";
+import { ReadmeView } from "./readme/readme-view";
 
 function stripChangeSide(changeId: string): string {
     const separator = changeId.indexOf(":");
@@ -55,20 +56,7 @@ function EmptyState({ label }: { label: string }) {
     );
 }
 
-export function MainRepoView({
-    repoId,
-    tab,
-    view,
-    issuesTab,
-    pullsTab,
-    issueLabel,
-    pullLabel,
-    generation,
-    selectedChangeId,
-    selectedCommitId,
-    selectedStashId,
-    dispatch,
-}: {
+type MainRepoViewProps = {
     repoId: number;
     tab: RepoTab;
     view: RepoView;
@@ -81,10 +69,27 @@ export function MainRepoView({
     selectedCommitId: string | null;
     selectedStashId: string | null;
     dispatch: React.ActionDispatch<[action: RepoStateAction]>;
-}) {
+};
+
+export function MainRepoView(props: MainRepoViewProps) {
+    return <RepoViewBody {...props} />;
+}
+
+function RepoViewBody({
+    repoId,
+    tab,
+    view,
+    issuesTab,
+    pullsTab,
+    issueLabel,
+    pullLabel,
+    generation,
+    selectedChangeId,
+    selectedCommitId,
+    selectedStashId,
+    dispatch,
+}: MainRepoViewProps) {
     const tabId = useTabId();
-    const nothingSelected =
-        !selectedChangeId && !selectedCommitId && !selectedStashId;
     useHotkey("Escape", () => dispatch({ type: "CLEAR_SELECTION" }), {
         preventDefault: true,
     });
@@ -134,6 +139,20 @@ export function MainRepoView({
                 dispatch={dispatch}
             />
         );
+    }
+
+    if (view === "readme") {
+        if (selectedCommitId && tab === "history") {
+            return (
+                <CommitDiffView
+                    repoId={repoId}
+                    commitId={selectedCommitId}
+                    tabId={tabId}
+                    dispatch={dispatch}
+                />
+            );
+        }
+        return <ReadmeView repoId={repoId} />;
     }
 
     if (view === "graph") {
@@ -186,6 +205,38 @@ export function MainRepoView({
         );
     }
 
+    return (
+        <OverviewView
+            repoId={repoId}
+            tab={tab}
+            selectedChangeId={selectedChangeId}
+            selectedCommitId={selectedCommitId}
+            selectedStashId={selectedStashId}
+            tabId={tabId}
+            dispatch={dispatch}
+        />
+    );
+}
+
+function OverviewView({
+    repoId,
+    tab,
+    selectedChangeId,
+    selectedCommitId,
+    selectedStashId,
+    tabId,
+    dispatch,
+}: {
+    repoId: number;
+    tab: RepoTab;
+    selectedChangeId: string | null;
+    selectedCommitId: string | null;
+    selectedStashId: string | null;
+    tabId: string;
+    dispatch: React.ActionDispatch<[action: RepoStateAction]>;
+}) {
+    const nothingSelected =
+        !selectedChangeId && !selectedCommitId && !selectedStashId;
     return (
         <div className="flex size-full min-h-0 flex-col">
             {tab === "history" && <DeferredHistoryChart repoId={repoId} />}

@@ -123,12 +123,12 @@ function RepoCard({ repo, index }: { repo: RepositoryEntry; index: number }) {
     return (
         <RepoContextMenu repoPath={repo.path} side="bottom">
             <motion.div
+                ref={ref}
                 layoutId={`home:${repo.path}`}
                 className="h-full"
                 transition={REPO_TRANSITION}
             >
                 <Frame
-                    ref={ref}
                     className="group grid h-full cursor-pointer grid-rows-[1fr_auto] text-sm"
                     {...link({ title: avatar.name, repoPath: repo.path })}
                 >

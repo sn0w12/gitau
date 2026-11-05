@@ -4,7 +4,11 @@
 
 gitau is a cross-platform Git desktop client: a Tauri 3 (alpha) shell (Rust workspace) plus a React 19 frontend. Git work happens entirely in Rust (libgit2 + gitoxide); the frontend never shells out to the git CLI.
 
-- `crates/git-backend/` is the pure-Rust git engine library: status, diff, history, remotes, mutations; dual engines (`git2` 0.21 as reference/mutation engine, `gix` 0.87 for fast reads); syntect syntax highlighting.
+- `crates/git/` is the pure-Rust git engine library: status, diff, history, remotes, mutations; dual engines (`git2` 0.21 as reference/mutation engine, `gix` 0.87 for fast reads).
+- `crates/highlight/` owns syntect grammar and theme handling for diff sections and markdown fences.
+- `crates/icons/` owns remote owner icon caching and worktree image sniffing.
+- `crates/language/` owns Linguist-style worktree language detection, shares, and display colors.
+- `crates/fs-util/` holds the atomic-write and cache-key helpers shared by the disk caches.
 - `crates/tauri/` holds the Tauri commands and app setup, bridging webview ↔ backend over IPC (~52 registered commands).
 - Webview runtime: Tauri 3 selects it through a runtime crate rather than a `tauri` feature. Linux builds depend on `tauri-runtime-cef` (bundled Chromium) under `[target.'cfg(target_os = "linux")'.dependencies]`; every other target depends on `tauri-runtime-wry` (the system webview). `crates/tauri/src/lib.rs` picks the runtime with the cfg-gated `runtime_attrs()`, and `crates/tauri/src/main.rs` carries the CEF helper entry point on Linux.
 
@@ -14,30 +18,34 @@ gitau is a cross-platform Git desktop client: a Tauri 3 (alpha) shell (Rust work
 React UI (src/)
   → BackendClient (src/lib/backend/transport/client.ts)   ← only place with command names
     → invokeCommand (src/lib/backend/transport/invoke.ts) → Tauri IPC
-      → #[tauri::command] fns (crates/tauri/src/commands/) → Backend facade (git-backend/src/application/backend.rs)
+      → #[tauri::command] fns (crates/tauri/src/commands/) → Backend facade (crates/git/src/application/backend.rs)
         → engines/git2 | engines/gix → repository on disk
 ```
 
 - Frontend state: TanStack Store singletons in `src/stores/` (not zustand/redux), each exporting a `store` const, plain action functions, and selectors. Data fetching: TanStack Query v5. Routing: TanStack Router, one memory-history router per app tab, each built from a fresh route tree (`src/routes/route-tree.tsx:createTabRouteTree`) because routers mutate their route nodes. Never share or cache route trees. Hidden tabs stay mounted via React `<Activity>` boundaries (`src/components/active-tab-host.tsx`).
 - Result discipline: every `BackendClient` method returns `Result<T> = {ok:true,value} | {ok:false,error}` and never rejects. Unwrap with `expectOk()` only at react-query boundaries (queryFn / mutation callbacks).
-- Backend errors: `GitError` enum (`crates/git-backend/src/error/mod.rs`, thiserror, no anyhow) serializes to `{code, message, retryable, detail}` with stable camelCase codes; commands return `CommandResult<T> = Result<T, SerializedError>`. Long ops take a `CancellationToken`; cancel explicitly with `git_cancel_operation`.
+- Backend errors: `GitError` enum (`crates/git/src/error/mod.rs`, thiserror, no anyhow) serializes to `{code, message, retryable, detail}` with stable camelCase codes; commands return `CommandResult<T> = Result<T, SerializedError>`. Long ops take a `CancellationToken`; cancel explicitly with `git_cancel_operation`.
 - Mutations: the shared `useRepoWrite` hook sends `expectedGeneration` from the snapshot query (optimistic concurrency vs backend generation counter); invalidation goes through centralized scopes in `src/lib/backend/mutations/invalidation.ts`. No optimistic writes to status/history; the backend is source of truth.
 - Push invalidation: the backend emits the `repository-invalidated` Tauri event, listened once in `src/components/providers/app-services-provider.tsx`, which marks diff sessions stale and invalidates all repo data.
 - Streaming diff: `git_open_diff` returns an operation id and pumps events over a Tauri `Channel<DiffEvent>`; session lifecycle in `src/lib/backend/streams/diff-session*.ts`.
 
 ## Key directories
 
-| Path                      | Purpose                                                                                                                                                                                                           |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/stores/`             | TanStack Store singletons: `app-store` (tabs), `repository-store` (repos keyed by durable path), `settings-store`, `operation-store` (op lifecycle), `theme-store`, `tab-runtime` (per-tab non-persisted runtime) |
-| `src/lib/`                | Framework-free core: `backend/` (whole Rust bridge), `routing/`, `bootstrap/`, `diff/`, `settings/settings.generated.ts` (generated)                                                                              |
-| `src/hooks/`              | One concern per file, kebab-case `use-*.ts` (e.g. `hooks/repositories/use-repository-queries.ts`)                                                                                                                 |
-| `src/contexts/`           | Minimal: services, per-tab id, promise-queued confirm dialog, tab title                                                                                                                                           |
-| `src/components/`         | Feature folders (`repo/`, `diff/`, `settings/`, `titlebar/`) + generic `ui/` primitives (shadcn/coss over Base UI)                                                                                                |
-| `src/routes/`             | Page components + `route-tree.tsx`                                                                                                                                                                                |
-| `crates/git-backend/src/` | `api/` (DTOs), `application/backend.rs` (facade), `domain/`, `engines/{git2,gix}/`, `error/`, `runtime/` (scheduler/cache/watcher/cancellation), `streaming/`                                                     |
-| `crates/tauri/src/`       | `lib.rs` (builder + command registration), `state.rs`, `commands/*`, `session.rs`, `settings/`                                                                                                                    |
-| `tests/`                  | Vitest suite mirroring `src/`: `lib/`, `stores/`, `components/`, `hooks/`                                                                                                                                         |
+| Path                    | Purpose                                                                                                                                                                                                           |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/stores/`           | TanStack Store singletons: `app-store` (tabs), `repository-store` (repos keyed by durable path), `settings-store`, `operation-store` (op lifecycle), `theme-store`, `tab-runtime` (per-tab non-persisted runtime) |
+| `src/lib/`              | Framework-free core: `backend/` (whole Rust bridge), `routing/`, `bootstrap/`, `diff/`, `settings/settings.generated.ts` (generated)                                                                              |
+| `src/hooks/`            | One concern per file, kebab-case `use-*.ts` (e.g. `hooks/repositories/use-repository-queries.ts`)                                                                                                                 |
+| `src/contexts/`         | Minimal: services, per-tab id, promise-queued confirm dialog, tab title                                                                                                                                           |
+| `src/components/`       | Feature folders (`repo/`, `diff/`, `settings/`, `titlebar/`) + generic `ui/` primitives (shadcn/coss over Base UI)                                                                                                |
+| `src/routes/`           | Page components + `route-tree.tsx`                                                                                                                                                                                |
+| `crates/git/src/`       | `api/` (DTOs), `application/backend.rs` (facade), `domain/`, `engines/{git2,gix}/`, `error/`, `runtime/` (scheduler/cache/watcher/cancellation), `streaming/`                                                     |
+| `crates/highlight/src/` | Syntect grammar and theme registry, snippet highlighter, chunked section highlighter over a neutral line model                                                                                                    |
+| `crates/icons/src/`     | Remote owner icon resolution and disk cache, HTTP fetcher, image sniffing and data-URL encoding                                                                                                                   |
+| `crates/language/src/`  | Linguist-style classifier and color table, worktree byte-share walk, sample corpus                                                                                                                                |
+| `crates/fs-util/src/`   | Atomic writes, filesystem-safe cache keys, and FNV hashing                                                                                                                                                        |
+| `crates/tauri/src/`     | `lib.rs` (builder + command registration), `state.rs`, `commands/*`, `session.rs`, `settings/`                                                                                                                    |
+| `tests/`                | Vitest suite mirroring `src/`: `lib/`, `stores/`, `components/`, `hooks/`                                                                                                                                         |
 
 ## Development commands
 
@@ -77,7 +85,7 @@ Regenerate the settings TS contract after changing the Rust settings schema:
 cargo run -p gitau --bin export_settings --features devtools   # rewrites src/lib/settings/settings.generated.ts
 ```
 
-Benchmarks: `cargo bench -p git-backend` (Criterion, `crates/git-backend/benches/`).
+Benchmarks: `cargo bench --workspace` (Criterion; git benches in `crates/git/benches/`, with the highlighter and language benches in their own crates).
 
 ## Code conventions and common patterns
 
@@ -135,7 +143,7 @@ strict mode plus `noUnusedLocals`, `noUnusedParameters`, `verbatimModuleSyntax`;
 - Commands are thin: `#[tauri::command] async fn git_xxx(state: SharedState<'_>, …) -> CommandResult<T>` delegating to `state.backend.<method>(…).map_err(to_serialized)`; register in the flat `generate_handler!` list in `crates/tauri/src/lib.rs`. Git ops prefixed `git_`; settings/session/icon commands unprefixed.
 - Serde enums sent over IPC (tagged events like `DiffEvent`/`CloneEvent`, error wire shapes) need both `rename_all = "camelCase"` AND `rename_all_fields = "camelCase"`: the first only renames variant names, so fields would hit the frontend as snake_case and read back as `undefined` with no error.
 - Blocking git work goes through the scheduler (`runtime/scheduler.rs`, semaphore-bounded → `spawn_blocking`). In-app tasks use `tauri::async_runtime::{spawn, spawn_blocking}`, never raw `tokio::spawn` in setup.
-- Engine parity is tested: gix results must equal the git2 reference (`crates/git-backend/tests/{status_parity,diff_parity}.rs`). The only `std::process::Command` usage is running repo hooks after commit/merge.
+- Engine parity is tested: gix results must equal the git2 reference (`crates/git/tests/{status_parity,diff_parity}.rs`). The only `std::process::Command` usage is running repo hooks after commit/merge.
 
 ## Anti-slop
 
@@ -159,7 +167,7 @@ Every word written in this repo follows this: comments, markdown docs, commit me
 - `src/routes/route-tree.tsx`: per-tab route tree factory; loaders handle title/badge, repo binding, stale-id redirects.
 - `src/components/providers/app-services-provider.tsx`: context provider and sole listener of `repository-invalidated`. Must export only the component or HMR Fast Refresh breaks.
 - `crates/tauri/src/lib.rs`: plugin wiring and all command registrations. `crates/tauri/src/state.rs` defines `AppState { backend, settings, session, icons }`.
-- `crates/git-backend/src/application/backend.rs`: the `Backend` facade every command delegates to.
+- `crates/git/src/application/backend.rs`: the `Backend` facade every command delegates to.
 - `crates/tauri/tauri.conf.json`: devUrl port 3000, `beforeBuildCommand: npm run build`.
 - `crates/tauri/tauri.dev.conf.json` / `tauri.preview.conf.json` / `tauri.scan.conf.json`: overrides merged with `tauri --config`. Dev swaps the bundle icon to `icons/dev/*`; preview swaps to `icons/preview/*` and points the updater at the rolling `preview` release; scan switches `beforeBuildCommand` to `npm run build:scan` and drops updater artifacts for a local react-scan bundle. Base `tauri.conf.json` stays stable: `icons/*` plus the `releases/latest` endpoint.
 - `scripts/generate-icons.mjs`: rebuilds the icon sets from `images/icons/*.png` and rewrites each `icon.ico` largest-frame-first. Tauri embeds ICO entry 0 as the window icon, and `tauri icon` writes a 16px first frame, which Windows upscales into a blurry taskbar icon.
@@ -168,7 +176,7 @@ Every word written in this repo follows this: comments, markdown docs, commit me
 ## Runtime and tooling preferences
 
 - npm is the package manager (`package-lock.json`, CI uses `npm ci`). Ignore `.cta.json`'s stale `pnpm`/file-router fields, scaffold leftovers.
-- Node LTS, Rust 1.95+ (workspace `rust-version = "1.95"`; the Tauri 3 alpha requires it; git-backend uses edition 2024).
+- Node LTS, Rust 1.95+ (workspace `rust-version = "1.95"`; the Tauri 3 alpha requires it; the git crate uses edition 2024).
 - Lint/format: oxlint + oxfmt, not ESLint/Prettier (VS Code defaults to the oxc extension, Prettier disabled). oxlint `correctness` rules are errors; React purity/immutability/exhaustive-deps warnings exist, so don't add code that trips them.
 - Tailwind CSS v4 CSS-first (no tailwind.config): theme tokens in `src/styles.css`, dark mode is a `.dark` class on `<html>` via theme-store. Icons: lucide-react.
 - Release builds run through the GitHub Actions tag workflow (`v*.*.*`) using tauri-action; bundles nsis/msi/dmg/appimage/deb.
@@ -185,5 +193,5 @@ Every word written in this repo follows this: comments, markdown docs, commit me
     }));
     ```
     Settings seeded via exported `seedSettingsForTests(...)`; stores reset via `appStore.setState(...)`; `resetAppRuntime()` between runtime tests.
-- Rust: integration tests in `crates/git-backend/tests/` (shared `TestRepo` helper builds real temp repos via git2 in `tests/common/mod.rs`); unit tests inline `#[cfg(test)]` throughout both crates; freshness test guards `settings.generated.ts`.
+- Rust: integration tests in `crates/git/tests/` (shared `TestRepo` helper builds real temp repos via git2 in `tests/common/mod.rs`); unit tests inline `#[cfg(test)]` in every crate; freshness test guards `settings.generated.ts`.
 - Coverage: no coverage tooling configured; PRs must pass the full gate list under Development commands.

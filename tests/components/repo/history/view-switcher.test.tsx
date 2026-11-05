@@ -169,6 +169,7 @@ describe("RepoViewSwitcher", () => {
     beforeEach(() => {
         seedSettingsForTests({
             switchOverviewViewShortcut: "Mod+O",
+            switchReadmeViewShortcut: "Mod+Shift+R",
             switchGraphViewShortcut: "Mod+G",
             switchIssuesViewShortcut: "Mod+I",
             switchPullsViewShortcut: "Mod+P",
@@ -198,6 +199,7 @@ describe("RepoViewSwitcher", () => {
         ) as HTMLElement;
 
         const popup = await openMenu(ownerDocument, trigger);
+        expect(popup.textContent).toContain("Readme");
         expect(popup.textContent).toContain("Commit Graph");
         expect(popup.textContent).toContain("Issues");
         expect(popup.textContent).toContain("Pull requests");
@@ -250,7 +252,7 @@ describe("RepoViewSwitcher", () => {
             view.container.querySelector('[data-slot="menu-trigger"]')!
         );
         const items = menuItems(popup);
-        expect(items.map((item) => item.textContent!.trim())).toHaveLength(4);
+        expect(items.map((item) => item.textContent!.trim())).toHaveLength(5);
 
         const issues = items.find((item) =>
             item.textContent?.includes("Issues")
@@ -264,6 +266,11 @@ describe("RepoViewSwitcher", () => {
         expect(issues?.getAttribute("data-disabled")).not.toBeNull();
         expect(pulls?.getAttribute("data-disabled")).not.toBeNull();
         expect(graph?.getAttribute("data-disabled")).toBeNull();
+        expect(
+            items
+                .find((item) => item.textContent?.includes("Readme"))
+                ?.getAttribute("data-disabled")
+        ).toBeNull();
 
         await click(issues as HTMLElement);
         await flush();

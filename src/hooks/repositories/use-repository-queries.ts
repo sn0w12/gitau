@@ -16,6 +16,7 @@ import type { HistoryPageQueryLike } from "@/lib/backend/queries/query-keys";
 import { iconKeys } from "@/lib/backend/queries/query-keys";
 import type { RareRead } from "@/lib/backend/queries/repository-queries";
 import {
+    aheadBehindQuery,
     commitDetailQuery,
     conflictFileQuery,
     fileAtRevisionQuery,
@@ -25,6 +26,7 @@ import {
     listingQuery,
     operationStateQuery,
     rareReadQuery,
+    readmeQuery,
     remoteRepoInfoByPathQuery,
     remoteRepoInfoQuery,
     remotesByPathQuery,
@@ -32,6 +34,7 @@ import {
     snapshotQuery,
     statusQuery,
     stashQuery,
+    worktreeImageQuery,
     worktreesQuery,
 } from "@/lib/backend/queries/repository-queries";
 import { expectOk } from "@/lib/backend/transport/result";
@@ -55,6 +58,25 @@ export function useRepositorySnapshot(repoId: number | undefined) {
     return useQuery({
         ...snapshotQuery({ backend }, repoId ?? 0),
         enabled: hasValidRepoId(repoId),
+    });
+}
+
+export function useRepoReadme(repoId: number | undefined) {
+    const { backend } = useAppServices();
+    return useQuery({
+        ...readmeQuery({ backend }, repoId ?? 0),
+        enabled: hasValidRepoId(repoId),
+    });
+}
+
+export function useRepoImage(
+    repoId: number | undefined,
+    path: string | undefined
+) {
+    const { backend } = useAppServices();
+    return useQuery({
+        ...worktreeImageQuery({ backend }, repoId ?? 0, path ?? ""),
+        enabled: hasValidRepoId(repoId) && !!path,
     });
 }
 
@@ -94,6 +116,18 @@ export function useRepoListing(repoId: number | undefined) {
     return useQuery({
         ...listingQuery({ backend }, repoId ?? 0),
         enabled: hasValidRepoId(repoId),
+    });
+}
+
+export function useBranchAheadBehind(
+    repoId: number | undefined,
+    head: string | null,
+    base: string | null
+) {
+    const { backend } = useAppServices();
+    return useQuery({
+        ...aheadBehindQuery({ backend }, repoId ?? 0, head ?? "", base ?? ""),
+        enabled: hasValidRepoId(repoId) && !!head && !!base,
     });
 }
 
@@ -230,7 +264,7 @@ export function useRemoteIcon(remoteUrl: string | undefined) {
         gcTime: 60 * 60_000,
         retry: false,
         refetchOnWindowFocus: false,
-        queryFn: async (): Promise<CachedIcon> =>
+        queryFn: async (): Promise<CachedIcon | null> =>
             expectOk(await backend.icons.resolve(remoteUrl as string)),
     });
 }

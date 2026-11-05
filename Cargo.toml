@@ -4,14 +4,18 @@ members = [
     "crates/ansi",
     "crates/forge-core",
     "crates/forge-github",
-    "crates/git-backend",
+    "crates/fs-util",
+    "crates/git",
+    "crates/highlight",
+    "crates/icons",
+    "crates/language",
     "crates/tauri",
     "crates/tauri-plugin-prevent-default",
     "crates/tauri-plugin-snap-layout",
 ]
 
 [workspace.package]
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 rust-version = "1.95"
 
@@ -23,8 +27,9 @@ criterion = "0.7"
 forge-core = { path = "crates/forge-core" }
 forge-github = { path = "crates/forge-github" }
 fontdb = "0.24"
+fs-util = { path = "crates/fs-util" }
 fuzzy-matcher = "0.3.7"
-git-backend = { path = "crates/git-backend" }
+git = { path = "crates/git" }
 git2 = { version = "0.21.0", features = [
     "vendored-libgit2",
     "vendored-openssl",
@@ -33,11 +38,14 @@ git2 = { version = "0.21.0", features = [
 ] }
 gix = { version = "0.87.0", features = ["status", "excludes"] }
 gix-status = { version = "0.34", features = ["parallel"] }
+highlight = { path = "crates/highlight" }
+icons = { path = "crates/icons" }
 keyring = { version = "3", features = [
     "windows-native",
     "apple-native",
     "sync-secret-service",
 ] }
+language = { path = "crates/language" }
 log = "0.4"
 notify = "8"
 pico-args = "0.5"
@@ -51,6 +59,7 @@ syntect = { version = "5", default-features = false, features = [
     "parsing",
     "default-syntaxes",
     "regex-onig",
+    "yaml-load",
 ] }
 tauri = "3.0.0-alpha.5"
 tauri-build = "3.0.0-alpha.4"
@@ -93,7 +102,7 @@ opt-level = "s"
 panic = "abort"
 strip = true
 
-[profile.release.package.git-backend]
+[profile.release.package.git]
 opt-level = 3
 
 [profile.bench]
@@ -101,3 +110,9 @@ opt-level = 3
 lto = "thin"
 codegen-units = 16
 debug = false
+
+[profile.profiling]
+inherits = "bench"
+debug = 2
+strip = false
+

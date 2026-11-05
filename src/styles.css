@@ -372,6 +372,13 @@
     height: stretch;
 }
 
+@utility inline-code-bg {
+    background-image: linear-gradient(var(--muted), var(--muted));
+    background-size: 100% 1lh;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
 @layer base {
     * {
         @apply border-border outline-ring/50;

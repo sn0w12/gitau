@@ -140,6 +140,16 @@ impl ForgeProvider for GithubProvider {
         ]
     }
 
+    fn owner_icon_url(&self, host: &str, owner: &str) -> Option<String> {
+        if !owner
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        {
+            return None;
+        }
+        Some(format!("https://{host}/{owner}.png?size=128"))
+    }
+
     fn parse_remote(&self, url: &str) -> Option<(String, String, String)> {
         parse_github_remote(url).map(|(owner, repo)| (HOST.to_owned(), owner, repo))
     }
@@ -1249,6 +1259,16 @@ mod tests {
                 "githubapp.com",
             ]
         );
+    }
+
+    #[test]
+    fn builds_owner_icon_urls_and_rejects_invalid_owners() {
+        let provider = GithubProvider::default();
+        assert_eq!(
+            provider.owner_icon_url("github.com", "octocat"),
+            Some("https://github.com/octocat.png?size=128".to_owned())
+        );
+        assert_eq!(provider.owner_icon_url("github.com", "../etc/passwd"), None);
     }
 
     fn param(request: &Request, name: &str) -> Option<String> {

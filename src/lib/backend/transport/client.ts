@@ -2,6 +2,7 @@ import { Channel } from "@tauri-apps/api/core";
 
 import type {
     AccountProfile,
+    AheadBehind,
     BranchInfo,
     CachedIcon,
     CloneEvent,
@@ -70,6 +71,7 @@ import type {
     RemoveRepositoryResult,
     ResetKind,
     ResolveSide,
+    ReadmeContent,
     SessionDocument,
     SessionRepository,
     SettingValue,
@@ -114,6 +116,14 @@ function createRawBackendClient() {
             snapshot: (repoId: number) =>
                 invokeCommand<RepoSnapshot>("git_repository_snapshot", {
                     args: { repoId },
+                }),
+            readme: (repoId: number) =>
+                invokeCommand<ReadmeContent | null>("git_readme", {
+                    args: { repoId },
+                }),
+            worktreeImage: (repoId: number, path: string) =>
+                invokeCommand<string | null>("git_read_worktree_image", {
+                    args: { repoId, path },
                 }),
             create: (request: CreateRepositoryRequest) =>
                 invokeCommand<CreateRepositoryResult>("git_init_repository", {
@@ -302,6 +312,11 @@ function createRawBackendClient() {
             listBranchesAndTags: (repoId: number) =>
                 invokeCommand<RepoListing>("git_list_branches_and_tags", {
                     args: { repoId },
+                }),
+            /** Commits `head` has that `base` lacks, and the reverse. */
+            aheadBehind: (repoId: number, head: string, base: string) =>
+                invokeCommand<AheadBehind>("git_branch_ahead_behind", {
+                    args: { repoId, head, base },
                 }),
             createBranch: (
                 repoId: number,
@@ -1028,11 +1043,11 @@ function createRawBackendClient() {
 
         icons: {
             resolve: (remoteUrl: string) =>
-                invokeCommand<CachedIcon>("icon_resolve", {
+                invokeCommand<CachedIcon | null>("icon_resolve", {
                     args: { remoteUrl },
                 }),
             refresh: (remoteUrl: string) =>
-                invokeCommand<CachedIcon>("icon_refresh", {
+                invokeCommand<CachedIcon | null>("icon_refresh", {
                     args: { remoteUrl },
                 }),
             byRepo: (repoId: number) =>

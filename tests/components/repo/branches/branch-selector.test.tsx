@@ -88,7 +88,8 @@ const PROFILE: AccountProfile = {
 function listingBackend(
     listingResult: Result<RepoListing>,
     head: RepoSnapshot["head"] = attachedHead,
-    trees: WorktreeInfo[] = []
+    trees: WorktreeInfo[] = [],
+    aheadBy = 1
 ) {
     const checkoutCalls: string[] = [];
     const createCalls: string[] = [];
@@ -119,6 +120,12 @@ function listingBackend(
                 listingFetches += 1;
                 return listingResult;
             },
+            aheadBehind: async (): Promise<
+                Result<{ ahead: number; behind: number }>
+            > => ({
+                ok: true,
+                value: { ahead: aheadBy, behind: 0 },
+            }),
             createBranch: (
                 _repoId: number,
                 name: string
@@ -810,6 +817,40 @@ describe("BranchSelector", () => {
         )!;
         expect(dialog.textContent).toContain("octo/repo");
         expect(services.checkoutCalls).toHaveLength(0);
+        view.unmount();
+    });
+
+    it("disables creating a pull request when the branch has nothing ahead", async () => {
+        const services = listingBackend(listing, attachedHead, [], 0);
+        const view = await openSelector(services);
+
+        const developRow = Array.from(
+            document.querySelectorAll('[data-slot="command-item"]')
+        ).find((item) => item.textContent.includes("develop"))!;
+        await act(async () => {
+            developRow.dispatchEvent(
+                new MouseEvent("contextmenu", {
+                    bubbles: true,
+                    cancelable: true,
+                    clientX: 10,
+                    clientY: 10,
+                })
+            );
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        });
+
+        const disabled = await waitFor(() => {
+            const item = Array.from(
+                document.querySelectorAll('[data-slot="context-menu-item"]')
+            ).find((candidate) =>
+                candidate.textContent.includes("Create pull request")
+            );
+            return item?.hasAttribute("data-disabled") === true;
+        });
+        expect(disabled).toBe(true);
+        expect(
+            document.querySelector('[data-testid="create-pull-dialog"]')
+        ).toBeNull();
         view.unmount();
     });
 

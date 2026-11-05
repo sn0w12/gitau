@@ -12,7 +12,7 @@
  */
 
 export type RepoTab = "changes" | "history";
-export type RepoView = "overview" | "graph" | "issues" | "pulls";
+export type RepoView = "overview" | "graph" | "issues" | "pulls" | "readme";
 /** The open/closed slice the issues and pulls lists each show. */
 export type ListTab = "open" | "closed";
 
@@ -22,6 +22,7 @@ const REPO_VIEWS: readonly RepoView[] = [
     "graph",
     "issues",
     "pulls",
+    "readme",
 ];
 const LIST_TABS: readonly ListTab[] = ["open", "closed"];
 

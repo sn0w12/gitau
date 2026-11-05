@@ -20,7 +20,7 @@ export type InvalidationScope =
 
 const SCOPES_TO_PREFIXES: Record<InvalidationScope, readonly string[]> = {
     status: ["status"],
-    refs: ["listing"],
+    refs: ["listing", "aheadBehind"],
     history: ["history", "commit"],
     files: ["file"],
     remotes: ["remotes"],

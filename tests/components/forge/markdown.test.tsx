@@ -62,7 +62,21 @@ const PROVIDERS: ProviderDescriptor[] = [
     },
 ];
 
-function renderMarkdown(source: string, owner?: string, repo?: string) {
+interface MarkdownOptions {
+    imageRepoId?: number;
+    imageBasePath?: string;
+    worktreeImage?: (
+        repoId: number,
+        path: string
+    ) => Promise<Result<string | null>>;
+}
+
+function renderMarkdown(
+    source: string,
+    owner?: string,
+    repo?: string,
+    options: MarkdownOptions = {}
+) {
     const backend = {
         highlight: {
             code: async (): Promise<Result<HighlightedSnippet>> => ({
@@ -75,6 +89,14 @@ function renderMarkdown(source: string, owner?: string, repo?: string) {
                 ok: true,
                 value: PROVIDERS,
             }),
+        },
+        repositories: {
+            worktreeImage:
+                options.worktreeImage ??
+                (async (): Promise<Result<string | null>> => ({
+                    ok: true,
+                    value: null,
+                })),
         },
     } as unknown as BackendClient;
     const queryClient = new QueryClient({
@@ -93,7 +115,12 @@ function renderMarkdown(source: string, owner?: string, repo?: string) {
     }
     return render(
         <Wrapper>
-            <CustomMarkdown owner={owner} repo={repo}>
+            <CustomMarkdown
+                owner={owner}
+                repo={repo}
+                imageRepoId={options.imageRepoId}
+                imageBasePath={options.imageBasePath}
+            >
                 {source}
             </CustomMarkdown>
         </Wrapper>
@@ -280,6 +307,75 @@ describe("Images", () => {
         expect(hrefs(view.container)).toEqual(["https://example.com/ci"]);
         expect(view.container.querySelector("img")).toBeNull();
         expect(view.container.textContent).toContain("build");
+    });
+
+    it("loads a relative image from the repository worktree", async () => {
+        const worktreeImage = vi.fn(
+            async (): Promise<Result<string | null>> => ({
+                ok: true,
+                value: "data:image/png;base64,iVBORw0KGgo=",
+            })
+        );
+        const view = renderMarkdown("![logo](logo.png)", undefined, undefined, {
+            imageRepoId: 7,
+            imageBasePath: "docs",
+            worktreeImage,
+        });
+        await waitFor(() => {
+            expect(
+                view.container.querySelector("img")?.getAttribute("src")
+            ).toBe("data:image/png;base64,iVBORw0KGgo=");
+        });
+        expect(worktreeImage).toHaveBeenCalledWith(7, "docs/logo.png");
+    });
+
+    it("treats a leading slash as the repository root", async () => {
+        const worktreeImage = vi.fn(
+            async (): Promise<Result<string | null>> => ({
+                ok: true,
+                value: "data:image/png;base64,iVBORw0KGgo=",
+            })
+        );
+        const view = renderMarkdown(
+            "![logo](/brand/logo.png)",
+            undefined,
+            undefined,
+            { imageRepoId: 7, imageBasePath: "docs", worktreeImage }
+        );
+        await waitFor(() => {
+            expect(
+                view.container.querySelector("img")?.getAttribute("src")
+            ).toBe("data:image/png;base64,iVBORw0KGgo=");
+        });
+        expect(worktreeImage).toHaveBeenCalledWith(7, "brand/logo.png");
+    });
+
+    it("falls back to alt text when a relative image is missing", async () => {
+        const view = renderMarkdown(
+            "![diagram](missing.png)",
+            undefined,
+            undefined,
+            { imageRepoId: 7, imageBasePath: "" }
+        );
+        await waitFor(() => {
+            expect(view.container.textContent).toContain("diagram");
+        });
+        expect(view.container.querySelector("img")).toBeNull();
+    });
+
+    it("does not resolve escaping relative images", () => {
+        const worktreeImage = vi.fn(
+            async (): Promise<Result<string | null>> => ({
+                ok: true,
+                value: "data:image/png;base64,iVBORw0KGgo=",
+            })
+        );
+        renderMarkdown("![secret](../secret.png)", undefined, undefined, {
+            imageRepoId: 7,
+            imageBasePath: "",
+            worktreeImage,
+        });
+        expect(worktreeImage).not.toHaveBeenCalled();
     });
 });
 
