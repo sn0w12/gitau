@@ -16,6 +16,7 @@ import {
 import type { ComponentType } from "react";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 
+import { WindowTitlebar } from "@/components/window-controls";
 import { useAppServices } from "@/contexts/services-context";
 import { TabTitleContext } from "@/contexts/tab-title-context";
 import { useActiveTabHistory } from "@/hooks/tabs/use-active-tab-router";
@@ -28,7 +29,7 @@ import {
     openUpdateDialog,
     updaterController,
 } from "@/lib/updates/update-manager";
-import { cn } from "@/lib/utils";
+import { cn, isMac } from "@/lib/utils";
 import {
     activateTab,
     appStore,
@@ -63,27 +64,18 @@ import {
 
 export function Titlebar() {
     return (
-        <div
-            className="relative z-30 flex shrink-0 flex-row overflow-hidden bg-transparent select-none"
-            data-tauri-drag-region="deep"
-            style={{
-                width: "var(--titlebar-area-width, 100%)",
-                height: "var(--titlebar-area-height, 2rem)",
-                marginLeft: "var(--titlebar-area-x, 0px)",
-            }}
-        >
+        <WindowTitlebar className="relative z-30 shrink-0 bg-transparent">
             <div
                 className={cn(
-                    "flex h-full min-w-0 items-center gap-1 pl-13",
-                    "in-data-[window-controls-side=left]:pl-2",
-                    "in-data-[window-controls-side=both]:pl-2",
-                    "in-data-[platform=macos]:pl-20"
+                    "flex h-full min-w-0 items-center gap-1 pl-2",
+                    !isMac() && "pl-13"
                 )}
+                data-tauri-drag-region
             >
                 <TitlebarHistory />
                 <TitlebarTabList />
             </div>
-        </div>
+        </WindowTitlebar>
     );
 }
 

@@ -147,10 +147,10 @@ impl Registry {
         let input = std::fs::canonicalize(discovered_path)
             .unwrap_or_else(|_| discovered_path.to_path_buf());
 
-        if let Some(existing) = self.by_path.read().unwrap().get(&input).copied() {
-            if let Some(handle) = self.entries.read().unwrap().get(&existing) {
-                return Ok((existing, handle.entry.clone(), false));
-            }
+        if let Some(existing) = self.by_path.read().unwrap().get(&input).copied()
+            && let Some(handle) = self.entries.read().unwrap().get(&existing)
+        {
+            return Ok((existing, handle.entry.clone(), false));
         }
 
         let session = GixSession::discover(&input)?;
@@ -160,10 +160,10 @@ impl Registry {
             .unwrap_or_else(|| session.git_dir().to_path_buf());
         let repo_root = std::fs::canonicalize(&repo_root).unwrap_or(repo_root);
 
-        if let Some(existing) = self.by_path.read().unwrap().get(&repo_root).copied() {
-            if let Some(handle) = self.entries.read().unwrap().get(&existing) {
-                return Ok((existing, handle.entry.clone(), false));
-            }
+        if let Some(existing) = self.by_path.read().unwrap().get(&repo_root).copied()
+            && let Some(handle) = self.entries.read().unwrap().get(&existing)
+        {
+            return Ok((existing, handle.entry.clone(), false));
         }
 
         let id = RepoId(self.next_repo_id.fetch_add(1, Ordering::AcqRel));

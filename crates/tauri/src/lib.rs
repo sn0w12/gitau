@@ -15,7 +15,7 @@ const LOG_FILE_NAME: &str = if cfg!(debug_assertions) {
     "gitau"
 };
 
-fn prevent_default() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+fn prevent_default<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
     use tauri_plugin_prevent_default::Flags;
     #[cfg(debug_assertions)]
     {
@@ -31,16 +31,14 @@ fn prevent_default() -> tauri::plugin::TauriPlugin<tauri::Wry> {
     }
 }
 
-/// `GITAU_WINDOW_CONTROLS_LEADING=1` draws the band on the leading edge in dev
-/// builds, to check the left-hand titlebar layout without a right-to-left
-/// Windows session.
-fn window_controls_config() -> tauri_plugin_window_controls_overlay::Config {
-    let config = tauri_plugin_window_controls_overlay::Config::new().height(32.0);
-    if cfg!(debug_assertions) && std::env::var_os("GITAU_WINDOW_CONTROLS_LEADING").is_some() {
-        config.leading(true)
-    } else {
-        config
-    }
+#[cfg(target_os = "linux")]
+fn runtime_attrs() -> tauri_runtime_cef::Cef {
+    tauri_runtime_cef::Cef::default()
+}
+
+#[cfg(not(target_os = "linux"))]
+fn runtime_attrs() -> tauri_runtime_wry::Wry {
+    tauri_runtime_wry::Wry::default()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -50,6 +48,7 @@ pub fn run() {
     let started_at = std::time::Instant::now();
     let started_wall = std::time::SystemTime::now();
     tauri::Builder::default()
+        .runtime(runtime_attrs())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Info)
@@ -70,9 +69,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_window_controls_overlay::init_with_config(
-            window_controls_config(),
-        ))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(external_navigation_plugin())
         .plugin(prevent_default())
@@ -81,6 +77,17 @@ pub fn run() {
             let handle = app.handle().clone();
             let _launch = boot_trace::span_from("rust.launch", started_at, started_wall);
             let _hook = boot_trace::span("rust.setup.hook");
+
+            // Wayland gives a client no way to place a toplevel, and CEF's child
+            // X11 host window consumes the pointer press, so a frameless window
+            // cannot be moved there and setPosition is ignored. A decorated window
+            // is moved by the compositor instead.
+            #[cfg(target_os = "linux")]
+            if let Some(window) = app.get_webview_window("main") {
+                if let Err(error) = window.set_decorations(true) {
+                    log::warn!("could not enable window decorations: {error}");
+                }
+            }
 
             // Settings live in the platform config dir; if it is unavailable
             // the store keeps operating on in-memory defaults.

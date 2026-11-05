@@ -62,10 +62,10 @@ async fn reveals_hidden_context_between_hunks() {
                 section_id, rows, ..
             } => {
                 for row in rows.iter() {
-                    if row.kind == DiffRowKind::HunkHeader {
-                        if let Some(range) = parse_hunk(&row.content) {
-                            hunks.entry(section_id).or_default().push(range);
-                        }
+                    if row.kind == DiffRowKind::HunkHeader
+                        && let Some(range) = parse_hunk(&row.content)
+                    {
+                        hunks.entry(section_id).or_default().push(range);
                     }
                 }
             }

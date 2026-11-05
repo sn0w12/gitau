@@ -172,7 +172,7 @@ impl<'de> Deserialize<'de> for ObjectId {
 }
 
 pub fn hex_decode(input: &str) -> std::result::Result<Vec<u8>, String> {
-    if input.len() % 2 != 0 {
+    if !input.len().is_multiple_of(2) {
         return Err("hex string has odd length".into());
     }
     let mut out = Vec::with_capacity(input.len() / 2);

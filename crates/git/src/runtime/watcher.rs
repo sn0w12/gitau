@@ -58,10 +58,8 @@ pub fn spawn_watch(
                     event.kind,
                     notify::EventKind::Access(_) | notify::EventKind::Other
                 );
-                if relevant {
-                    if let Some(path) = event.paths.first() {
-                        let _ = tx_events.send(path.clone());
-                    }
+                if relevant && let Some(path) = event.paths.first() {
+                    let _ = tx_events.send(path.clone());
                 }
             }
         },

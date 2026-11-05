@@ -232,13 +232,12 @@ pub fn expand_context(
         ));
     }
     let mut styles = Vec::new();
-    if !rows.is_empty() {
-        if let Some(mut highlighter) =
+    if !rows.is_empty()
+        && let Some(mut highlighter) =
             crate::engines::gix::syntax::SectionHighlighter::new(path, &bytes, &[])
-        {
-            highlighter.highlight_rows(&mut rows);
-            styles = highlighter.take_new_styles();
-        }
+    {
+        highlighter.highlight_rows(&mut rows);
+        styles = highlighter.take_new_styles();
     }
     Ok(ContextExpansion {
         more_below: start_index + take < lines.len(),

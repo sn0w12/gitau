@@ -29,6 +29,7 @@
         "pnpm-lock.yaml",
         "yarn.lock",
         "routeTree.gen.ts",
-        "src/lib/settings/settings.generated.ts"
+        "src/lib/settings/settings.generated.ts",
+        "crates/tauri-plugin-prevent-default/assets"
     ]
 }

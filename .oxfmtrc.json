@@ -6,6 +6,7 @@
         "yarn.lock",
         "routeTree.gen.ts",
         "src/lib/settings/settings.generated.ts",
+        "crates/tauri-plugin-prevent-default/assets",
         "crates/highlight/syntaxes/**"
     ],
     "printWidth": 80,
