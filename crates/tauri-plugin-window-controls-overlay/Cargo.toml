@@ -1,0 +1,37 @@
+[package]
+name = "tauri-plugin-window-controls-overlay"
+version = "0.1.0"
+description = "Native window controls (minimize / maximize / close) overlaid on a frameless window"
+edition = "2024"
+rust-version.workspace = true
+license = "MIT OR Apache-2.0"
+publish = false
+links = "tauri-plugin-window-controls-overlay"
+
+# Vendored from tauri-plugin-window-controls-overlay 0.1.0, which pins `tauri`
+# to 2.x. Tauri 3 renamed `js_init_script` to `initialization_script`; that is
+# the only source change.
+[dependencies]
+csscolorparser = "0.7"
+serde = { version = "1.0", features = ["derive"] }
+tauri.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Dwm",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Registry",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))'.dependencies]
+gtk = { version = "0.18", features = ["v3_24"] }
+
+[build-dependencies]
+tauri-plugin.workspace = true

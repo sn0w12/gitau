@@ -26,6 +26,7 @@ import {
     reopenSessionRepositories,
     scheduleReopenRetry,
 } from "@/lib/bootstrap/session-persistence";
+import { startWindowControlsOverlay } from "@/lib/window-controls-overlay";
 
 import "./styles.css";
 import { startFontEngine } from "@/stores/font-store";
@@ -135,6 +136,7 @@ async function bootstrap(): Promise<void> {
 
     startThemeEngine();
     startFontEngine();
+    startWindowControlsOverlay();
 
     // Save failures are logged loudly: silent data loss is worse than noise.
     const disposePersistence = initSessionPersistence(async (doc) => {

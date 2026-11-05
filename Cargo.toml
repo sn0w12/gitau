@@ -11,6 +11,7 @@ members = [
     "crates/language",
     "crates/tauri",
     "crates/tauri-plugin-prevent-default",
+    "crates/tauri-plugin-window-controls-overlay",
 ]
 
 [workspace.package]
@@ -62,6 +63,7 @@ syntect = { version = "5", default-features = false, features = [
 ] }
 tauri = "3.0.0-alpha.5"
 tauri-build = "3.0.0-alpha.4"
+tauri-plugin = { version = "3.0.0-alpha.4", features = ["build"] }
 tauri-plugin-dialog = { version = "3.0.0-alpha.4", default-features = false, features = [
     "xdg-portal",
 ] }
@@ -71,6 +73,7 @@ tauri-plugin-os = "3.0.0-alpha.3"
 tauri-plugin-prevent-default = { path = "crates/tauri-plugin-prevent-default" }
 tauri-plugin-process = "3.0.0-alpha.3"
 tauri-plugin-updater = "3.0.0-alpha.3"
+tauri-plugin-window-controls-overlay = { path = "crates/tauri-plugin-window-controls-overlay" }
 # alpha.6 ships CEF 154, which dropped libEGL.so and libGLESv2.so while
 # tauri-bundler alpha.4 still copies them, so deb/appimage bundling aborts.
 tauri-runtime-cef = "=3.0.0-alpha.5"

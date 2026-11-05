@@ -1,0 +1,17 @@
+[default]
+description = """
+Default permissions for the window-controls-overlay plugin.
+
+Grants the entire overlay API: auto-enabling the overlay on page load,
+enabling/disabling it, reading its state and geometry, and updating its colors
+and height.
+"""
+permissions = [
+ "allow-enable",
+ "allow-disable",
+ "allow-is-enabled",
+ "allow-set",
+ "allow-get-state",
+ "allow-get-geometry",
+ "allow-bootstrap",
+]

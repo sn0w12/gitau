@@ -7,6 +7,8 @@
         "routeTree.gen.ts",
         "src/lib/settings/settings.generated.ts",
         "crates/tauri-plugin-prevent-default/assets",
+        "crates/tauri-plugin-window-controls-overlay/permissions",
+        "crates/tauri-plugin-window-controls-overlay/src/init.js",
         "crates/highlight/syntaxes/**"
     ],
     "printWidth": 80,

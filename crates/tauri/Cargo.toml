@@ -40,6 +40,7 @@ tauri-plugin-log.workspace = true
 tauri-plugin-prevent-default.workspace = true
 tauri-plugin-process.workspace = true
 tauri-plugin-updater.workspace = true
+tauri-plugin-window-controls-overlay.workspace = true
 tauri.workspace = true
 tauri-plugin-opener.workspace = true
 serde.workspace = true
