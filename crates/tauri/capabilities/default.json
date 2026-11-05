@@ -19,7 +19,6 @@
         "dialog:allow-open",
         "log:default",
         "os:default",
-        "snap-layout:default",
         "updater:default",
         "process:default"
     ]

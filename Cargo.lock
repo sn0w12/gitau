@@ -2374,7 +2374,6 @@ dependencies = [
  "tauri-plugin-os",
  "tauri-plugin-prevent-default",
  "tauri-plugin-process",
- "tauri-plugin-snap-layout",
  "tauri-plugin-updater",
  "tauri-runtime-cef",
  "tauri-runtime-wry",
@@ -7412,20 +7411,6 @@ checksum = "fd60a494f144af72d33e43640ca37f876101b513f647cca45fc346810bc76831"
 dependencies = [
  "tauri",
  "tauri-plugin",
-]
-
-[[package]]
-name = "tauri-plugin-snap-layout"
-version = "1.0.9"
-dependencies = [
- "raw-window-handle",
- "serde",
- "serde_json",
- "tauri",
- "tauri-plugin",
- "thiserror 2.0.21",
- "windows-sys 0.61.2",
- "windows-version",
 ]
 
 [[package]]

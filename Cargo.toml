@@ -11,7 +11,6 @@ members = [
     "crates/language",
     "crates/tauri",
     "crates/tauri-plugin-prevent-default",
-    "crates/tauri-plugin-snap-layout",
 ]
 
 [workspace.package]
@@ -71,7 +70,6 @@ tauri-plugin-opener = "3.0.0-alpha.3"
 tauri-plugin-os = "3.0.0-alpha.3"
 tauri-plugin-prevent-default = { path = "crates/tauri-plugin-prevent-default" }
 tauri-plugin-process = "3.0.0-alpha.3"
-tauri-plugin-snap-layout = { path = "crates/tauri-plugin-snap-layout" }
 tauri-plugin-updater = "3.0.0-alpha.3"
 # alpha.6 ships CEF 154, which dropped libEGL.so and libGLESv2.so while
 # tauri-bundler alpha.4 still copies them, so deb/appimage bundling aborts.
