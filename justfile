@@ -4,6 +4,12 @@ set default-list
 [windows]
 set shell := ["pwsh", "-NoLogo", "-Command"]
 
+# sharun_cef.rs downloads quick-sharun.sh from a fork that still points
+# anylinux.c and gtk-class-fix.c at upstream main, which 404s
+# (tauri-apps/tauri#16204). Pin both to the last commit the fork merged.
+export ANYLINUX_LIB_SOURCE := 'https://raw.githubusercontent.com/pkgforge-dev/Anylinux-AppImages/d1bb26882eded9576bb0760aeb848179bbf64e9b/useful-tools/lib/anylinux.c'
+export GTK_CLASS_FIX_SOURCE := 'https://raw.githubusercontent.com/pkgforge-dev/Anylinux-AppImages/d1bb26882eded9576bb0760aeb848179bbf64e9b/useful-tools/lib/gtk-class-fix.c'
+
 # [-g|--gate <ids>] [-s|--skip <ids>] [--with-check] [--changed] [--base <ref>] [-j|--jobs <n>] [-v|--verbose] [--no-nextest] [--list] [-h|--help]
 [group('ci')]
 ci *args:
