@@ -71,6 +71,7 @@ pub(crate) trait OverlayHost: Send + Sync + 'static {
     fn close(&self);
     /// Activates the window, which is what a native non-client button press
     /// does before it acts.
+    #[cfg_attr(not(windows), allow(dead_code))]
     fn focus(&self);
     fn is_maximized(&self) -> bool;
     fn is_minimizable(&self) -> bool;

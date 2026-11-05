@@ -7466,7 +7466,7 @@ name = "tauri-plugin-window-controls-overlay"
 version = "0.1.0"
 dependencies = [
  "csscolorparser",
- "gtk",
+ "gtk4",
  "serde",
  "tauri",
  "tauri-plugin",

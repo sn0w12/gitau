@@ -31,7 +31,10 @@ windows = { version = "0.62", features = [
 ] }
 
 [target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))'.dependencies]
-gtk = { version = "0.18", features = ["v3_24"] }
+# Tauri 3's CEF runtime builds Linux windows with GTK4, so `Window::gtk_window`
+# hands back gtk4 types. The alias keeps the platform module unchanged.
+gtk = { package = "gtk4", version = "0.11" }
+tauri = { workspace = true, features = ["gtk4"] }
 
 [build-dependencies]
 tauri-plugin.workspace = true

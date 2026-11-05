@@ -18,7 +18,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use gtk::glib;
 use gtk::prelude::*;
 
 use super::{
@@ -440,21 +439,25 @@ fn load_icon(kind: ButtonKind, color: Rgba, size: u32, scale: i32) -> Option<Ico
 
 fn lookup_icon(kind: ButtonKind, color: Rgba, size: u32, scale: i32) -> Option<IconData> {
     let scale = scale.max(1);
-    let theme = gtk::IconTheme::default()?;
+    let theme = gtk::IconTheme::default();
     let logical_size = (size as i32 / scale).max(1);
-    let info = theme.lookup_icon_for_scale(
+    let paintable = theme.lookup_icon(
         icon_name(kind),
+        &[],
         logical_size,
         scale,
-        gtk::IconLookupFlags::USE_BUILTIN | gtk::IconLookupFlags::GENERIC_FALLBACK,
-    )?;
-    let foreground = gtk::gdk::RGBA::new(
-        f64::from(color.r) / 255.0,
-        f64::from(color.g) / 255.0,
-        f64::from(color.b) / 255.0,
-        f64::from(color.a) / 255.0,
+        gtk::TextDirection::None,
+        gtk::IconLookupFlags::empty(),
     );
-    let (pixbuf, _was_symbolic) = info.load_symbolic(&foreground, None, None, None).ok()?;
+    // A full-color icon would lose its palette in the recoloring below, so only
+    // symbolic icons go through this path.
+    if !paintable.is_symbolic() {
+        return None;
+    }
+    let path = paintable.file()?.path()?;
+    let device_size = i32::try_from(size).ok()?;
+    let pixbuf =
+        gtk::gdk_pixbuf::Pixbuf::from_file_at_scale(&path, device_size, device_size, true).ok()?;
     if pixbuf.n_channels() != 4 {
         return None;
     }
@@ -470,10 +473,15 @@ fn lookup_icon(kind: ButtonKind, color: Rgba, size: u32, scale: i32) -> Option<I
     let row = width as usize * 4;
 
     // Pixbuf rows are padded to `rowstride`, and our canvas wants them tight.
+    // GTK4 dropped `load_symbolic`, so the requested color replaces the RGB
+    // channels while the icon's alpha keeps the shape.
     let mut pixels = Vec::with_capacity(row * height as usize);
     for y in 0..height as usize {
         let start = y * stride;
-        pixels.extend_from_slice(data.get(start..start + row)?);
+        let source = data.get(start..start + row)?;
+        for pixel in source.as_chunks::<4>().0 {
+            pixels.extend_from_slice(&[color.r, color.g, color.b, pixel[3]]);
+        }
     }
     Some(IconData {
         width,
@@ -674,17 +682,14 @@ pub(crate) fn attach(
     // float above the web view.
     let overlay = gtk::Overlay::new();
     if vbox.parent().is_some() {
-        window.remove(&vbox);
+        vbox.unparent();
     }
-    overlay.add(&vbox);
+    overlay.set_child(Some(&vbox));
 
     let mut bands = Vec::with_capacity(2);
     for side in [Side::Leading, Side::Trailing] {
         let area = gtk::DrawingArea::new();
         area.set_widget_name(label);
-        // Skip GTK's own background so the web view shows through an overlay
-        // color with alpha; the draw handler paints the whole band anyway.
-        area.set_app_paintable(true);
         area.set_halign(match side {
             Side::Leading => gtk::Align::Start,
             Side::Trailing => gtk::Align::End,
@@ -701,18 +706,10 @@ pub(crate) fn attach(
         });
     }
 
-    window.add(&overlay);
-    // The widgets are grafted onto a window that is already on screen, so GTK
-    // never sees them through a `show_all()` on the window and they would stay
-    // hidden (and unpainted) without an explicit `show()`.
-    overlay.show();
-    for band in &bands {
-        band.area.show();
-    }
+    window.set_child(Some(&overlay));
 
-    // `relayout` is driven by the window's `size-allocate` signal below, which
-    // needs a handle that outlives the `Overlay` (which takes ownership of
-    // `window`).
+    // The surface layout handler below needs a window handle that outlives the
+    // `Overlay`, which takes ownership of `window`.
     let resized_window = window.clone();
     OVERLAYS.with(|overlays| {
         overlays.borrow_mut().insert(
@@ -736,16 +733,16 @@ pub(crate) fn attach(
     }
     watch_settings();
 
-    // `tao` reports a resize from the X `configure-event`, which fires *before*
-    // GTK has applied the new allocation, so `allocated_width()` still returns
-    // the old size when Tauri dispatches the `Resized` event. Re-laying out from
-    // `size-allocate` — which runs after the allocation is applied — is what
-    // keeps the published geometry (and so `--titlebar-area-width`) in step with
-    // the window while it is being resized.
-    let resized_label = label.to_owned();
-    resized_window.connect_size_allocate(move |_, _| {
-        let _ = relayout(&resized_label);
-    });
+    // Tauri dispatches `Resized` from the X surface event, which can fire before
+    // GTK has applied the new allocation. `layout` runs after the surface has
+    // been laid out, so the published geometry (and `--titlebar-area-width`)
+    // follows the window while it is being resized.
+    if let Some(surface) = resized_window.surface() {
+        let resized_label = label.to_owned();
+        surface.connect_layout(move |_, _, _| {
+            let _ = relayout(&resized_label);
+        });
+    }
 
     relayout(label)
 }
@@ -787,100 +784,86 @@ fn connect_band(label: &str, side: Side) {
         return;
     };
 
-    area.add_events(
-        gtk::gdk::EventMask::POINTER_MOTION_MASK
-            | gtk::gdk::EventMask::ENTER_NOTIFY_MASK
-            | gtk::gdk::EventMask::LEAVE_NOTIFY_MASK
-            | gtk::gdk::EventMask::BUTTON_PRESS_MASK
-            | gtk::gdk::EventMask::BUTTON_RELEASE_MASK,
-    );
-
-    let drawing = area.clone();
-    let surface = area.clone();
-    drawing.connect_draw(move |_, cr| {
-        if let Some(label) = label_of(&surface) {
+    area.set_draw_func(move |area, cr, _, _| {
+        if let Some(label) = label_of(area) {
             with_overlay(&label, |overlay| overlay.draw(side, cr));
         }
-        glib::Propagation::Proceed
     });
 
-    let motion = area.clone();
-    area.connect_motion_notify_event(move |_, event| {
-        let (x, y) = event.position();
-        if let Some(label) = label_of(&motion) {
-            update_hover(&label, side, x, y);
-        }
-        glib::Propagation::Proceed
-    });
-
-    // Moving the pointer straight into the band — when it appears under a
-    // stationary pointer, or when the pointer simply stops on a button — only
+    let motion = gtk::EventControllerMotion::new();
+    {
+        let area = area.clone();
+        motion.connect_motion(move |_, x, y| {
+            if let Some(label) = label_of(&area) {
+                update_hover(&label, side, x, y);
+            }
+        });
+    }
+    // Moving the pointer straight into the band, when it appears under a
+    // stationary pointer or when the pointer simply stops on a button, only
     // produces an enter event, not a motion one, so the hover has to be taken
     // from that too. Without this the first button the pointer reaches never
     // highlights.
-    let entering = area.clone();
-    area.connect_enter_notify_event(move |_, event| {
-        let (x, y) = event.position();
-        if let Some(label) = label_of(&entering) {
-            update_hover(&label, side, x, y);
-        }
-        glib::Propagation::Proceed
-    });
-
-    let leaving = area.clone();
-    area.connect_leave_notify_event(move |_, _| {
-        if let Some(label) = label_of(&leaving) {
-            let changed = with_overlay(&label, |overlay| overlay.hovered.take().is_some());
-            if changed == Some(true) {
-                with_overlay(&label, |overlay| overlay.queue_draw());
+    {
+        let area = area.clone();
+        motion.connect_enter(move |_, x, y| {
+            if let Some(label) = label_of(&area) {
+                update_hover(&label, side, x, y);
             }
-        }
-        glib::Propagation::Proceed
-    });
-
-    let pressing = area.clone();
-    area.connect_button_press_event(move |_, event| {
-        if event.button() != 1 {
-            return glib::Propagation::Proceed;
-        }
-        let (x, y) = event.position();
-        if let Some(label) = label_of(&pressing) {
-            with_overlay(&label, |overlay| {
-                let button = overlay.layout().hit_test(side, x, y);
-                overlay.pressed = button;
-                overlay.hovered = button;
-                overlay.queue_draw();
-            });
-            return glib::Propagation::Stop;
-        }
-        glib::Propagation::Proceed
-    });
-
-    let releasing = area.clone();
-    area.connect_button_release_event(move |_, event| {
-        if event.button() != 1 {
-            return glib::Propagation::Proceed;
-        }
-        let (x, y) = event.position();
-        let Some(label) = label_of(&releasing) else {
-            return glib::Propagation::Proceed;
-        };
-        let clicked = with_overlay(&label, |overlay| {
-            let pressed = overlay.pressed.take();
-            let hovered = overlay.layout().hit_test(side, x, y);
-            overlay.hovered = hovered;
-            match pressed {
-                Some(kind) if Some(kind) == hovered => Some(kind),
-                _ => None,
+        });
+    }
+    {
+        let area = area.clone();
+        motion.connect_leave(move |_| {
+            if let Some(label) = label_of(&area) {
+                let changed = with_overlay(&label, |overlay| overlay.hovered.take().is_some());
+                if changed == Some(true) {
+                    with_overlay(&label, |overlay| overlay.queue_draw());
+                }
             }
-        })
-        .flatten();
-        if let Some(kind) = clicked {
-            apply_button_action(&label, kind);
-        }
-        with_overlay(&label, |overlay| overlay.queue_draw());
-        glib::Propagation::Stop
-    });
+        });
+    }
+    area.add_controller(motion);
+
+    let click = gtk::GestureClick::new();
+    click.set_button(gtk::gdk::BUTTON_PRIMARY);
+    {
+        let area = area.clone();
+        click.connect_pressed(move |gesture, _, x, y| {
+            gesture.set_state(gtk::EventSequenceState::Claimed);
+            if let Some(label) = label_of(&area) {
+                with_overlay(&label, |overlay| {
+                    let button = overlay.layout().hit_test(side, x, y);
+                    overlay.pressed = button;
+                    overlay.hovered = button;
+                    overlay.queue_draw();
+                });
+            }
+        });
+    }
+    {
+        let area = area.clone();
+        click.connect_released(move |_, _, x, y| {
+            let Some(label) = label_of(&area) else {
+                return;
+            };
+            let clicked = with_overlay(&label, |overlay| {
+                let pressed = overlay.pressed.take();
+                let hovered = overlay.layout().hit_test(side, x, y);
+                overlay.hovered = hovered;
+                match pressed {
+                    Some(kind) if Some(kind) == hovered => Some(kind),
+                    _ => None,
+                }
+            })
+            .flatten();
+            if let Some(kind) = clicked {
+                apply_button_action(&label, kind);
+            }
+            with_overlay(&label, |overlay| overlay.queue_draw());
+        });
+    }
+    area.add_controller(click);
 }
 
 fn watch_settings() {
@@ -948,7 +931,7 @@ pub(crate) fn destroy(label: &str) {
     overlay.vbox.unparent();
     overlay.overlay.unparent();
     if overlay.window.is_realized() {
-        overlay.window.add(&overlay.vbox);
+        overlay.window.set_child(Some(&overlay.vbox));
     }
 }
 
@@ -971,7 +954,7 @@ impl Overlay {
     }
 
     fn client_width(&self) -> f64 {
-        f64::from(self.window.allocated_width())
+        f64::from(self.window.width())
     }
 
     fn layout(&self) -> Layout {
@@ -1008,6 +991,7 @@ impl Overlay {
 
     /// `titleBarOverlay.color`, else the GTK theme's window color — Electron's
     /// `ui::kColorFrameActive` fallback.
+    #[allow(deprecated)]
     fn background(&self) -> Rgba {
         if let Some(color) = self.config.color {
             return color;
@@ -1113,12 +1097,8 @@ impl Overlay {
         };
         let device_scale = band.area.scale_factor().max(1);
         let scale = f64::from(device_scale);
-        let width = (f64::from(band.area.allocated_width()) * scale)
-            .round()
-            .max(1.0) as u32;
-        let height = (f64::from(band.area.allocated_height()) * scale)
-            .round()
-            .max(1.0) as u32;
+        let width = (f64::from(band.area.width()) * scale).round().max(1.0) as u32;
+        let height = (f64::from(band.area.height()) * scale).round().max(1.0) as u32;
 
         band.canvas.resize(width, height);
         let icons =
