@@ -305,7 +305,9 @@ impl SectionHighlighter {
                     .or_else(|| line.old_lineno.and_then(|lineno| old_spans.remove(&lineno)))?;
                 let limit = line.content.len() as u32;
                 spans
-                    .chunks_exact(3)
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
                     .all(|triple| triple[0] + triple[1] <= limit)
                     .then_some(spans)
             })
@@ -411,7 +413,7 @@ fn main() {
         let spans = row.spans.as_ref().unwrap();
         let mut out = String::new();
         let mut cursor = 0usize;
-        for t in spans.chunks_exact(3) {
+        for t in spans.as_chunks::<3>().0 {
             let (start, len) = (t[0] as usize, t[1] as usize);
             out.push_str(&row.content[cursor..start]);
             out.push_str(&row.content[start..start + len]);
@@ -445,7 +447,9 @@ fn main() {
         let region_start = assignment.content.find("\"world\"").unwrap();
         let region_end = region_start + "\"world\"".len();
         let covering = spans
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .filter(|t| {
                 (t[0] as usize) < region_end && (t[0] as usize + t[1] as usize) > region_start
             })
