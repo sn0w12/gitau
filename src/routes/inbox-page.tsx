@@ -11,6 +11,7 @@ import {
 import { useMemo, useState } from "react";
 
 import { ExternalLink } from "@/components/external-link";
+import { RelativeTime } from "@/components/relative-time";
 import { Button } from "@/components/ui/button";
 import {
     Empty,
@@ -56,7 +57,7 @@ import { GitBackendError } from "@/lib/backend/transport/invoke";
 import { parseIssueUrl, parsePullUrl } from "@/lib/forge/repo-coords";
 import { openExternal } from "@/lib/open-external";
 import { toastError } from "@/lib/toast-error";
-import { cn, formatRelativeDate } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 type InboxFilter = "all" | "unread" | "mention" | "review_requested" | "assign";
 
@@ -522,9 +523,12 @@ function InboxRow({
                 </div>
                 <p className="truncate text-xs text-muted-foreground">
                     {formatSubjectType(thread.subjectType)}
-                    {thread.updatedAt
-                        ? ` · ${formatRelativeDate(thread.updatedAt)}`
-                        : ""}
+                    {thread.updatedAt ? (
+                        <>
+                            {" · "}
+                            <RelativeTime value={thread.updatedAt} />
+                        </>
+                    ) : null}
                 </p>
             </div>
             <span className="flex size-8 shrink-0 items-center justify-center">

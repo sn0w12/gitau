@@ -44,10 +44,22 @@ export function trashBinName(): string {
     return isWindows() ? "Recycle Bin" : "Trash";
 }
 
-export function formatRelativeDate(dateString: string | number): string {
+const RELATIVE_DATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Whether `formatRelativeDate` returns a relative label rather than a date. */
+export function isRelativeDate(
+    dateString: string | number,
+    now: number = Date.now()
+): boolean {
+    return now - new Date(dateString).getTime() < RELATIVE_DATE_WINDOW_MS;
+}
+
+export function formatRelativeDate(
+    dateString: string | number,
+    now: number = Date.now()
+): string {
     const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
+    const diffMs = now - date.getTime();
     const diffMinutes = Math.floor(diffMs / (1000 * 60));
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -65,7 +77,7 @@ export function formatRelativeDate(dateString: string | number): string {
             return `1 hour ago`;
         }
         return `${diffHours} hours ago`;
-    } else if (diffDays < 7) {
+    } else if (diffMs < RELATIVE_DATE_WINDOW_MS) {
         if (diffDays === 1) {
             return `1 day ago`;
         }

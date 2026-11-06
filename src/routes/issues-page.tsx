@@ -7,6 +7,7 @@ import {
     issueStatusOf,
     ThreadStatusIcon,
 } from "@/components/forge/status-badge";
+import { RelativeTime } from "@/components/relative-time";
 import { Button } from "@/components/ui/button";
 import {
     Empty,
@@ -36,7 +37,6 @@ import { useInternalLink } from "@/hooks/tabs/use-internal-link";
 import type { SearchIssueItem } from "@/lib/backend/protocol";
 import { GitBackendError } from "@/lib/backend/transport/invoke";
 import { parseIssueUrl } from "@/lib/forge/repo-coords";
-import { formatRelativeDate } from "@/lib/utils";
 
 /**
  * Signed-in issues matching `is:issue involves:@me
@@ -282,9 +282,12 @@ function IssuesRow({
                 <p className="truncate text-xs text-muted-foreground">
                     #{issue.number}
                     {issue.author ? ` · ${issue.author}` : ""}
-                    {issue.updatedAt
-                        ? ` · ${formatRelativeDate(issue.updatedAt)}`
-                        : ""}
+                    {issue.updatedAt ? (
+                        <>
+                            {" · "}
+                            <RelativeTime value={issue.updatedAt} />
+                        </>
+                    ) : null}
                 </p>
             </div>
         </div>

@@ -7,6 +7,7 @@ import {
     pullRequestStatusOf,
     ThreadStatusIcon,
 } from "@/components/forge/status-badge";
+import { RelativeTime } from "@/components/relative-time";
 import { Button } from "@/components/ui/button";
 import {
     Empty,
@@ -34,7 +35,6 @@ import { useInternalLink } from "@/hooks/tabs/use-internal-link";
 import type { PullRequestListItem } from "@/lib/backend/protocol";
 import { GitBackendError } from "@/lib/backend/transport/invoke";
 import { parsePullUrl } from "@/lib/forge/repo-coords";
-import { formatRelativeDate } from "@/lib/utils";
 
 /**
  * Signed-in pull requests matching `is:pr involves:@me
@@ -284,9 +284,12 @@ function PullsRow({
                 <p className="truncate text-xs text-muted-foreground">
                     #{pull.number}
                     {pull.author.login ? ` · ${pull.author.login}` : ""}
-                    {pull.updatedAt
-                        ? ` · ${formatRelativeDate(pull.updatedAt)}`
-                        : ""}
+                    {pull.updatedAt ? (
+                        <>
+                            {" · "}
+                            <RelativeTime value={pull.updatedAt} />
+                        </>
+                    ) : null}
                 </p>
             </div>
         </div>

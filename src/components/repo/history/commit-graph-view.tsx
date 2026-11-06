@@ -1,12 +1,12 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
+import { RelativeTime } from "@/components/relative-time";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTabId } from "@/contexts/tab-context";
 import { useGraphSession } from "@/hooks/repositories/use-graph-session";
 import type { GraphRow } from "@/lib/backend/protocol";
-import { formatRelativeDate } from "@/lib/utils";
 
 import { Badge } from "../../ui/badge";
 
@@ -364,7 +364,7 @@ function CommitGraphRow({
                 {row.authorName}
             </td>
             <td className="truncate px-2 text-muted-foreground">
-                {formatRelativeDate(row.timeSeconds * 1000)}
+                <RelativeTime value={row.timeSeconds * 1000} />
             </td>
             <td className="truncate px-2 font-mono text-muted-foreground">
                 {shortId(row.id)}

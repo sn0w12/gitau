@@ -2,10 +2,11 @@ import { useSelector } from "@tanstack/react-store";
 import { getTauriVersion, getVersion } from "@tauri-apps/api/app";
 import { arch, platform, version as osVersion } from "@tauri-apps/plugin-os";
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 
+import { RelativeTime } from "@/components/relative-time";
 import type { UpdateState } from "@/lib/updates/update-controller";
 import { updaterController } from "@/lib/updates/update-manager";
-import { formatRelativeDate } from "@/lib/utils";
 
 import { FramePanel } from "../ui/frame";
 import { Separator } from "../ui/separator";
@@ -47,7 +48,7 @@ interface ReleaseInfo {
 
 interface ReleaseRow {
     label: string;
-    value: string;
+    value: ReactNode;
 }
 
 async function readReleaseInfo(): Promise<ReleaseInfo> {
@@ -148,7 +149,7 @@ export function ReleaseInfoCard() {
     if (checkedAt !== null) {
         rows.push({
             label: "Last checked",
-            value: formatRelativeDate(checkedAt),
+            value: <RelativeTime value={checkedAt} />,
         });
     }
 

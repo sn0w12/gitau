@@ -2,6 +2,7 @@ import { File, Tag } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
+import { RelativeTime } from "@/components/relative-time";
 import { CommitContextMenu } from "@/components/repo/history/commit-context-menu";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -11,7 +12,6 @@ import { useTabId } from "@/contexts/tab-context";
 import { useCommitDiffPrefetch } from "@/hooks/changes/use-diff-prefetch";
 import { useInfiniteHistoryPage } from "@/hooks/repositories/use-repository-queries";
 import type { CommitSummary, SearchMatchRange } from "@/lib/backend/protocol";
-import { formatRelativeDate } from "@/lib/utils";
 
 import { Input } from "../../ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip";
@@ -312,9 +312,9 @@ const HistoryRow = memo(function HistoryRow({
                                 className="hidden size-1 shrink-0 rounded-full bg-muted-foreground lg:inline-block"
                             />
                             <span className="hidden lg:inline">
-                                {formatRelativeDate(
-                                    commit.committer.timeSeconds * 1000
-                                )}
+                                <RelativeTime
+                                    value={commit.committer.timeSeconds * 1000}
+                                />
                             </span>
                         </div>
                         <div className="flex items-center gap-0.5 font-mono">

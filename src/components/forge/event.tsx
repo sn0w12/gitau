@@ -7,9 +7,9 @@ import {
     UserRound,
 } from "lucide-react";
 
+import { RelativeTime } from "@/components/relative-time";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { Label } from "@/lib/backend/protocol";
-import { formatRelativeDate } from "@/lib/utils";
 
 import { LabelBadge } from "./label-badge";
 import { MessageSpacer } from "./message";
@@ -116,7 +116,7 @@ export function TimelineEvent({
                 {assignee && !label ? <span>{assignee}</span> : null}
                 {createdAt ? (
                     <span className="text-muted-foreground">
-                        on {formatRelativeDate(createdAt)}
+                        on <RelativeTime value={createdAt} />
                     </span>
                 ) : null}
             </div>

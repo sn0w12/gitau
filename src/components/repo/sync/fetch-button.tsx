@@ -2,8 +2,9 @@ import { useSelector } from "@tanstack/react-store";
 import { ArrowDown, ArrowUp, CloudUpload, Upload } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
+import { RelativeTime } from "@/components/relative-time";
 import { PublishRepositoryDialog } from "@/components/repo/dialogs/publish-dialog";
 import { SpinnerIcon } from "@/components/repo/sync/spinner-icon";
 import {
@@ -23,10 +24,8 @@ import {
     deriveFetchAction,
     type FetchAction,
 } from "@/lib/repositories/fetch-action";
-import { formatRelativeDate } from "@/lib/utils";
 import { fetchStore } from "@/stores/fetch-store";
 
-const RELATIVE_TIME_TICK_MS = 30_000;
 const ICON_PROPS = { className: "size-7", strokeWidth: "1.5px" } as const;
 
 /**
@@ -57,16 +56,6 @@ export function RepoFetchButton({
     );
     const busy = sync.busy || backgroundFetching;
     const [publishOpen, setPublishOpen] = useState(false);
-    // Re-render periodically so "X minutes ago" stays honest.
-    const [, setTick] = useState(0);
-    useEffect(() => {
-        if (!lastFetchedAt) return;
-        const timer = setInterval(
-            () => setTick((n) => n + 1),
-            RELATIVE_TIME_TICK_MS
-        );
-        return () => clearInterval(timer);
-    }, [lastFetchedAt]);
 
     const head = snapshot.data?.head;
     const remoteName = sync.remoteName;
@@ -82,11 +71,15 @@ export function RepoFetchButton({
     const remoteLabel = remoteName
         ? `${remoteName.charAt(0).toUpperCase()}${remoteName.slice(1)}`
         : "";
-    const fetchedLine = backgroundFetching
-        ? "Fetching in the background…"
-        : lastFetchedAt
-          ? `Last fetched ${formatRelativeDate(lastFetchedAt)}`
-          : "Never fetched";
+    const fetchedLine: ReactNode = backgroundFetching ? (
+        "Fetching in the background…"
+    ) : lastFetchedAt ? (
+        <span>
+            Last fetched <RelativeTime value={lastFetchedAt} />
+        </span>
+    ) : (
+        "Never fetched"
+    );
 
     const spec = action
         ? resolveButtonSpec(action, {
@@ -132,7 +125,7 @@ interface ButtonSpec {
     content: {
         icon: ReactNode;
         label: string;
-        subtitle?: string;
+        subtitle?: ReactNode;
         trailing?: ReactNode;
     };
 }
@@ -141,7 +134,7 @@ function resolveButtonSpec(
     action: FetchAction,
     state: {
         remoteLabel: string;
-        fetchedLine: string;
+        fetchedLine: ReactNode;
         busy: boolean;
         sync: SyncActions;
         onPublishRepository: () => void;

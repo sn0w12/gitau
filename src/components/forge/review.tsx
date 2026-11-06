@@ -8,6 +8,7 @@ import { Fragment } from "react";
 
 import { CodeBlock } from "@/components/forge/code-block";
 import { MessageSpacer, TimelineMessage } from "@/components/forge/message";
+import { RelativeTime } from "@/components/relative-time";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
     Collapsible,
@@ -18,7 +19,6 @@ import type {
     PullRequestReview,
     PullRequestReviewComment,
 } from "@/lib/backend/protocol";
-import { formatRelativeDate } from "@/lib/utils";
 
 function initials(login: string): string {
     return login.slice(0, 1).toUpperCase() || "?";
@@ -105,7 +105,7 @@ export function TimelineReview({
                     <span>
                         {review.author.login}{" "}
                         <span className="text-muted-foreground">
-                            {label} {formatRelativeDate(review.submittedAt)}
+                            {label} <RelativeTime value={review.submittedAt} />
                         </span>
                     </span>
                 </div>
@@ -180,7 +180,7 @@ export function TimelineReviewComment({
                     </span>
                     <span className="truncate text-xs text-muted-foreground">
                         {comment.author.login}{" "}
-                        {formatRelativeDate(comment.createdAt)}
+                        <RelativeTime value={comment.createdAt} />
                     </span>
                 </div>
                 <MessageSpacer />

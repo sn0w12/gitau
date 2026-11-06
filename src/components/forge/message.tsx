@@ -8,10 +8,11 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
+import { RelativeTime } from "@/components/relative-time";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
 import { toastError } from "@/lib/toast-error";
-import { formatRelativeDate, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { Button } from "../ui/button";
@@ -175,7 +176,7 @@ function MessageIdentity({
                     {author ?? "Someone"}{" "}
                     {createdAt ? (
                         <span className="text-muted-foreground">
-                            {actionLabel} {formatRelativeDate(createdAt)}
+                            {actionLabel} <RelativeTime value={createdAt} />
                         </span>
                     ) : null}
                 </span>
