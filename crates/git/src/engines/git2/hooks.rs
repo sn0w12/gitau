@@ -19,7 +19,7 @@ use git2::Repository;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::api::hooks::{
-    CommitHookEvent, HookContent, HookInfo, HookOutputChunk, HookOutputLine, HookRunResult,
+    CommitHookEvent, GitHook, HookContent, HookOutputChunk, HookOutputLine, HookRunResult,
 };
 use crate::error::{GitError, Result};
 
@@ -86,12 +86,12 @@ pub(crate) enum HookSpawn {
 /// Lists commit-pipeline hooks that exist on disk, in execution order.
 /// Shell sample stubs (`*.sample`) never match exact names, so they are
 /// excluded naturally.
-pub fn list_commit_hooks(repo: &Repository) -> Result<Vec<HookInfo>> {
+pub fn list_commit_hooks(repo: &Repository) -> Result<Vec<GitHook>> {
     let dir = hooks_dir(repo)?;
     let mut hooks = Vec::new();
     for name in COMMIT_HOOK_NAMES {
         if let Some(path) = find_hook_file(&dir, name) {
-            hooks.push(HookInfo {
+            hooks.push(GitHook {
                 name: name.to_owned(),
                 path: path.to_string_lossy().into_owned(),
                 executable: is_executable(&path),

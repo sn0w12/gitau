@@ -6,6 +6,8 @@
         "yarn.lock",
         "routeTree.gen.ts",
         "src/lib/settings/settings.generated.ts",
+        "src/lib/backend/protocol.ts",
+        "src/lib/backend/transport/commands.generated.ts",
         "crates/tauri-plugin-prevent-default/assets",
         "crates/tauri-plugin-window-controls-overlay/permissions",
         "crates/tauri-plugin-window-controls-overlay/src/init.js",

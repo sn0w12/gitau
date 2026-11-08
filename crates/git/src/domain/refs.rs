@@ -40,6 +40,7 @@ pub struct TagInfo {
     pub name: RefName,
     pub target: ObjectId,
     /// For annotated tags this is the tag object itself.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tag_object: Option<ObjectId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,

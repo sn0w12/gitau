@@ -88,6 +88,7 @@ pub struct SectionMeta {
     pub old_path: Option<RelativePath>,
     pub kind: SectionKind,
     pub binary: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub image: bool,
     /// True while rows are still being computed.
     pub complete: bool,

@@ -299,7 +299,9 @@ pub struct DiffImageSide {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiffImage {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub old: Option<DiffImageSide>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub new: Option<DiffImageSide>,
 }
 

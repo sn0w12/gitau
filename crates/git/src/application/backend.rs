@@ -19,7 +19,7 @@ use crate::api::highlight::HighlightedSnippet;
 use crate::api::history::{
     BlameQuery, CommitDetailQuery, FileAtRevisionQuery, HistoryChartQuery, HistoryPageQuery,
 };
-use crate::api::hooks::{CommitHookEvent, HookContent, HookInfo, HookOutputChunk, HookRunResult};
+use crate::api::hooks::{CommitHookEvent, GitHook, HookContent, HookOutputChunk, HookRunResult};
 use crate::api::lfs::LfsStatus;
 use crate::api::mutations::{
     AmendRequest, BranchCreateRequest, CheckoutRequest, CommitExecution, CommitRequest,
@@ -118,7 +118,7 @@ pub struct RemoveRepositoryResult {
     pub repo_root: String,
 }
 
-type LanguageStatsCache = Arc<Mutex<Vec<(PathBuf, Option<Vec<language::LanguageEntry>>)>>>;
+type LanguageStatsCache = Arc<Mutex<Vec<(PathBuf, Option<Vec<language::LanguageShare>>)>>>;
 
 pub struct Backend {
     scheduler: Scheduler,
@@ -1107,7 +1107,7 @@ impl Backend {
     }
 
     /// Discovers commit-pipeline hook scripts for manual runs; read-only.
-    pub async fn list_commit_hooks(&self, id: RepoId) -> Result<Vec<HookInfo>> {
+    pub async fn list_commit_hooks(&self, id: RepoId) -> Result<Vec<GitHook>> {
         let entry = self.registry.get(id)?;
         let path = entry.canonical_path.clone();
         self.scheduler
@@ -1754,7 +1754,7 @@ impl Backend {
 
     /// Language shares keyed by repo path, bounded FIFO cache; the backend
     /// is a process singleton, so one map covers all callers.
-    async fn cached_language_stats(&self, path: &Path) -> Option<Vec<language::LanguageEntry>> {
+    async fn cached_language_stats(&self, path: &Path) -> Option<Vec<language::LanguageShare>> {
         {
             let cache = self.language_stats_cache.lock().unwrap();
             if let Some((_, cached)) = cache.iter().find(|(key, _)| key == path) {

@@ -26,7 +26,7 @@ pub use forge_core::dto::{
 };
 pub use highlight::{HighlightedSnippet, SnippetStyle, highlight_code};
 pub use history::{BlameQuery, CommitDetailQuery, FileAtRevisionQuery, HistoryPageQuery};
-pub use hooks::{HookContent, HookInfo, HookRunResult};
+pub use hooks::{GitHook, HookContent, HookRunResult};
 pub use lfs::{LfsFileInfo, LfsStatus};
 pub use mutations::{
     AmendRequest, BranchCreateRequest, CheckoutRequest, CommitRequest, MergeAbortRequest,

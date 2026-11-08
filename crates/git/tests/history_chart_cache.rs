@@ -6,7 +6,7 @@ mod common;
 
 use common::TestRepo;
 use git::api::history::HistoryChartQuery;
-use git::domain::history::{BucketSize, HistoryChart};
+use git::domain::history::{ChartBucketSize, HistoryChart};
 use git::domain::ids::RepoId;
 use git::{Backend, BackendConfig};
 use std::path::PathBuf;
@@ -287,12 +287,12 @@ fn an_explicit_bucket_size_gets_its_own_cache_file() {
         &first,
         opened.id,
         HistoryChartQuery {
-            bucket: Some(BucketSize::Week),
+            bucket: Some(ChartBucketSize::Week),
             ..Default::default()
         },
     );
-    assert_eq!(auto.bucket_size, BucketSize::QuarterDay);
-    assert_eq!(weekly.bucket_size, BucketSize::Week);
+    assert_eq!(auto.bucket_size, ChartBucketSize::QuarterDay);
+    assert_eq!(weekly.bucket_size, ChartBucketSize::Week);
     assert_ne!(auto.buckets, weekly.buckets);
     assert_eq!(auto.total_commits, weekly.total_commits);
 
@@ -311,7 +311,7 @@ fn an_explicit_bucket_size_gets_its_own_cache_file() {
             &second,
             reopened.id,
             HistoryChartQuery {
-                bucket: Some(BucketSize::Week),
+                bucket: Some(ChartBucketSize::Week),
                 ..Default::default()
             }
         )
@@ -340,7 +340,7 @@ fn charts_are_written_under_the_name_the_next_request_looks_up() {
         &first,
         opened.id,
         HistoryChartQuery {
-            bucket: Some(BucketSize::Week),
+            bucket: Some(ChartBucketSize::Week),
             ..Default::default()
         },
     );

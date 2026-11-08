@@ -13,7 +13,7 @@ use rayon::prelude::*;
 
 use crate::api::history::HistoryChartQuery;
 use crate::domain::RevisionSpec;
-use crate::domain::history::{BucketSize, ChartBucket, HistoryChart};
+use crate::domain::history::{ChartBucket, ChartBucketSize, HistoryChart};
 use crate::domain::{Generation, SnapshotId};
 use crate::engines::git2::history::{commit_diff_stats, oid_bytes, resolve_tip};
 use crate::engines::git2::local;
@@ -177,7 +177,7 @@ pub fn history_chart(
                     return Ok(HistoryChart {
                         snapshot_id,
                         generation,
-                        bucket_size: BucketSize::Day,
+                        bucket_size: ChartBucketSize::Day,
                         buckets: Vec::new(),
                         total_commits: 0,
                     });
@@ -265,7 +265,7 @@ pub fn history_chart(
             return Ok(HistoryChart {
                 snapshot_id,
                 generation,
-                bucket_size: BucketSize::Day,
+                bucket_size: ChartBucketSize::Day,
                 buckets: Vec::new(),
                 total_commits: 0,
             });
@@ -367,61 +367,61 @@ fn compute_missing(
 /// even as a repository ages:
 /// monthly 10y+, weekly 6y+, half-weekly 3y+, two-daily 1y+, daily 180d+,
 /// half-daily 90d+, quarter-daily 14d+, hourly below.
-fn select_auto(first_seconds: i64, last_seconds: i64) -> BucketSize {
+fn select_auto(first_seconds: i64, last_seconds: i64) -> ChartBucketSize {
     let span = (last_seconds - first_seconds).max(0);
     if span >= 10 * SECONDS_PER_YEAR {
-        BucketSize::Month
+        ChartBucketSize::Month
     } else if span >= 6 * SECONDS_PER_YEAR {
-        BucketSize::Week
+        ChartBucketSize::Week
     } else if span >= 3 * SECONDS_PER_YEAR {
-        BucketSize::HalfWeek
+        ChartBucketSize::HalfWeek
     } else if span >= SECONDS_PER_YEAR {
-        BucketSize::TwoDays
+        ChartBucketSize::TwoDays
     } else if span >= 180 * SECONDS_PER_DAY {
-        BucketSize::Day
+        ChartBucketSize::Day
     } else if span >= 90 * SECONDS_PER_DAY {
-        BucketSize::HalfDay
+        ChartBucketSize::HalfDay
     } else if span >= 14 * SECONDS_PER_DAY {
-        BucketSize::QuarterDay
+        ChartBucketSize::QuarterDay
     } else {
-        BucketSize::Hour
+        ChartBucketSize::Hour
     }
 }
 
 /// Inclusive floor boundary of the bucket containing `seconds`, in UTC.
-fn bucket_start(seconds: i64, size: BucketSize) -> Result<i64> {
+fn bucket_start(seconds: i64, size: ChartBucketSize) -> Result<i64> {
     Ok(match size {
-        BucketSize::Hour => align_epoch(seconds, SECONDS_PER_HOUR),
-        BucketSize::QuarterDay => align_epoch(seconds, SECONDS_PER_QUARTER_DAY),
-        BucketSize::HalfDay => align_epoch(seconds, SECONDS_PER_HALF_DAY),
-        BucketSize::Day => align_epoch(seconds, SECONDS_PER_DAY),
-        BucketSize::TwoDays => align_epoch(seconds, SECONDS_PER_TWO_DAYS),
+        ChartBucketSize::Hour => align_epoch(seconds, SECONDS_PER_HOUR),
+        ChartBucketSize::QuarterDay => align_epoch(seconds, SECONDS_PER_QUARTER_DAY),
+        ChartBucketSize::HalfDay => align_epoch(seconds, SECONDS_PER_HALF_DAY),
+        ChartBucketSize::Day => align_epoch(seconds, SECONDS_PER_DAY),
+        ChartBucketSize::TwoDays => align_epoch(seconds, SECONDS_PER_TWO_DAYS),
         // Fixed half-week blocks from the epoch; boundaries fall on the same
         // clock time every 3.5 days.
-        BucketSize::HalfWeek => align_epoch(seconds, SECONDS_PER_HALF_WEEK),
-        BucketSize::Week => {
+        ChartBucketSize::HalfWeek => align_epoch(seconds, SECONDS_PER_HALF_WEEK),
+        ChartBucketSize::Week => {
             let day_start = align_epoch(seconds, SECONDS_PER_DAY);
             // Unix day 0 was a Thursday; step back to the week's Monday.
             let days = day_start.div_euclid(SECONDS_PER_DAY);
             day_start - (days + 3).rem_euclid(7) * SECONDS_PER_DAY
         }
-        BucketSize::Month => month_floor(seconds, 1)?,
-        BucketSize::Quarter => month_floor(seconds, 3)?,
+        ChartBucketSize::Month => month_floor(seconds, 1)?,
+        ChartBucketSize::Quarter => month_floor(seconds, 3)?,
     })
 }
 
 /// Exclusive end of the bucket starting at `start`.
-fn next_bucket_start(start: i64, size: BucketSize) -> Result<i64> {
+fn next_bucket_start(start: i64, size: ChartBucketSize) -> Result<i64> {
     Ok(match size {
-        BucketSize::Hour => start + SECONDS_PER_HOUR,
-        BucketSize::QuarterDay => start + SECONDS_PER_QUARTER_DAY,
-        BucketSize::HalfDay => start + SECONDS_PER_HALF_DAY,
-        BucketSize::Day => start + SECONDS_PER_DAY,
-        BucketSize::TwoDays => start + SECONDS_PER_TWO_DAYS,
-        BucketSize::HalfWeek => start + SECONDS_PER_HALF_WEEK,
-        BucketSize::Week => start + SECONDS_PER_WEEK,
-        BucketSize::Month => advance_months(start, 1)?,
-        BucketSize::Quarter => advance_months(start, 3)?,
+        ChartBucketSize::Hour => start + SECONDS_PER_HOUR,
+        ChartBucketSize::QuarterDay => start + SECONDS_PER_QUARTER_DAY,
+        ChartBucketSize::HalfDay => start + SECONDS_PER_HALF_DAY,
+        ChartBucketSize::Day => start + SECONDS_PER_DAY,
+        ChartBucketSize::TwoDays => start + SECONDS_PER_TWO_DAYS,
+        ChartBucketSize::HalfWeek => start + SECONDS_PER_HALF_WEEK,
+        ChartBucketSize::Week => start + SECONDS_PER_WEEK,
+        ChartBucketSize::Month => advance_months(start, 1)?,
+        ChartBucketSize::Quarter => advance_months(start, 3)?,
     })
 }
 
@@ -462,7 +462,7 @@ fn date_time(seconds: i64) -> Result<DateTime<Utc>> {
 /// `BTreeMap` over bucket boundaries. That costs one bucket's worth of memory
 /// instead of a full sort of every point, which matters once the walk is no
 /// longer capped.
-fn aggregate(points: &[CommitStatPoint], size: BucketSize) -> Result<Vec<ChartBucket>> {
+fn aggregate(points: &[CommitStatPoint], size: ChartBucketSize) -> Result<Vec<ChartBucket>> {
     let mut filled: BTreeMap<i64, ChartBucket> = BTreeMap::new();
     for point in points {
         let start = bucket_start(point.time_seconds, size)?;
@@ -540,74 +540,89 @@ mod tests {
     #[test]
     fn auto_selection_follows_age_thresholds() {
         // Every tier boundary, plus a sample inside each tier.
-        assert_eq!(select_auto(T, T + 11 * SECONDS_PER_YEAR), BucketSize::Month);
-        assert_eq!(select_auto(T, T + 10 * SECONDS_PER_YEAR), BucketSize::Month);
+        assert_eq!(
+            select_auto(T, T + 11 * SECONDS_PER_YEAR),
+            ChartBucketSize::Month
+        );
+        assert_eq!(
+            select_auto(T, T + 10 * SECONDS_PER_YEAR),
+            ChartBucketSize::Month
+        );
         assert_eq!(
             select_auto(T, T + 10 * SECONDS_PER_YEAR - SECONDS_PER_DAY),
-            BucketSize::Week
+            ChartBucketSize::Week
         );
-        assert_eq!(select_auto(T, T + 6 * SECONDS_PER_YEAR), BucketSize::Week);
+        assert_eq!(
+            select_auto(T, T + 6 * SECONDS_PER_YEAR),
+            ChartBucketSize::Week
+        );
         assert_eq!(
             select_auto(T, T + 6 * SECONDS_PER_YEAR - SECONDS_PER_DAY),
-            BucketSize::HalfWeek
+            ChartBucketSize::HalfWeek
         );
         assert_eq!(
             select_auto(T, T + 3 * SECONDS_PER_YEAR),
-            BucketSize::HalfWeek
+            ChartBucketSize::HalfWeek
         );
         assert_eq!(
             select_auto(T, T + 3 * SECONDS_PER_YEAR - SECONDS_PER_DAY),
-            BucketSize::TwoDays
+            ChartBucketSize::TwoDays
         );
         assert_eq!(
             select_auto(T, T + 2 * SECONDS_PER_YEAR),
-            BucketSize::TwoDays
+            ChartBucketSize::TwoDays
         );
-        assert_eq!(select_auto(T, T + SECONDS_PER_YEAR), BucketSize::TwoDays);
+        assert_eq!(
+            select_auto(T, T + SECONDS_PER_YEAR),
+            ChartBucketSize::TwoDays
+        );
         assert_eq!(
             select_auto(T, T + SECONDS_PER_YEAR - SECONDS_PER_DAY),
-            BucketSize::Day
+            ChartBucketSize::Day
         );
-        assert_eq!(select_auto(T, T + 180 * SECONDS_PER_DAY), BucketSize::Day);
+        assert_eq!(
+            select_auto(T, T + 180 * SECONDS_PER_DAY),
+            ChartBucketSize::Day
+        );
         assert_eq!(
             select_auto(T, T + 90 * SECONDS_PER_DAY),
-            BucketSize::HalfDay
+            ChartBucketSize::HalfDay
         );
         assert_eq!(
             select_auto(T, T + 90 * SECONDS_PER_DAY - SECONDS_PER_DAY),
-            BucketSize::QuarterDay
+            ChartBucketSize::QuarterDay
         );
         assert_eq!(
             select_auto(T, T + 14 * SECONDS_PER_DAY),
-            BucketSize::QuarterDay
+            ChartBucketSize::QuarterDay
         );
         assert_eq!(
             select_auto(T, T + 14 * SECONDS_PER_DAY - SECONDS_PER_HOUR),
-            BucketSize::Hour
+            ChartBucketSize::Hour
         );
-        assert_eq!(select_auto(T, T), BucketSize::Hour);
+        assert_eq!(select_auto(T, T), ChartBucketSize::Hour);
     }
 
     #[test]
     fn hour_day_alignment_is_epoch_flooring() {
         assert_eq!(
-            bucket_start(T, BucketSize::Hour).unwrap(),
+            bucket_start(T, ChartBucketSize::Hour).unwrap(),
             align_epoch(T, 3600)
         );
         assert_eq!(
-            bucket_start(T, BucketSize::Day).unwrap(),
+            bucket_start(T, ChartBucketSize::Day).unwrap(),
             align_epoch(T, 86400)
         );
     }
 
     #[test]
     fn weeks_align_to_mondays() {
-        let start = bucket_start(T, BucketSize::Week).unwrap();
+        let start = bucket_start(T, ChartBucketSize::Week).unwrap();
         let dt = DateTime::<Utc>::from_timestamp(start, 0).unwrap();
         assert_eq!(dt.weekday(), chrono::Weekday::Mon);
         assert!(start <= T && T - start < SECONDS_PER_WEEK);
         // Pre-epoch timestamps still floor onto a Monday.
-        let ancient = bucket_start(-1_000_000_000, BucketSize::Week).unwrap();
+        let ancient = bucket_start(-1_000_000_000, ChartBucketSize::Week).unwrap();
         let dt = DateTime::<Utc>::from_timestamp(ancient, 0).unwrap();
         assert_eq!(dt.weekday(), chrono::Weekday::Mon);
     }
@@ -615,19 +630,25 @@ mod tests {
     #[test]
     fn month_and_quarter_floor_to_calendar_starts() {
         // 2024-03-15 -> March 1st.
-        assert_eq!(bucket_start(T, BucketSize::Month).unwrap(), 1_709_251_200);
+        assert_eq!(
+            bucket_start(T, ChartBucketSize::Month).unwrap(),
+            1_709_251_200
+        );
         // ...and Q1 starts even earlier (January 1st).
-        assert_eq!(bucket_start(T, BucketSize::Quarter).unwrap(), 1_704_067_200);
+        assert_eq!(
+            bucket_start(T, ChartBucketSize::Quarter).unwrap(),
+            1_704_067_200
+        );
     }
 
     #[test]
     fn calendar_buckets_step_across_year_boundaries() {
         let dec = utc_month_start(2025, 12).unwrap();
-        let next = next_bucket_start(dec, BucketSize::Month).unwrap();
+        let next = next_bucket_start(dec, ChartBucketSize::Month).unwrap();
         assert_eq!(next, utc_month_start(2026, 1).unwrap());
         let q = utc_month_start(2025, 11).unwrap(); // Q4
         assert_eq!(
-            next_bucket_start(q, BucketSize::Quarter).unwrap(),
+            next_bucket_start(q, ChartBucketSize::Quarter).unwrap(),
             utc_month_start(2026, 2).unwrap()
         );
     }
@@ -639,7 +660,7 @@ mod tests {
             point(T + SECONDS_PER_HOUR, 5, 1),
             point(T + SECONDS_PER_DAY * 3, 7, 0), // two empty days in between
         ];
-        let buckets = aggregate(&points, BucketSize::Hour).unwrap();
+        let buckets = aggregate(&points, ChartBucketSize::Hour).unwrap();
         assert_eq!(buckets.len(), 73); // hours 0..72 inclusive
         assert_eq!(buckets[0].commits, 1);
         assert_eq!(buckets[0].additions, 10);
@@ -665,10 +686,10 @@ mod tests {
         ordered.reverse();
 
         for size in [
-            BucketSize::Hour,
-            BucketSize::Day,
-            BucketSize::Week,
-            BucketSize::Month,
+            ChartBucketSize::Hour,
+            ChartBucketSize::Day,
+            ChartBucketSize::Week,
+            ChartBucketSize::Month,
         ] {
             let a = aggregate(&ordered, size).unwrap();
             let b = aggregate(&shuffled, size).unwrap();
@@ -772,7 +793,7 @@ mod tests {
 
         assert_eq!(chart.total_commits, 3);
         // A 40-day span lands in the quarter-day tier (14d..90d).
-        assert_eq!(chart.bucket_size, BucketSize::QuarterDay);
+        assert_eq!(chart.bucket_size, ChartBucketSize::QuarterDay);
         // Zero-filled quarter-days 0..=160: commits on exact UTC midnights
         // align to quarter-day boundaries.
         assert_eq!(chart.buckets.len(), 161);
@@ -808,7 +829,7 @@ mod tests {
 
         // An explicit unit overrides the auto selection.
         let weekly_query = HistoryChartQuery {
-            bucket: Some(BucketSize::Week),
+            bucket: Some(ChartBucketSize::Week),
             ..Default::default()
         };
         let weekly = history_chart(
@@ -819,7 +840,7 @@ mod tests {
             &cache,
         )
         .unwrap();
-        assert_eq!(weekly.bucket_size, BucketSize::Week);
+        assert_eq!(weekly.bucket_size, ChartBucketSize::Week);
         // Day 0 (2024-03-15) is a Friday, so its week bucket begins on the
         // preceding Monday and day 40 lands in the 7th week overall.
         assert_eq!(weekly.buckets.len(), 7);

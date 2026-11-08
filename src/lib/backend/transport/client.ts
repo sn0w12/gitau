@@ -1,163 +1,82 @@
 import { Channel } from "@tauri-apps/api/core";
 
 import type {
-    AccountProfile,
-    AheadBehind,
-    BranchInfo,
-    CachedIcon,
     CloneEvent,
-    CommitDetail,
-    CommitExecution,
     CommitHookEvent,
-    CommitSummary,
-    ConflictFile,
     CreatePullRequestBody,
     CreateRepositoryRequest,
-    CreateRepositoryResult,
     CheckoutMode,
     CredentialRequest,
-    AuthChallenge,
-    ConnectionProfile,
-    DiffContextResult,
     DiffEvent,
-    DiffImage,
     DiffRequest,
-    FileContent,
-    IssueComment,
-    CheckRun,
-    CheckRunDetail,
-    CheckRunLog,
-    CommitStatus,
-    IssueDetail,
-    IssueEvent,
-    Label,
-    Org,
-    PullRequestCommit,
-    PullRequestDetail,
-    PullRequestReview,
-    PullRequestReviewComment,
-    RepoPermissions,
     GraphEvent,
-    HighlightedSnippet,
     GraphQuery,
-    GraphRangeResult,
-    GitHook,
-    GitignoreTemplateInfo,
-    HistoryChart,
     HistoryChartQuery,
-    HistoryPage,
     HistoryPageQuery,
-    HookContent,
     HookOutputChunk,
-    HookRunResult,
-    WorkflowRun,
-    LicenseTemplateInfo,
     MergePullRequestBody,
-    MergePullRequestResult,
-    NotificationPage,
-    Oid,
-    OpenedRepository,
-    OperationState,
-    PublishResult,
-    PushOutcome,
-    SearchIssuePage,
-    SearchPullRequestPage,
-    RangeResult,
-    RepoListing,
-    RepoSnapshot,
-    RemoteInfo,
-    RemoteRepoInfo,
     RepositoryInvalidation,
-    RemoveRepositoryResult,
     ResetKind,
     ResolveSide,
-    ReadmeContent,
     SessionDocument,
-    SessionRepository,
     SettingValue,
-    SettingsSnapshot,
-    StashEntry,
     StatusOptions,
-    StatusReport,
-    TagInfo,
     UpdateIssueBody,
     UpdatePullRequestBody,
-    ValuesSnapshot,
-    WorkflowOutcome,
-    WorktreeInfo,
-    ProviderDescriptor,
 } from "../protocol";
-import { invokeCommand } from "./invoke";
+import { commands } from "./commands.generated";
 import { asResult } from "./result";
 import type { Result } from "./result";
 
 /**
- * The single place where raw Tauri command names exist. Everything else in
- * the app talks to this typed client.
- *
- * Every method returns a `Result`: the client NEVER rejects, so callers
- * are forced by the compiler to narrow on `ok` before using a value.
+ * The ergonomic backend client. Every method returns a `Result`: the client
+ * NEVER rejects, so callers are forced by the compiler to narrow on `ok`
+ * before using a value.
  */
 function createRawBackendClient() {
     return {
         repositories: {
             open: (path: string) =>
-                invokeCommand<OpenedRepository>("git_open_repository", {
-                    args: { request: { path } },
-                }),
+                commands.git_open_repository({ request: { path } }),
             close: (repoId: number) =>
-                invokeCommand<boolean>("git_close_repository", {
-                    args: { repoId },
-                }),
+                commands.git_close_repository({ repoId }),
             remove: (path: string, moveToTrash: boolean) =>
-                invokeCommand<RemoveRepositoryResult>("git_remove_repository", {
-                    args: { path, moveToTrash },
-                }),
+                commands.git_remove_repository({ path, moveToTrash }),
             snapshot: (repoId: number) =>
-                invokeCommand<RepoSnapshot>("git_repository_snapshot", {
-                    args: { repoId },
-                }),
-            readme: (repoId: number) =>
-                invokeCommand<ReadmeContent | null>("git_readme", {
-                    args: { repoId },
-                }),
+                commands.git_repository_snapshot({ repoId }),
+            readme: (repoId: number) => commands.git_readme({ repoId }),
             worktreeImage: (repoId: number, path: string) =>
-                invokeCommand<string | null>("git_read_worktree_image", {
-                    args: { repoId, path },
-                }),
+                commands.git_read_worktree_image({ repoId, path }),
             create: (request: CreateRepositoryRequest) =>
-                invokeCommand<CreateRepositoryResult>("git_init_repository", {
-                    args: { request },
-                }),
-            gitignoreTemplates: () =>
-                invokeCommand<GitignoreTemplateInfo[]>(
-                    "git_list_gitignore_templates"
-                ),
-            licenses: () =>
-                invokeCommand<LicenseTemplateInfo[]>("git_list_licenses"),
+                commands.git_init_repository({ request }),
+            gitignoreTemplates: () => commands.git_list_gitignore_templates(),
+            licenses: () => commands.git_list_licenses(),
         },
 
         changes: {
             status: (repoId: number, options?: StatusOptions) =>
-                invokeCommand<StatusReport>("git_status", {
-                    args: { repoId, options },
-                }),
+                commands.git_status({ repoId, options }),
             stagePaths: (
                 repoId: number,
                 paths: string[],
                 all: boolean | undefined,
                 expectedGeneration?: number
             ) =>
-                invokeCommand<void>("git_stage_paths", {
-                    args: { repoId, paths, all, expectedGeneration },
+                commands.git_stage_paths({
+                    repoId,
+                    paths,
+                    all,
+                    expectedGeneration,
                 }),
             unstagePaths: (
                 repoId: number,
                 paths: string[],
                 expectedGeneration?: number
             ) =>
-                invokeCommand<void>("git_unstage_paths", {
-                    args: { repoId, paths, expectedGeneration },
+                commands.git_unstage_paths({
+                    repoId,
+                    paths,
+                    expectedGeneration,
                 }),
             discardChanges: (
                 repoId: number,
@@ -165,16 +84,17 @@ function createRawBackendClient() {
                 all: boolean | undefined,
                 expectedGeneration?: number
             ) =>
-                invokeCommand<void>("git_discard_changes", {
-                    args: { repoId, paths, all, expectedGeneration },
+                commands.git_discard_changes({
+                    repoId,
+                    paths,
+                    all,
+                    expectedGeneration,
                 }),
         },
 
         hooks: {
             list: (repoId: number) =>
-                invokeCommand<GitHook[]>("git_list_commit_hooks", {
-                    args: { repoId },
-                }),
+                commands.git_list_commit_hooks({ repoId }),
             /**
              * Runs one hook, handing `onLine` each output line as the process
              * writes it. Resolves once every line has been delivered, with a
@@ -187,21 +107,16 @@ function createRawBackendClient() {
             ) => {
                 const channel = new Channel<HookOutputChunk>();
                 channel.onmessage = onLine;
-                return invokeCommand<HookRunResult>(
-                    "git_run_commit_hook_streamed",
-                    {
-                        args: { repoId, hook, onEvent: channel },
-                    }
-                );
+                return commands.git_run_commit_hook_streamed({
+                    repoId,
+                    hook,
+                    onEvent: channel,
+                });
             },
             read: (repoId: number, hook: string) =>
-                invokeCommand<HookContent>("git_read_commit_hook", {
-                    args: { repoId, hook },
-                }),
+                commands.git_read_commit_hook({ repoId, hook }),
             write: (repoId: number, hook: string, content: string) =>
-                invokeCommand<void>("git_write_commit_hook", {
-                    args: { repoId, hook, content },
-                }),
+                commands.git_write_commit_hook({ repoId, hook, content }),
         },
 
         diff: {
@@ -216,21 +131,23 @@ function createRawBackendClient() {
             ): Promise<number> => {
                 const channel = new Channel<DiffEvent>();
                 channel.onmessage = onEvent;
-                return invokeCommand<number>("git_open_diff", {
-                    args: { repoId, request, onEvent: channel },
+                return commands.git_open_diff({
+                    repoId,
+                    request,
+                    onEvent: channel,
                 });
             },
             readImage: (operationId: number, sectionId: number) =>
-                invokeCommand<DiffImage | null>("git_read_diff_image", {
-                    args: { operationId, sectionId },
-                }),
+                commands.git_read_diff_image({ operationId, sectionId }),
             readRange: (
                 operationId: number,
                 startRow: number,
                 maxRows: number
             ) =>
-                invokeCommand<RangeResult>("git_read_diff_range", {
-                    args: { operationId, startRow, maxRows },
+                commands.git_read_diff_range({
+                    operationId,
+                    startRow,
+                    maxRows,
                 }),
             readContext: (
                 operationId: number,
@@ -239,19 +156,15 @@ function createRawBackendClient() {
                 newStart: number,
                 count: number
             ) =>
-                invokeCommand<DiffContextResult>("git_read_diff_context", {
-                    args: {
-                        operationId,
-                        sectionId,
-                        oldStart,
-                        newStart,
-                        count,
-                    },
+                commands.git_read_diff_context({
+                    operationId,
+                    sectionId,
+                    oldStart,
+                    newStart,
+                    count,
                 }),
             cancel: (operationId: number) =>
-                invokeCommand<boolean>("git_cancel_operation", {
-                    args: { operationId },
-                }),
+                commands.git_cancel_operation({ operationId }),
         },
 
         graph: {
@@ -263,61 +176,51 @@ function createRawBackendClient() {
             ): Promise<number> => {
                 const channel = new Channel<GraphEvent>();
                 channel.onmessage = onEvent;
-                return invokeCommand<number>("git_open_graph", {
-                    args: { repoId, query, onEvent: channel },
+                return commands.git_open_graph({
+                    repoId,
+                    query,
+                    onEvent: channel,
                 });
             },
             readImage: (operationId: number, sectionId: number) =>
-                invokeCommand<DiffImage | null>("git_read_diff_image", {
-                    args: { operationId, sectionId },
-                }),
+                commands.git_read_diff_image({ operationId, sectionId }),
             readRange: (
                 operationId: number,
                 startRow: number,
                 maxRows: number
             ) =>
-                invokeCommand<GraphRangeResult>("git_read_graph_range", {
-                    args: { operationId, startRow, maxRows },
+                commands.git_read_graph_range({
+                    operationId,
+                    startRow,
+                    maxRows,
                 }),
             cancel: (operationId: number) =>
-                invokeCommand<boolean>("git_cancel_operation", {
-                    args: { operationId },
-                }),
+                commands.git_cancel_operation({ operationId }),
         },
 
         history: {
             page: (repoId: number, query: HistoryPageQuery = {}) =>
-                invokeCommand<HistoryPage>("git_history_page", {
-                    args: { repoId, query },
-                }),
+                commands.git_history_page({ repoId, query }),
             chart: (repoId: number, query: HistoryChartQuery = {}) =>
-                invokeCommand<HistoryChart>("git_history_chart", {
-                    args: { repoId, query },
-                }),
+                commands.git_history_chart({ repoId, query }),
             commitDetail: (
                 repoId: number,
                 revision: string,
                 detectRenames?: boolean
             ) =>
-                invokeCommand<CommitDetail>("git_commit_detail", {
-                    args: { repoId, revision, detectRenames },
-                }),
+                commands.git_commit_detail({ repoId, revision, detectRenames }),
             fileAtRevision: (repoId: number, revision: string, path: string) =>
-                invokeCommand<FileContent>("git_file_at_revision", {
-                    args: { repoId, revision, path },
-                }),
+                commands.git_file_at_revision({ repoId, revision, path }),
+            blame: (repoId: number, path: string, revision?: string) =>
+                commands.git_blame({ repoId, path, revision }),
         },
 
         refs: {
             listBranchesAndTags: (repoId: number) =>
-                invokeCommand<RepoListing>("git_list_branches_and_tags", {
-                    args: { repoId },
-                }),
+                commands.git_list_branches_and_tags({ repoId }),
             /** Commits `head` has that `base` lacks, and the reverse. */
             aheadBehind: (repoId: number, head: string, base: string) =>
-                invokeCommand<AheadBehind>("git_branch_ahead_behind", {
-                    args: { repoId, head, base },
-                }),
+                commands.git_branch_ahead_behind({ repoId, head, base }),
             createBranch: (
                 repoId: number,
                 name: string,
@@ -326,15 +229,13 @@ function createRawBackendClient() {
                 checkout: boolean | undefined,
                 expectedGeneration?: number
             ) =>
-                invokeCommand<BranchInfo>("git_create_branch", {
-                    args: {
-                        repoId,
-                        name,
-                        startPoint,
-                        force,
-                        checkout,
-                        expectedGeneration,
-                    },
+                commands.git_create_branch({
+                    repoId,
+                    name,
+                    startPoint,
+                    force,
+                    checkout,
+                    expectedGeneration,
                 }),
             deleteBranch: (
                 repoId: number,
@@ -342,8 +243,11 @@ function createRawBackendClient() {
                 force: boolean | undefined,
                 expectedGeneration?: number
             ) =>
-                invokeCommand<void>("git_delete_branch", {
-                    args: { repoId, name, force, expectedGeneration },
+                commands.git_delete_branch({
+                    repoId,
+                    name,
+                    force,
+                    expectedGeneration,
                 }),
             renameBranch: (
                 repoId: number,
@@ -352,14 +256,12 @@ function createRawBackendClient() {
                 force: boolean | undefined,
                 expectedGeneration?: number
             ) =>
-                invokeCommand<BranchInfo>("git_rename_branch", {
-                    args: {
-                        repoId,
-                        oldName,
-                        newName,
-                        force,
-                        expectedGeneration,
-                    },
+                commands.git_rename_branch({
+                    repoId,
+                    oldName,
+                    newName,
+                    force,
+                    expectedGeneration,
                 }),
             createTag: (
                 repoId: number,
@@ -369,24 +271,19 @@ function createRawBackendClient() {
                 force: boolean | undefined,
                 expectedGeneration?: number
             ) =>
-                invokeCommand<TagInfo>("git_create_tag", {
-                    args: {
-                        repoId,
-                        name,
-                        target,
-                        message,
-                        force,
-                        expectedGeneration,
-                    },
+                commands.git_create_tag({
+                    repoId,
+                    name,
+                    target,
+                    message,
+                    force,
+                    expectedGeneration,
                 }),
             deleteTag: (
                 repoId: number,
                 name: string,
                 expectedGeneration?: number
-            ) =>
-                invokeCommand<void>("git_delete_tag", {
-                    args: { repoId, name, expectedGeneration },
-                }),
+            ) => commands.git_delete_tag({ repoId, name, expectedGeneration }),
         },
 
         mutations: {
@@ -415,14 +312,12 @@ function createRawBackendClient() {
                 const { onHookEvent, ...wire } = options;
                 const channel = new Channel<CommitHookEvent>();
                 channel.onmessage = onHookEvent ?? ignoreHookEvent;
-                return invokeCommand<CommitExecution>("git_commit", {
-                    args: {
-                        repoId,
-                        message,
-                        ...wire,
-                        expectedGeneration,
-                        onEvent: channel,
-                    },
+                return commands.git_commit({
+                    repoId,
+                    message,
+                    ...wire,
+                    expectedGeneration,
+                    onEvent: channel,
                 });
             },
             amend: (
@@ -430,8 +325,10 @@ function createRawBackendClient() {
                 message?: string,
                 expectedGeneration?: number
             ) =>
-                invokeCommand<CommitSummary>("git_amend_commit", {
-                    args: { repoId, message, expectedGeneration },
+                commands.git_amend_commit({
+                    repoId,
+                    message,
+                    expectedGeneration,
                 }),
             checkout: (
                 repoId: number,
@@ -443,8 +340,11 @@ function createRawBackendClient() {
                 } = {},
                 expectedGeneration?: number
             ) =>
-                invokeCommand<void>("git_checkout", {
-                    args: { repoId, target, ...options, expectedGeneration },
+                commands.git_checkout({
+                    repoId,
+                    target,
+                    ...options,
+                    expectedGeneration,
                 }),
             reset: (
                 repoId: number,
@@ -452,16 +352,16 @@ function createRawBackendClient() {
                 target: string,
                 expectedGeneration?: number
             ) =>
-                invokeCommand<void>("git_reset", {
-                    args: { repoId, kind, target, expectedGeneration },
+                commands.git_reset({
+                    repoId,
+                    kind,
+                    target,
+                    expectedGeneration,
                 }),
         },
 
         worktrees: {
-            list: (repoId: number) =>
-                invokeCommand<WorktreeInfo[]>("git_list_worktrees", {
-                    args: { repoId },
-                }),
+            list: (repoId: number) => commands.git_list_worktrees({ repoId }),
             create: (
                 repoId: number,
                 name: string,
@@ -469,14 +369,12 @@ function createRawBackendClient() {
                 startPoint: string | undefined,
                 expectedGeneration?: number
             ) =>
-                invokeCommand<WorktreeInfo>("git_create_worktree", {
-                    args: {
-                        repoId,
-                        name,
-                        path,
-                        startPoint,
-                        expectedGeneration,
-                    },
+                commands.git_create_worktree({
+                    repoId,
+                    name,
+                    path,
+                    startPoint,
+                    expectedGeneration,
                 }),
             remove: (
                 repoId: number,
@@ -484,8 +382,11 @@ function createRawBackendClient() {
                 force: boolean | undefined,
                 expectedGeneration?: number
             ) =>
-                invokeCommand<void>("git_remove_worktree", {
-                    args: { repoId, name, force, expectedGeneration },
+                commands.git_remove_worktree({
+                    repoId,
+                    name,
+                    force,
+                    expectedGeneration,
                 }),
             lock: (
                 repoId: number,
@@ -493,17 +394,60 @@ function createRawBackendClient() {
                 reason: string | undefined,
                 expectedGeneration?: number
             ) =>
-                invokeCommand<void>("git_lock_worktree", {
-                    args: { repoId, name, reason, expectedGeneration },
+                commands.git_lock_worktree({
+                    repoId,
+                    name,
+                    reason,
+                    expectedGeneration,
                 }),
             unlock: (
                 repoId: number,
                 name: string,
                 expectedGeneration?: number
             ) =>
-                invokeCommand<void>("git_unlock_worktree", {
-                    args: { repoId, name, expectedGeneration },
+                commands.git_unlock_worktree({
+                    repoId,
+                    name,
+                    expectedGeneration,
                 }),
+        },
+
+        submodules: {
+            list: (repoId: number) => commands.git_list_submodules({ repoId }),
+            add: (
+                repoId: number,
+                url: string,
+                path: string,
+                branch?: string,
+                expectedGeneration?: number
+            ) =>
+                commands.git_add_submodule({
+                    repoId,
+                    url,
+                    path,
+                    branch,
+                    expectedGeneration,
+                }),
+            update: (
+                repoId: number,
+                options: {
+                    names?: string[];
+                    recursive?: boolean;
+                    init?: boolean;
+                } = {},
+                expectedGeneration?: number
+            ) =>
+                commands.git_update_submodules({
+                    repoId,
+                    ...options,
+                    expectedGeneration,
+                }),
+        },
+
+        lfs: {
+            status: (repoId: number) => commands.git_lfs_status({ repoId }),
+            smudge: (repoId: number, expectedGeneration?: number) =>
+                commands.git_lfs_smudge({ repoId, expectedGeneration }),
         },
 
         workflows: {
@@ -517,45 +461,65 @@ function createRawBackendClient() {
                 } = {},
                 expectedGeneration?: number
             ) =>
-                invokeCommand<WorkflowOutcome>("git_merge", {
-                    args: { repoId, target, ...options, expectedGeneration },
+                commands.git_merge({
+                    repoId,
+                    target,
+                    ...options,
+                    expectedGeneration,
                 }),
             mergeContinue: (
                 repoId: number,
                 message?: string,
                 expectedGeneration?: number
             ) =>
-                invokeCommand<WorkflowOutcome>("git_merge_continue", {
-                    args: { repoId, message, expectedGeneration },
+                commands.git_merge_continue({
+                    repoId,
+                    message,
+                    expectedGeneration,
                 }),
             mergeAbort: (repoId: number, expectedGeneration?: number) =>
-                invokeCommand<WorkflowOutcome>("git_merge_abort", {
-                    args: { repoId, expectedGeneration },
+                commands.git_merge_abort({ repoId, expectedGeneration }),
+            startRebase: (
+                repoId: number,
+                upstream: string,
+                onto?: string,
+                expectedGeneration?: number
+            ) =>
+                commands.git_start_rebase({
+                    repoId,
+                    upstream,
+                    onto,
+                    expectedGeneration,
                 }),
+            continueRebase: (repoId: number, expectedGeneration?: number) =>
+                commands.git_continue_rebase({ repoId, expectedGeneration }),
+            abortRebase: (repoId: number, expectedGeneration?: number) =>
+                commands.git_abort_rebase({ repoId, expectedGeneration }),
             operationState: (repoId: number) =>
-                invokeCommand<OperationState>("git_operation_state", {
-                    args: { repoId },
-                }),
+                commands.git_operation_state({ repoId }),
             resolveConflict: (
                 repoId: number,
                 path: string,
                 side: ResolveSide,
                 expectedGeneration?: number
             ) =>
-                invokeCommand<void>("git_resolve_conflict", {
-                    args: { repoId, path, side, expectedGeneration },
+                commands.git_resolve_conflict({
+                    repoId,
+                    path,
+                    side,
+                    expectedGeneration,
                 }),
             conflictFile: (repoId: number, path: string, stage: number) =>
-                invokeCommand<ConflictFile>("git_conflict_file", {
-                    args: { repoId, path, stage },
-                }),
+                commands.git_conflict_file({ repoId, path, stage }),
             cherryPick: (
                 repoId: number,
                 target: string,
                 expectedGeneration?: number
             ) =>
-                invokeCommand<WorkflowOutcome>("git_cherry_pick", {
-                    args: { repoId, target, expectedGeneration },
+                commands.git_cherry_pick({
+                    repoId,
+                    target,
+                    expectedGeneration,
                 }),
             revert: (
                 repoId: number,
@@ -563,8 +527,11 @@ function createRawBackendClient() {
                 parentIndex?: number,
                 expectedGeneration?: number
             ) =>
-                invokeCommand<WorkflowOutcome>("git_revert", {
-                    args: { repoId, target, parentIndex, expectedGeneration },
+                commands.git_revert({
+                    repoId,
+                    target,
+                    parentIndex,
+                    expectedGeneration,
                 }),
             stashPush: (
                 repoId: number,
@@ -576,8 +543,10 @@ function createRawBackendClient() {
                 } = {},
                 expectedGeneration?: number
             ) =>
-                invokeCommand<Oid>("git_stash_push", {
-                    args: { repoId, ...options, expectedGeneration },
+                commands.git_stash_push({
+                    repoId,
+                    ...options,
+                    expectedGeneration,
                 }),
             stashPop: (
                 repoId: number,
@@ -585,51 +554,46 @@ function createRawBackendClient() {
                 action?: "pop" | "apply" | "drop",
                 expectedGeneration?: number
             ) =>
-                invokeCommand<StashEntry[]>("git_stash_pop", {
-                    args: { repoId, index, action, expectedGeneration },
+                commands.git_stash_pop({
+                    repoId,
+                    index,
+                    action,
+                    expectedGeneration,
                 }),
-            stashList: (repoId: number) =>
-                invokeCommand<StashEntry[]>("git_stash_list", {
-                    args: { repoId },
-                }),
+            stashList: (repoId: number) => commands.git_stash_list({ repoId }),
         },
 
         remoteInfo: {
-            info: (repoId: number) =>
-                invokeCommand<RemoteRepoInfo>("git_remote_repo_info", {
-                    args: { repoId },
-                }),
+            info: (repoId: number) => commands.git_remote_repo_info({ repoId }),
             byPath: (path: string) =>
-                invokeCommand<RemoteRepoInfo>("git_remote_repo_info_by_path", {
-                    args: { path },
-                }),
+                commands.git_remote_repo_info_by_path({ path }),
         },
 
         remotes: {
-            list: (repoId: number) =>
-                invokeCommand<RemoteInfo[]>("git_list_remotes", {
-                    args: { repoId },
-                }),
+            list: (repoId: number) => commands.git_list_remotes({ repoId }),
             listByPath: (path: string) =>
-                invokeCommand<RemoteInfo[]>("git_list_remotes_by_path", {
-                    args: { path },
-                }),
+                commands.git_list_remotes_by_path({ path }),
             add: (
                 repoId: number,
                 name: string,
                 url: string,
                 expectedGeneration?: number
             ) =>
-                invokeCommand<void>("git_add_remote", {
-                    args: { repoId, name, url, expectedGeneration },
+                commands.git_add_remote({
+                    repoId,
+                    name,
+                    url,
+                    expectedGeneration,
                 }),
             remove: (
                 repoId: number,
                 name: string,
                 expectedGeneration?: number
             ) =>
-                invokeCommand<void>("git_remove_remote", {
-                    args: { repoId, name, expectedGeneration },
+                commands.git_remove_remote({
+                    repoId,
+                    name,
+                    expectedGeneration,
                 }),
             setUrl: (
                 repoId: number,
@@ -637,8 +601,11 @@ function createRawBackendClient() {
                 url: string,
                 expectedGeneration?: number
             ) =>
-                invokeCommand<void>("git_set_remote_url", {
-                    args: { repoId, name, url, expectedGeneration },
+                commands.git_set_remote_url({
+                    repoId,
+                    name,
+                    url,
+                    expectedGeneration,
                 }),
             fetch: (
                 repoId: number,
@@ -647,10 +614,7 @@ function createRawBackendClient() {
                     prune?: boolean;
                     credential?: CredentialRequest;
                 } = {}
-            ) =>
-                invokeCommand<void>("git_fetch", {
-                    args: { repoId, ...options },
-                }),
+            ) => commands.git_fetch({ repoId, ...options }),
             push: (
                 repoId: number,
                 options: {
@@ -660,10 +624,7 @@ function createRawBackendClient() {
                     setUpstream?: boolean;
                     credential?: CredentialRequest;
                 } = {}
-            ) =>
-                invokeCommand<PushOutcome[]>("git_push", {
-                    args: { repoId, ...options },
-                }),
+            ) => commands.git_push({ repoId, ...options }),
             pull: (
                 repoId: number,
                 options: {
@@ -674,10 +635,7 @@ function createRawBackendClient() {
                     credential?: CredentialRequest;
                 } = {},
                 expectedGeneration?: number
-            ) =>
-                invokeCommand<WorkflowOutcome>("git_pull", {
-                    args: { repoId, ...options, expectedGeneration },
-                }),
+            ) => commands.git_pull({ repoId, ...options, expectedGeneration }),
             /**
              * Starts a clone. Resolves with the operation id immediately;
              * CloneEvent updates arrive on the callback until a terminal
@@ -689,64 +647,40 @@ function createRawBackendClient() {
             ) => {
                 const channel = new Channel<CloneEvent>();
                 channel.onmessage = onEvent;
-                return invokeCommand<number>("git_clone", {
-                    args: { request, onEvent: channel },
-                });
+                return commands.git_clone({ request, onEvent: channel });
             },
         },
 
         operations: {
             cancel: (operationId: number) =>
-                invokeCommand<boolean>("git_cancel_operation", {
-                    args: { operationId },
-                }),
+                commands.git_cancel_operation({ operationId }),
         },
 
         highlight: {
             code: (language: string, text: string) =>
-                invokeCommand<HighlightedSnippet>("highlight_code", {
-                    args: { language, text },
-                }),
+                commands.highlight_code({ language, text }),
         },
 
         forge: {
-            providers: () =>
-                invokeCommand<ProviderDescriptor[]>("forge_providers"),
-            connections: () =>
-                invokeCommand<ConnectionProfile[]>("forge_connections"),
-            account: (provider: string) =>
-                invokeCommand<AccountProfile | null>("forge_account", {
-                    args: { provider },
-                }),
+            providers: () => commands.forge_providers(),
+            connections: () => commands.forge_connections(),
+            account: (provider: string) => commands.forge_account({ provider }),
             beginSignIn: (provider: string, host: string) =>
-                invokeCommand<AuthChallenge>("forge_begin_sign_in", {
-                    args: { provider, host },
-                }),
-            completeSignIn: () =>
-                invokeCommand<ConnectionProfile>("forge_complete_sign_in"),
-            cancelSignIn: () => invokeCommand<void>("forge_cancel_sign_in"),
+                commands.forge_begin_sign_in({ provider, host }),
+            completeSignIn: () => commands.forge_complete_sign_in(),
+            cancelSignIn: () => commands.forge_cancel_sign_in(),
             signOut: (provider: string, host: string) =>
-                invokeCommand<void>("forge_sign_out", {
-                    args: { provider, host },
-                }),
+                commands.forge_sign_out({ provider, host }),
             listOrgs: (provider: string) =>
-                invokeCommand<Org[]>("forge_list_orgs", { args: { provider } }),
+                commands.forge_list_orgs({ provider }),
             listNotifications: (provider: string, page?: number) =>
-                invokeCommand<NotificationPage>("forge_list_notifications", {
-                    args: { provider, page },
-                }),
+                commands.forge_list_notifications({ provider, page }),
             markNotificationRead: (provider: string, threadId: string) =>
-                invokeCommand<void>("forge_mark_notification_read", {
-                    args: { provider, threadId },
-                }),
+                commands.forge_mark_notification_read({ provider, threadId }),
             markAllNotificationsRead: (provider: string) =>
-                invokeCommand<void>("forge_mark_all_notifications_read", {
-                    args: { provider },
-                }),
+                commands.forge_mark_all_notifications_read({ provider }),
             resolveSubjectUrl: (provider: string, subjectUrl: string) =>
-                invokeCommand<string | null>("forge_resolve_subject_url", {
-                    args: { provider, subjectUrl },
-                }),
+                commands.forge_resolve_subject_url({ provider, subjectUrl }),
             listIssues: (
                 provider: string,
                 owner: string,
@@ -755,8 +689,13 @@ function createRawBackendClient() {
                 labels?: string[],
                 page?: number
             ) =>
-                invokeCommand<SearchIssuePage>("forge_list_issues", {
-                    args: { provider, owner, repo, issueState, labels, page },
+                commands.forge_list_issues({
+                    provider,
+                    owner,
+                    repo,
+                    issueState,
+                    labels,
+                    page,
                 }),
             listPullRequests: (
                 provider: string,
@@ -766,36 +705,31 @@ function createRawBackendClient() {
                 labels?: string[],
                 page?: number
             ) =>
-                invokeCommand<SearchPullRequestPage>(
-                    "forge_list_pull_requests",
-                    {
-                        args: {
-                            provider,
-                            owner,
-                            repo,
-                            pullState,
-                            labels,
-                            page,
-                        },
-                    }
-                ),
+                commands.forge_list_pull_requests({
+                    provider,
+                    owner,
+                    repo,
+                    pullState,
+                    labels,
+                    page,
+                }),
             getPull: (
                 provider: string,
                 owner: string,
                 repo: string,
                 number: number
-            ) =>
-                invokeCommand<PullRequestDetail>("forge_get_pull", {
-                    args: { provider, owner, repo, number },
-                }),
+            ) => commands.forge_get_pull({ provider, owner, repo, number }),
             listPullReviews: (
                 provider: string,
                 owner: string,
                 repo: string,
                 number: number
             ) =>
-                invokeCommand<PullRequestReview[]>("forge_list_pull_reviews", {
-                    args: { provider, owner, repo, number },
+                commands.forge_list_pull_reviews({
+                    provider,
+                    owner,
+                    repo,
+                    number,
                 }),
             listPullCommits: (
                 provider: string,
@@ -803,8 +737,11 @@ function createRawBackendClient() {
                 repo: string,
                 number: number
             ) =>
-                invokeCommand<PullRequestCommit[]>("forge_list_pull_commits", {
-                    args: { provider, owner, repo, number },
+                commands.forge_list_pull_commits({
+                    provider,
+                    owner,
+                    repo,
+                    number,
                 }),
             listPullReviewComments: (
                 provider: string,
@@ -812,23 +749,20 @@ function createRawBackendClient() {
                 repo: string,
                 number: number
             ) =>
-                invokeCommand<PullRequestReviewComment[]>(
-                    "forge_list_pull_review_comments",
-                    { args: { provider, owner, repo, number } }
-                ),
+                commands.forge_list_pull_review_comments({
+                    provider,
+                    owner,
+                    repo,
+                    number,
+                }),
             createPull: (
                 provider: string,
                 owner: string,
                 repo: string,
                 body: CreatePullRequestBody
-            ) =>
-                invokeCommand<PullRequestDetail>("forge_create_pull", {
-                    args: { provider, owner, repo, body },
-                }),
+            ) => commands.forge_create_pull({ provider, owner, repo, body }),
             listLabels: (provider: string, owner: string, repo: string) =>
-                invokeCommand<Label[]>("forge_list_labels", {
-                    args: { provider, owner, repo },
-                }),
+                commands.forge_list_labels({ provider, owner, repo }),
             updatePull: (
                 provider: string,
                 owner: string,
@@ -836,8 +770,12 @@ function createRawBackendClient() {
                 number: number,
                 body: UpdatePullRequestBody
             ) =>
-                invokeCommand<PullRequestDetail>("forge_update_pull", {
-                    args: { provider, owner, repo, number, body },
+                commands.forge_update_pull({
+                    provider,
+                    owner,
+                    repo,
+                    number,
+                    body,
                 }),
             mergePull: (
                 provider: string,
@@ -846,8 +784,12 @@ function createRawBackendClient() {
                 number: number,
                 body: MergePullRequestBody
             ) =>
-                invokeCommand<MergePullRequestResult>("forge_merge_pull", {
-                    args: { provider, owner, repo, number, body },
+                commands.forge_merge_pull({
+                    provider,
+                    owner,
+                    repo,
+                    number,
+                    body,
                 }),
             getCheckRun: (
                 provider: string,
@@ -855,8 +797,11 @@ function createRawBackendClient() {
                 repo: string,
                 checkRunId: number
             ) =>
-                invokeCommand<CheckRunDetail>("forge_get_check_run", {
-                    args: { provider, owner, repo, checkRunId },
+                commands.forge_get_check_run({
+                    provider,
+                    owner,
+                    repo,
+                    checkRunId,
                 }),
             getCheckRunLog: (
                 provider: string,
@@ -864,26 +809,29 @@ function createRawBackendClient() {
                 repo: string,
                 checkRunId: number
             ) =>
-                invokeCommand<CheckRunLog>("forge_get_check_run_log", {
-                    args: { provider, owner, repo, checkRunId },
+                commands.forge_get_check_run_log({
+                    provider,
+                    owner,
+                    repo,
+                    checkRunId,
                 }),
             listCheckRuns: (
                 provider: string,
                 owner: string,
                 repo: string,
                 sha: string
-            ) =>
-                invokeCommand<CheckRun[]>("forge_list_check_runs", {
-                    args: { provider, owner, repo, sha },
-                }),
+            ) => commands.forge_list_check_runs({ provider, owner, repo, sha }),
             listWorkflowRuns: (
                 provider: string,
                 owner: string,
                 repo: string,
                 sha: string
             ) =>
-                invokeCommand<WorkflowRun[]>("forge_list_workflow_runs", {
-                    args: { provider, owner, repo, sha },
+                commands.forge_list_workflow_runs({
+                    provider,
+                    owner,
+                    repo,
+                    sha,
                 }),
             listCommitStatuses: (
                 provider: string,
@@ -891,35 +839,33 @@ function createRawBackendClient() {
                 repo: string,
                 sha: string
             ) =>
-                invokeCommand<CommitStatus[]>("forge_list_commit_statuses", {
-                    args: { provider, owner, repo, sha },
+                commands.forge_list_commit_statuses({
+                    provider,
+                    owner,
+                    repo,
+                    sha,
                 }),
             searchIssues: (provider: string, page?: number) =>
-                invokeCommand<SearchIssuePage>("forge_search_issues", {
-                    args: { provider, page },
-                }),
+                commands.forge_search_issues({ provider, page }),
             searchPullRequests: (provider: string, page?: number) =>
-                invokeCommand<SearchPullRequestPage>(
-                    "forge_search_pull_requests",
-                    { args: { provider, page } }
-                ),
+                commands.forge_search_pull_requests({ provider, page }),
             getIssue: (
                 provider: string,
                 owner: string,
                 repo: string,
                 number: number
-            ) =>
-                invokeCommand<IssueDetail>("forge_get_issue", {
-                    args: { provider, owner, repo, number },
-                }),
+            ) => commands.forge_get_issue({ provider, owner, repo, number }),
             listIssueComments: (
                 provider: string,
                 owner: string,
                 repo: string,
                 number: number
             ) =>
-                invokeCommand<IssueComment[]>("forge_list_issue_comments", {
-                    args: { provider, owner, repo, number },
+                commands.forge_list_issue_comments({
+                    provider,
+                    owner,
+                    repo,
+                    number,
                 }),
             listIssueEvents: (
                 provider: string,
@@ -927,8 +873,11 @@ function createRawBackendClient() {
                 repo: string,
                 number: number
             ) =>
-                invokeCommand<IssueEvent[]>("forge_list_issue_events", {
-                    args: { provider, owner, repo, number },
+                commands.forge_list_issue_events({
+                    provider,
+                    owner,
+                    repo,
+                    number,
                 }),
             createIssueComment: (
                 provider: string,
@@ -937,8 +886,12 @@ function createRawBackendClient() {
                 number: number,
                 body: string
             ) =>
-                invokeCommand<IssueComment>("forge_create_issue_comment", {
-                    args: { provider, owner, repo, number, body },
+                commands.forge_create_issue_comment({
+                    provider,
+                    owner,
+                    repo,
+                    number,
+                    body,
                 }),
             updateIssue: (
                 provider: string,
@@ -947,8 +900,12 @@ function createRawBackendClient() {
                 number: number,
                 body: UpdateIssueBody
             ) =>
-                invokeCommand<IssueDetail>("forge_update_issue", {
-                    args: { provider, owner, repo, number, body },
+                commands.forge_update_issue({
+                    provider,
+                    owner,
+                    repo,
+                    number,
+                    body,
                 }),
             updateIssueComment: (
                 provider: string,
@@ -957,8 +914,12 @@ function createRawBackendClient() {
                 commentId: number,
                 body: string
             ) =>
-                invokeCommand<IssueComment>("forge_update_issue_comment", {
-                    args: { provider, owner, repo, commentId, body },
+                commands.forge_update_issue_comment({
+                    provider,
+                    owner,
+                    repo,
+                    commentId,
+                    body,
                 }),
             deleteIssueComment: (
                 provider: string,
@@ -966,13 +927,14 @@ function createRawBackendClient() {
                 repo: string,
                 commentId: number
             ) =>
-                invokeCommand<void>("forge_delete_issue_comment", {
-                    args: { provider, owner, repo, commentId },
+                commands.forge_delete_issue_comment({
+                    provider,
+                    owner,
+                    repo,
+                    commentId,
                 }),
             repoPermissions: (provider: string, owner: string, repo: string) =>
-                invokeCommand<RepoPermissions>("forge_repo_permissions", {
-                    args: { provider, owner, repo },
-                }),
+                commands.forge_repo_permissions({ provider, owner, repo }),
             createIssue: (
                 provider: string,
                 owner: string,
@@ -981,8 +943,13 @@ function createRawBackendClient() {
                 body?: string,
                 labels?: string[]
             ) =>
-                invokeCommand<IssueDetail>("forge_create_issue", {
-                    args: { provider, owner, repo, title, body, labels },
+                commands.forge_create_issue({
+                    provider,
+                    owner,
+                    repo,
+                    title,
+                    body,
+                    labels,
                 }),
             publishRepository: (
                 repoId: number,
@@ -995,30 +962,28 @@ function createRawBackendClient() {
                 },
                 expectedGeneration?: number
             ) =>
-                invokeCommand<PublishResult>("forge_publish_repository", {
-                    args: { repoId, ...options, expectedGeneration },
+                commands.forge_publish_repository({
+                    repoId,
+                    ...options,
+                    expectedGeneration,
                 }),
         },
 
         settings: {
-            load: () => invokeCommand<SettingsSnapshot>("settings_load"),
+            load: () => commands.settings_load(),
             set: (key: string, value: SettingValue) =>
-                invokeCommand<ValuesSnapshot>("settings_set", {
-                    args: { key, value },
-                }),
+                commands.settings_set({ key, value }),
         },
 
         fonts: {
-            list: () => invokeCommand<string[]>("fonts_list"),
+            list: () => commands.fonts_list(),
         },
 
         editor: {
             /** Opens `path` (optionally `relativePath` joined onto it) in
              * the editor configured by the `editorCommand` setting. */
             openInEditor: (path: string, relativePath?: string) =>
-                invokeCommand<void>("open_in_editor", {
-                    args: { path, relativePath },
-                }),
+                commands.open_in_editor({ path, relativePath }),
         },
 
         fileManager: {
@@ -1026,48 +991,30 @@ function createRawBackendClient() {
              * the OS file manager: directories open, files are selected in
              * their parent. */
             reveal: (path: string, relativePath?: string) =>
-                invokeCommand<void>("reveal_in_file_manager", {
-                    args: { path, relativePath },
-                }),
+                commands.reveal_in_file_manager({ path, relativePath }),
         },
 
         terminal: {
             /** Opens a terminal with `path` as its working directory, using
              * the system default emulator or the `terminalCommand` override
              * when one is set. */
-            open: (path: string) =>
-                invokeCommand<void>("open_in_terminal", {
-                    args: { path },
-                }),
+            open: (path: string) => commands.open_in_terminal({ path }),
         },
 
         icons: {
             resolve: (remoteUrl: string) =>
-                invokeCommand<CachedIcon | null>("icon_resolve", {
-                    args: { remoteUrl },
-                }),
+                commands.icon_resolve({ remoteUrl }),
             refresh: (remoteUrl: string) =>
-                invokeCommand<CachedIcon | null>("icon_refresh", {
-                    args: { remoteUrl },
-                }),
-            byRepo: (repoId: number) =>
-                invokeCommand<CachedIcon | null>("git_repo_icon", {
-                    args: { repoId },
-                }),
-            byPath: (path: string) =>
-                invokeCommand<CachedIcon | null>("git_repo_icon_by_path", {
-                    args: { path },
-                }),
+                commands.icon_refresh({ remoteUrl }),
+            byRepo: (repoId: number) => commands.git_repo_icon({ repoId }),
+            byPath: (path: string) => commands.git_repo_icon_by_path({ path }),
         },
 
         session: {
-            load: () => invokeCommand<SessionDocument | null>("session_load"),
-            save: (doc: SessionDocument) =>
-                invokeCommand<void>("session_save", { args: { doc } }),
+            load: () => commands.session_load(),
+            save: (doc: SessionDocument) => commands.session_save({ doc }),
             repositories: (paths: string[]) =>
-                invokeCommand<SessionRepository[]>("session_repositories", {
-                    args: { paths },
-                }),
+                commands.session_repositories({ paths }),
         },
     };
 }
@@ -1122,6 +1069,8 @@ export function createBackendClient(): BackendClient {
         refs: resultifyGroup(raw.refs),
         mutations: resultifyGroup(raw.mutations),
         worktrees: resultifyGroup(raw.worktrees),
+        submodules: resultifyGroup(raw.submodules),
+        lfs: resultifyGroup(raw.lfs),
         workflows: resultifyGroup(raw.workflows),
         remoteInfo: resultifyGroup(raw.remoteInfo),
         remotes: resultifyGroup(raw.remotes),

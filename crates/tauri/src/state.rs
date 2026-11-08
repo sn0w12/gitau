@@ -12,12 +12,12 @@ pub struct AppState {
     pub settings: Arc<SettingsStore>,
     pub session: Arc<SessionStore>,
     pub icons: Arc<IconService>,
-    pub startup_repos: Arc<tokio::sync::OnceCell<Vec<PreOpenedRepo>>>,
+    pub startup_repos: Arc<tokio::sync::OnceCell<Vec<SessionRepository>>>,
 }
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PreOpenedRepo {
+pub struct SessionRepository {
     pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub repo_id: Option<u64>,

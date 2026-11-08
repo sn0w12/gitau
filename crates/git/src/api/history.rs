@@ -1,5 +1,5 @@
 use crate::domain::RevisionSpec;
-use crate::domain::history::BucketSize;
+use crate::domain::history::ChartBucketSize;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -86,7 +86,7 @@ pub struct HistoryChartQuery {
     /// Fixed bucket unit; `None` auto-selects purely from the time since the
     /// first commit: 10y+ monthly, 6y+ weekly, 3y+ half-weekly, 1y+ two-day,
     /// 180d+ daily, 90d+ half-daily, 14d+ quarter-daily, younger hourly.
-    pub bucket: Option<BucketSize>,
+    pub bucket: Option<ChartBucketSize>,
     /// Merge commits contribute nothing when false (default): no commit
     /// count and no diff stats, avoiding double-counted branch lines.
     pub include_merges: bool,

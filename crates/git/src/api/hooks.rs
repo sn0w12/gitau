@@ -7,7 +7,7 @@ use crate::api::highlight::SnippetStyle;
 /// listed; only files that exist on disk appear.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct HookInfo {
+pub struct GitHook {
     /// Git hook name without extension, e.g. `pre-commit`.
     pub name: String,
     /// Absolute path of the script that would execute.

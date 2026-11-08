@@ -16,7 +16,7 @@ gitau is a cross-platform Git desktop client: a Tauri 3 (alpha) shell (Rust work
 
 ```
 React UI (src/)
-  → BackendClient (src/lib/backend/transport/client.ts)   ← only place with command names
+  → BackendClient (src/lib/backend/transport/client.ts)   ← wraps generated command client
     → invokeCommand (src/lib/backend/transport/invoke.ts) → Tauri IPC
       → #[tauri::command] fns (crates/tauri/src/commands/) → Backend facade (crates/git/src/application/backend.rs)
         → engines/git2 | engines/gix → repository on disk
@@ -34,7 +34,7 @@ React UI (src/)
 | Path                    | Purpose                                                                                                                                                                                                           |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/stores/`           | TanStack Store singletons: `app-store` (tabs), `repository-store` (repos keyed by durable path), `settings-store`, `operation-store` (op lifecycle), `theme-store`, `tab-runtime` (per-tab non-persisted runtime) |
-| `src/lib/`              | Framework-free core: `backend/` (whole Rust bridge), `routing/`, `bootstrap/`, `diff/`, `settings/settings.generated.ts` (generated)                                                                              |
+| `src/lib/`              | Framework-free core: `backend/` (whole Rust bridge, generated `protocol.ts` + `transport/commands.generated.ts`), `routing/`, `bootstrap/`, `diff/`, `settings/settings.generated.ts` (generated)                 |
 | `src/hooks/`            | One concern per file, kebab-case `use-*.ts` (e.g. `hooks/repositories/use-repository-queries.ts`)                                                                                                                 |
 | `src/contexts/`         | Minimal: services, per-tab id, promise-queued confirm dialog, tab title                                                                                                                                           |
 | `src/components/`       | Feature folders (`repo/`, `diff/`, `settings/`, `titlebar/`) + generic `ui/` primitives (shadcn/coss over Base UI)                                                                                                |
@@ -44,6 +44,7 @@ React UI (src/)
 | `crates/icons/src/`     | Remote owner icon resolution and disk cache, HTTP fetcher, image sniffing and data-URL encoding                                                                                                                   |
 | `crates/language/src/`  | Linguist-style classifier and color table, worktree byte-share walk, sample corpus                                                                                                                                |
 | `crates/fs-util/src/`   | Atomic writes, filesystem-safe cache keys, and FNV hashing                                                                                                                                                        |
+| `crates/contract/`      | Source parser and emitter for `protocol.ts` and `transport/commands.generated.ts`; the freshness and reachability tests live here                                                                                 |
 | `crates/tauri/src/`     | `lib.rs` (builder + command registration), `state.rs`, `commands/*`, `session.rs`, `settings/`                                                                                                                    |
 | `tests/`                | Vitest suite mirroring `src/`: `lib/`, `stores/`, `components/`, `hooks/`                                                                                                                                         |
 
@@ -83,6 +84,7 @@ Regenerate the settings TS contract after changing the Rust settings schema:
 
 ```bash
 cargo run -p gitau --bin export_settings --features devtools   # rewrites src/lib/settings/settings.generated.ts
+cargo run -p contract --bin export_contract                    # rewrites protocol.ts and commands.generated.ts
 ```
 
 Benchmarks: `cargo bench --workspace` (Criterion; git benches in `crates/git/benches/`, with the highlighter and language benches in their own crates).
@@ -125,7 +127,7 @@ strict mode plus `noUnusedLocals`, `noUnusedParameters`, `verbatimModuleSyntax`;
 ### Frontend patterns
 
 - Named-export function components everywhere (no default exports). Hooks live above any early return (fixed hook order).
-- Never call `invoke` or add command names outside `src/lib/backend/transport/client.ts`; hand-maintain the protocol twin `src/lib/backend/protocol.ts`.
+- Command names and wire args live only in the generated `src/lib/backend/transport/commands.generated.ts`; `src/lib/backend/protocol.ts` is generated too. Never hand-edit either. Every `#[tauri::command]` needs a wrapper in `client.ts`; `cargo test -p contract` fails when one is unreachable.
 - Queries via `queryOptions()` factories (`src/lib/backend/queries/repository-queries.ts`) + structured keys (`query-keys.ts`); `useQuery` hooks guard with `hasValidRepoId(repoId)` before calling the backend.
 - Store ownership: durable tab data → `appStore`; repo set → `repositoryStore` (keyed by path); ephemeral per-tab UI → `tab-runtime.ts`; op tracking → `operationStore`. Setters return unchanged state when nothing changed.
 - Errors surfaced via `toastError(title, error)` (`src/lib/toast-error.ts`); destructive actions go through `useConfirm()`.
@@ -136,7 +138,7 @@ strict mode plus `noUnusedLocals`, `noUnusedParameters`, `verbatimModuleSyntax`;
 
 - `repoId` is ephemeral/process-local; the repo path is durable. Never persist `repoId`; route loaders `throw redirect(...)` to rewrite stale persisted ids.
 - `getSetting`/`setSetting` throw before settings init; bootstrap order in `src/main.tsx` is load-bearing (settings → theme engine → render).
-- Generated files are never hand-edited: `src/lib/settings/settings.generated.ts` (a freshness test fails if stale). Don't recreate the scaffold-era `routeTree.gen.ts`; routing here is code-based.
+- Generated files are never hand-edited: `src/lib/settings/settings.generated.ts`, `src/lib/backend/protocol.ts`, and `src/lib/backend/transport/commands.generated.ts` (freshness tests fail if stale). Don't recreate the scaffold-era `routeTree.gen.ts`; routing here is code-based.
 
 ### Rust patterns
 
@@ -162,7 +164,8 @@ Every word written in this repo follows this: comments, markdown docs, commit me
 
 - `src/main.tsx`: async bootstrap (settings → session restore → theme → render); failure renders `BootstrapError`.
 - `scripts/ci.mjs`: the gate registry and scheduler behind `just ci`. A gate's `lock` decides scheduling, `null` runs concurrently and `"cargo"` serializes on the build lock. `tests` names the runner whose output gets tallied into the passed/skipped/failed counts.
-- `src/lib/backend/transport/client.ts`: typed backend client; single choke point for command names.
+- `src/lib/backend/transport/client.ts`: typed backend client; wraps the generated command client with ergonomic method names.
+- `src/lib/backend/protocol.manual.ts`: frontend-owned protocol shapes (session document, `SyntaxStyle`) re-exported by the generated protocol.
 - `src/lib/bootstrap/app-runtime.ts`: process-wide `{backend, queryClient}` singleton (`resetAppRuntime()` for tests).
 - `src/routes/route-tree.tsx`: per-tab route tree factory; loaders handle title/badge, repo binding, stale-id redirects.
 - `src/components/providers/app-services-provider.tsx`: context provider and sole listener of `repository-invalidated`. Must export only the component or HMR Fast Refresh breaks.
@@ -193,5 +196,5 @@ Every word written in this repo follows this: comments, markdown docs, commit me
     }));
     ```
     Settings seeded via exported `seedSettingsForTests(...)`; stores reset via `appStore.setState(...)`; `resetAppRuntime()` between runtime tests.
-- Rust: integration tests in `crates/git/tests/` (shared `TestRepo` helper builds real temp repos via git2 in `tests/common/mod.rs`); unit tests inline `#[cfg(test)]` in every crate; freshness test guards `settings.generated.ts`.
+- Rust: integration tests in `crates/git/tests/` (shared `TestRepo` helper builds real temp repos via git2 in `tests/common/mod.rs`); unit tests inline `#[cfg(test)]` in every crate; freshness tests guard `settings.generated.ts` and the generated command contract.
 - Coverage: no coverage tooling configured; PRs must pass the full gate list under Development commands.

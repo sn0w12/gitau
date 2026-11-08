@@ -22,7 +22,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::domain::history::{BucketSize, ChartBucket};
+use crate::domain::history::{ChartBucket, ChartBucketSize};
 use crate::runtime::history_cache::CommitStatPoint;
 use fs_util::{fnv1a64, sanitize_component, write_atomic};
 
@@ -56,7 +56,7 @@ pub struct StoredPoints {
 /// found without walking the history to discover which size it resolved to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredChart {
-    pub bucket: BucketSize,
+    pub bucket: ChartBucketSize,
     pub total_commits: u32,
     pub buckets: Vec<ChartBucket>,
 }
@@ -68,7 +68,7 @@ pub fn points_path(base: &Path, repo_root: &Path) -> PathBuf {
 pub fn chart_path(
     base: &Path,
     repo_root: &Path,
-    requested: Option<BucketSize>,
+    requested: Option<ChartBucketSize>,
     include_merges: bool,
 ) -> PathBuf {
     base.join(format!(
@@ -90,7 +90,7 @@ fn repo_slug(repo_root: &Path) -> String {
     )
 }
 
-fn chart_slug(requested: Option<BucketSize>, include_merges: bool) -> String {
+fn chart_slug(requested: Option<ChartBucketSize>, include_merges: bool) -> String {
     let bucket = match requested {
         Some(bucket) => format!("{:02}", bucket_code(bucket)),
         None => "auto".to_owned(),
@@ -98,31 +98,31 @@ fn chart_slug(requested: Option<BucketSize>, include_merges: bool) -> String {
     format!("{bucket}-{}", u8::from(include_merges))
 }
 
-fn bucket_code(bucket: BucketSize) -> u8 {
+fn bucket_code(bucket: ChartBucketSize) -> u8 {
     match bucket {
-        BucketSize::Hour => 0,
-        BucketSize::QuarterDay => 1,
-        BucketSize::HalfDay => 2,
-        BucketSize::Day => 3,
-        BucketSize::TwoDays => 4,
-        BucketSize::HalfWeek => 5,
-        BucketSize::Week => 6,
-        BucketSize::Month => 7,
-        BucketSize::Quarter => 8,
+        ChartBucketSize::Hour => 0,
+        ChartBucketSize::QuarterDay => 1,
+        ChartBucketSize::HalfDay => 2,
+        ChartBucketSize::Day => 3,
+        ChartBucketSize::TwoDays => 4,
+        ChartBucketSize::HalfWeek => 5,
+        ChartBucketSize::Week => 6,
+        ChartBucketSize::Month => 7,
+        ChartBucketSize::Quarter => 8,
     }
 }
 
-fn bucket_from_code(code: u8) -> Option<BucketSize> {
+fn bucket_from_code(code: u8) -> Option<ChartBucketSize> {
     Some(match code {
-        0 => BucketSize::Hour,
-        1 => BucketSize::QuarterDay,
-        2 => BucketSize::HalfDay,
-        3 => BucketSize::Day,
-        4 => BucketSize::TwoDays,
-        5 => BucketSize::HalfWeek,
-        6 => BucketSize::Week,
-        7 => BucketSize::Month,
-        8 => BucketSize::Quarter,
+        0 => ChartBucketSize::Hour,
+        1 => ChartBucketSize::QuarterDay,
+        2 => ChartBucketSize::HalfDay,
+        3 => ChartBucketSize::Day,
+        4 => ChartBucketSize::TwoDays,
+        5 => ChartBucketSize::HalfWeek,
+        6 => ChartBucketSize::Week,
+        7 => ChartBucketSize::Month,
+        8 => ChartBucketSize::Quarter,
         _ => return None,
     })
 }
@@ -328,7 +328,7 @@ pub fn save_chart(
     path: &Path,
     tip: [u8; OID_LEN],
     exclusions: u64,
-    bucket: BucketSize,
+    bucket: ChartBucketSize,
     include_merges: bool,
     total_commits: u32,
     buckets: &[ChartBucket],
@@ -501,11 +501,11 @@ mod tests {
                 deletions: 0,
             },
         ];
-        let path = chart_path(dir.path(), repo, Some(BucketSize::Hour), false);
-        save_chart(&path, tip, 42, BucketSize::Hour, false, 3, &buckets).unwrap();
+        let path = chart_path(dir.path(), repo, Some(ChartBucketSize::Hour), false);
+        save_chart(&path, tip, 42, ChartBucketSize::Hour, false, 3, &buckets).unwrap();
 
         let hit = load_chart(&path, tip, 42, false).unwrap();
-        assert_eq!(hit.bucket, BucketSize::Hour);
+        assert_eq!(hit.bucket, ChartBucketSize::Hour);
         assert_eq!(hit.total_commits, 3);
         assert_eq!(hit.buckets, buckets);
 
@@ -517,8 +517,8 @@ mod tests {
 
         // Bucket size and merge flag live in the filename, so each variant
         // keeps its own file rather than evicting the others.
-        let daily = chart_path(dir.path(), repo, Some(BucketSize::Day), false);
-        let merges = chart_path(dir.path(), repo, Some(BucketSize::Hour), true);
+        let daily = chart_path(dir.path(), repo, Some(ChartBucketSize::Day), false);
+        let merges = chart_path(dir.path(), repo, Some(ChartBucketSize::Hour), true);
         let auto = chart_path(dir.path(), repo, None, false);
         assert_ne!(path, daily);
         assert_ne!(path, merges);
@@ -536,10 +536,10 @@ mod tests {
         // Requested nothing, resolved to Month: the file has to carry that
         // forward or the next request cannot answer without a walk.
         let path = chart_path(dir.path(), repo, None, false);
-        save_chart(&path, tip, 7, BucketSize::Month, false, 9, &[]).unwrap();
+        save_chart(&path, tip, 7, ChartBucketSize::Month, false, 9, &[]).unwrap();
 
         let hit = load_chart(&path, tip, 7, false).unwrap();
-        assert_eq!(hit.bucket, BucketSize::Month);
+        assert_eq!(hit.bucket, ChartBucketSize::Month);
         assert_eq!(hit.total_commits, 9);
         assert!(hit.buckets.is_empty());
     }
@@ -549,12 +549,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let repo = Path::new("/repos/example");
         let tip = [31u8; OID_LEN];
-        let path = chart_path(dir.path(), repo, Some(BucketSize::Day), false);
+        let path = chart_path(dir.path(), repo, Some(ChartBucketSize::Day), false);
         save_chart(
             &path,
             tip,
             1,
-            BucketSize::Day,
+            ChartBucketSize::Day,
             false,
             1,
             &[ChartBucket {

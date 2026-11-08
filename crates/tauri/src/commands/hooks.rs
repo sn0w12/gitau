@@ -8,7 +8,7 @@ use crate::state::{to_repo_id, SharedState};
 pub async fn git_list_commit_hooks(
     state: SharedState<'_>,
     repo_id: u64,
-) -> CommandResult<Vec<git::api::hooks::HookInfo>> {
+) -> CommandResult<Vec<git::api::hooks::GitHook>> {
     state
         .backend
         .list_commit_hooks(to_repo_id(repo_id))

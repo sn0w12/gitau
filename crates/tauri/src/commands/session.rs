@@ -5,7 +5,7 @@ use git::Backend;
 use serde_json::Value;
 
 use crate::commands::{to_session_serialized, CommandResult};
-use crate::state::{PreOpenedRepo, SharedState};
+use crate::state::{SessionRepository, SharedState};
 
 /// Loads the persisted app session (tabs, active tab, open repos).
 #[tauri::command]
@@ -23,18 +23,18 @@ pub fn session_save(state: SharedState<'_>, doc: Value) -> CommandResult<()> {
 pub(crate) async fn open_session_repositories(
     backend: Arc<Backend>,
     paths: Vec<String>,
-) -> Vec<PreOpenedRepo> {
+) -> Vec<SessionRepository> {
     let mut set = tokio::task::JoinSet::new();
     for path in paths {
         let backend = Arc::clone(&backend);
         set.spawn(async move {
             match backend.open_repository(Path::new(&path)).await {
-                Ok(opened) => PreOpenedRepo {
+                Ok(opened) => SessionRepository {
                     path,
                     repo_id: Some(opened.id.0),
                     error: None,
                 },
-                Err(error) => PreOpenedRepo {
+                Err(error) => SessionRepository {
                     path,
                     repo_id: None,
                     error: Some(error.to_string()),
@@ -55,7 +55,7 @@ pub(crate) async fn open_session_repositories(
 pub async fn session_repositories(
     state: SharedState<'_>,
     paths: Vec<String>,
-) -> CommandResult<Vec<PreOpenedRepo>> {
+) -> CommandResult<Vec<SessionRepository>> {
     let backend = Arc::clone(&state.backend);
     let cell = Arc::clone(&state.startup_repos);
     let session_paths = crate::session::repo_paths(&state.session.load());
@@ -70,12 +70,12 @@ pub async fn session_repositories(
             continue;
         }
         out.push(match backend.open_repository(Path::new(&path)).await {
-            Ok(opened) => PreOpenedRepo {
+            Ok(opened) => SessionRepository {
                 path,
                 repo_id: Some(opened.id.0),
                 error: None,
             },
-            Err(error) => PreOpenedRepo {
+            Err(error) => SessionRepository {
                 path,
                 repo_id: None,
                 error: Some(error.to_string()),

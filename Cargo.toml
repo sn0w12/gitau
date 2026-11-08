@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/ansi",
+    "crates/contract",
     "crates/forge-core",
     "crates/forge-github",
     "crates/fs-util",

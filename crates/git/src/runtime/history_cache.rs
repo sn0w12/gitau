@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::domain::CommitSummary;
-use crate::domain::history::BucketSize;
+use crate::domain::history::ChartBucketSize;
 
 const MAX_CACHED_SUMMARIES: usize = 8192;
 /// Sized for a very large repository's full history rather than a typical
@@ -44,8 +44,8 @@ pub struct PendingChart {
     /// What the caller asked for, which is what the file is named after. It
     /// differs from `resolved_bucket` whenever auto-selection ran, and writing
     /// to the resolved name would leave the auto request permanently missing.
-    pub requested_bucket: Option<BucketSize>,
-    pub resolved_bucket: BucketSize,
+    pub requested_bucket: Option<ChartBucketSize>,
+    pub resolved_bucket: ChartBucketSize,
     pub include_merges: bool,
     pub total_commits: u32,
     pub buckets: Vec<crate::domain::history::ChartBucket>,
@@ -157,7 +157,7 @@ impl HistoryCache {
             .map(|(order, tip)| (*tip, order.as_slice()))
     }
 
-    pub fn pending_charts(&self) -> Vec<((Option<BucketSize>, bool), &PendingChart)> {
+    pub fn pending_charts(&self) -> Vec<((Option<ChartBucketSize>, bool), &PendingChart)> {
         self.pending_charts
             .iter()
             .map(|chart| ((chart.requested_bucket, chart.include_merges), chart))

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use language::LanguageEntry;
+use language::LanguageShare;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
@@ -14,7 +14,7 @@ pub struct RemoteRepoInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub forks: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub languages: Option<Vec<LanguageEntry>>,
+    pub languages: Option<Vec<LanguageShare>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fetched_at_ms: Option<u64>,
 }

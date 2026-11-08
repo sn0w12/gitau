@@ -70,7 +70,7 @@ pub struct CommitWithDetail {
 /// Time window covered by one chart bucket.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub enum BucketSize {
+pub enum ChartBucketSize {
     Hour,
     QuarterDay,
     HalfDay,
@@ -102,7 +102,7 @@ pub struct HistoryChart {
     pub snapshot_id: SnapshotId,
     pub generation: Generation,
     /// The resolved unit after applying auto-selection.
-    pub bucket_size: BucketSize,
+    pub bucket_size: ChartBucketSize,
     /// Chronological; gaps between first and last activity are zero-filled
     /// so the chart shows quiet periods instead of compressing them away.
     pub buckets: Vec<ChartBucket>,

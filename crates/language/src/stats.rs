@@ -27,7 +27,7 @@ pub type Result<T> = std::result::Result<T, LanguageError>;
 /// One language's share of the worktree's code.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LanguageEntry {
+pub struct LanguageShare {
     pub language: String,
     pub color: String,
     /// Percent of the classified byte total, 1..=100.
@@ -37,7 +37,7 @@ pub struct LanguageEntry {
 /// Per-language byte totals, ordered by share.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct LanguageStats {
-    pub entries: Vec<LanguageEntry>,
+    pub entries: Vec<LanguageShare>,
     /// Sum of the displayed percents; 0 when nothing was classified.
     pub total_percent: u64,
     /// Number of files excluded from stats by classifier rules.
@@ -236,7 +236,7 @@ impl LanguageDelegate<'_> {
         let entries = raw
             .into_iter()
             .filter(|(_, percent)| *percent > 0)
-            .map(|(language, percent)| LanguageEntry {
+            .map(|(language, percent)| LanguageShare {
                 language: language.to_owned(),
                 color: color_for_language(language).unwrap_or_default().to_owned(),
                 percent,
