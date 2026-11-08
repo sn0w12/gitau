@@ -381,6 +381,48 @@ fn bench_status_phases(c: &mut Criterion) {
     });
 }
 
+/// Cold status after `N` generation bumps, which forces `get_stale_status` to
+/// scan every past generation before the report is recomputed. The loop calls
+/// `entry.cached` per generation, hashing the status options each time.
+fn bench_status_generation_scan(c: &mut Criterion) {
+    let root = fixture_repo().clone();
+    let backend = git::Backend::new(git::BackendConfig {
+        watch_worktree: false,
+        ..Default::default()
+    });
+    let opened = runtime().block_on(backend.open_repository(&root)).unwrap();
+    let opts = git::api::changes::StatusOptions::default();
+
+    runtime()
+        .block_on(backend.status(opened.id, opts, Default::default()))
+        .unwrap();
+
+    let mut group = c.benchmark_group("status/generation-scan");
+    group.sample_size(20);
+
+    let mut bumped = 0usize;
+    for target in [1usize, 100, 1_000, 10_000] {
+        while bumped < target {
+            // The same pair keeps the theme swap a no-op after the first call,
+            // while the registry still bumps every open repository.
+            backend.apply_syntax_theme_setting("base16OceanLight", "base16OceanDark");
+            bumped += 1;
+        }
+        group.bench_function(format!("cold-after-{target}-bumps"), |b| {
+            b.iter(|| {
+                backend.clear_repository_caches(opened.id).unwrap();
+                let report = runtime().block_on(backend.status(
+                    opened.id,
+                    black_box(opts),
+                    Default::default(),
+                ));
+                black_box(report.unwrap().entries.len())
+            })
+        });
+    }
+    group.finish();
+}
+
 #[derive(Default)]
 struct CountCollector {
     count: usize,
@@ -417,5 +459,10 @@ impl<'index> VisitEntry<'index> for CountCollector {
     }
 }
 
-criterion_group!(benches, bench_status, bench_status_phases);
+criterion_group!(
+    benches,
+    bench_status,
+    bench_status_phases,
+    bench_status_generation_scan
+);
 criterion_main!(benches);

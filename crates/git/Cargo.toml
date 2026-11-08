@@ -60,3 +60,23 @@ harness = false
 [[bench]]
 name = "diff_highlight"
 harness = false
+
+[[bench]]
+name = "graph"
+harness = false
+
+[[bench]]
+name = "refs"
+harness = false
+
+[[bench]]
+name = "commit_detail"
+harness = false
+
+[[bench]]
+name = "worktree_icon"
+harness = false
+
+[[bench]]
+name = "diff_context"
+harness = false
