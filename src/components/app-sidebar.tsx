@@ -32,7 +32,10 @@ import {
 import { useForgeUnreadCount } from "@/hooks/forge/use-forge-inbox";
 import { useOpenRepository } from "@/hooks/repositories/use-open-repository";
 import { useRepoAvatarByPath } from "@/hooks/repositories/use-repo-avatar";
-import { useRemoteIcon } from "@/hooks/repositories/use-repository-queries";
+import {
+    useRemoteIcon,
+    useRemoteRepoInfoByPath,
+} from "@/hooks/repositories/use-repository-queries";
 import { useSettingValue } from "@/hooks/settings/use-setting";
 import { useActiveTabPathname } from "@/hooks/tabs/use-active-tab-pathname";
 import { useActiveTabRouter } from "@/hooks/tabs/use-active-tab-router";
@@ -42,6 +45,7 @@ import { EASE_SNAPPY } from "@/lib/motion";
 import { addExistingRepositoryFromDisk } from "@/lib/repositories/add-repository";
 import { isRepoPathname } from "@/lib/routing/active-route";
 import { toastError } from "@/lib/toast-error";
+import { cn, getTextColor } from "@/lib/utils";
 import { appStore, selectActiveTab } from "@/stores/app-store";
 import { connectionKey, setActiveConnection } from "@/stores/connection-store";
 import {
@@ -340,6 +344,18 @@ const RepoButton = memo(function RepoButton({
     isSelected: boolean;
 }) {
     const avatar = useRepoAvatarByPath(repoPath);
+    const languageInfo = useRemoteRepoInfoByPath(repoPath, {
+        enabled: !avatar.icon,
+    });
+    const languageColor = avatar.icon
+        ? undefined
+        : languageInfo.data?.languages?.[0]?.color || undefined;
+    const fallbackTextClass =
+        languageColor === undefined
+            ? undefined
+            : getTextColor(languageColor) === "bright"
+              ? "text-background dark:text-foreground"
+              : "text-foreground dark:text-background";
     const link = useInternalLink();
     const { ref } = useSortable({ id: repoPath, index, modifiers });
     const [hovered, setHovered] = useState(false);
@@ -392,13 +408,25 @@ const RepoButton = memo(function RepoButton({
                                     repoPath,
                                 })}
                                 render={
-                                    <Avatar>
+                                    <Avatar
+                                        style={
+                                            languageColor
+                                                ? {
+                                                      backgroundColor:
+                                                          languageColor,
+                                                  }
+                                                : undefined
+                                        }
+                                    >
                                         <AvatarImage
                                             src={avatar.icon?.dataUrl}
                                             alt={`${avatar.name} icon`}
                                         />
                                         <AvatarFallback
-                                            className="block size-auto bg-transparent"
+                                            className={cn(
+                                                "block size-auto bg-transparent",
+                                                fallbackTextClass
+                                            )}
                                             render={<div />}
                                         >
                                             {avatar.initial}

@@ -139,11 +139,14 @@ export function useRemoteRepoInfo(repoId: number | undefined) {
     });
 }
 
-export function useRemoteRepoInfoByPath(path: string | undefined) {
+export function useRemoteRepoInfoByPath(
+    path: string | undefined,
+    options?: { enabled?: boolean }
+) {
     const { backend } = useAppServices();
     return useQuery({
         ...remoteRepoInfoByPathQuery({ backend }, path ?? ""),
-        enabled: !!path,
+        enabled: !!path && (options?.enabled ?? true),
     });
 }
 
