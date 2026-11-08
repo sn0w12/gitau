@@ -75,7 +75,7 @@ export function DialogActions({
                     loading={submitLoading}
                 >
                     {submitLabel}{" "}
-                    <Kbd className="text-foreground dark:text-background">
+                    <Kbd className="text-dark">
                         <CornerDownLeft />
                     </Kbd>
                 </Button>

@@ -410,10 +410,7 @@ function HighlightedText({
             );
         }
         parts.push(
-            <mark
-                key={`m-${index}`}
-                className="bg-info font-bold text-background dark:text-foreground"
-            >
+            <mark key={`m-${index}`} className="bg-info font-bold text-light">
                 {text.slice(segment.start, segment.end)}
             </mark>
         );

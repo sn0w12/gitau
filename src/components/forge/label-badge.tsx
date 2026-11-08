@@ -7,8 +7,8 @@ export function LabelBadge({ label }: { label: Label }) {
         <Badge
             className={
                 getTextColor(label.color) === "bright"
-                    ? "text-background dark:text-foreground"
-                    : "text-foreground dark:text-background"
+                    ? "text-light"
+                    : "text-dark"
             }
             style={{
                 backgroundColor: `#${label.color}`,

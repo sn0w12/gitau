@@ -354,8 +354,8 @@ const RepoButton = memo(function RepoButton({
         languageColor === undefined
             ? undefined
             : getTextColor(languageColor) === "bright"
-              ? "text-background dark:text-foreground"
-              : "text-foreground dark:text-background";
+              ? "text-light"
+              : "text-dark";
     const link = useInternalLink();
     const { ref } = useSortable({ id: repoPath, index, modifiers });
     const [hovered, setHovered] = useState(false);

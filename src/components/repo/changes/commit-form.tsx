@@ -133,7 +133,7 @@ export function CommitForm({
             </Fieldset>
             <Button
                 variant="info"
-                className="w-full text-background dark:text-foreground"
+                className="w-full text-light"
                 type="submit"
                 loading={busy}
                 disabled={!canCommit}

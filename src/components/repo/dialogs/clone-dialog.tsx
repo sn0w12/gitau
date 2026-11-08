@@ -235,7 +235,7 @@ export function CloneRepoDialog({
                             className="transition-colors"
                         >
                             <Scritto value={running ? "Cancel" : "Clone"} />{" "}
-                            <Kbd className="text-foreground dark:text-background">
+                            <Kbd className="text-dark">
                                 <CornerDownLeft />
                             </Kbd>
                         </Button>
