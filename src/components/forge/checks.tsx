@@ -23,14 +23,13 @@ import {
 } from "@/components/ui/collapsible";
 import {
     Dialog,
-    DialogClose,
     DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogPanel,
     DialogPopup,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogActions } from "@/components/ui/dialog-actions";
 import { Frame, FrameHeader, FramePanel } from "@/components/ui/frame";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toastManager } from "@/components/ui/toast";
@@ -375,11 +374,7 @@ function CheckRunDialogBody({
                     />
                 )}
             </DialogPanel>
-            <DialogFooter>
-                <DialogClose render={<Button variant="ghost" />}>
-                    Close
-                </DialogClose>
-            </DialogFooter>
+            <DialogActions cancelLabel="Close" />
         </>
     );
 }

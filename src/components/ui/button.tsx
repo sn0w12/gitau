@@ -47,7 +47,7 @@ export const buttonVariants = cva(
                     COLORED_BASE
                 ),
                 info: cn(
-                    "border-info bg-info text-black shadow-info/24 hover:bg-info/90 data-pressed:bg-info/90 dark:text-background",
+                    "border-info bg-info text-foreground shadow-info/24 hover:bg-info/90 data-pressed:bg-info/90 dark:text-background",
                     COLORED_BASE
                 ),
                 "destructive-outline":

@@ -1,18 +1,15 @@
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import {
     Dialog,
-    DialogClose,
     DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogPanel,
     DialogPopup,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogActions, DialogForm } from "@/components/ui/dialog-actions";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Form } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
 import type { CommitSummary } from "@/lib/backend/protocol";
 
@@ -81,13 +78,7 @@ function AmendCommitDialogBody({
                     The branch moves to the replacement commit.
                 </DialogDescription>
             </DialogHeader>
-            <Form
-                className="contents"
-                onSubmit={(event) => {
-                    event.preventDefault();
-                    void handleSubmit();
-                }}
-            >
+            <DialogForm onSubmit={() => void handleSubmit()}>
                 <DialogPanel className="flex flex-col gap-3">
                     <Field>
                         <FieldLabel>Message</FieldLabel>
@@ -99,19 +90,12 @@ function AmendCommitDialogBody({
                         />
                     </Field>
                 </DialogPanel>
-                <DialogFooter>
-                    <DialogClose render={<Button variant="ghost" />}>
-                        Cancel
-                    </DialogClose>
-                    <Button
-                        type="submit"
-                        disabled={!canSubmit}
-                        loading={submitting}
-                    >
-                        Amend commit
-                    </Button>
-                </DialogFooter>
-            </Form>
+                <DialogActions
+                    submitLabel="Amend commit"
+                    submitDisabled={!canSubmit}
+                    submitLoading={submitting}
+                />
+            </DialogForm>
         </>
     );
 }

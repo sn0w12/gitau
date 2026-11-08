@@ -228,7 +228,7 @@ describe("useCommitActions", () => {
             promise = captured.actions!.resetTo(rowCommit, "hard");
         });
         await act(async () => {
-            fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+            fireEvent.click(screen.getByRole("button", { name: /^Cancel/ }));
         });
         await promise;
 

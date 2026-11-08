@@ -202,8 +202,9 @@ async function typeInto(input: HTMLInputElement, value: string): Promise<void> {
 }
 
 function buttonByText(text: string): HTMLButtonElement | undefined {
-    return Array.from(document.querySelectorAll("button")).find(
-        (button) => button.textContent === text
+    const footer = document.querySelector('[data-slot="dialog-footer"]');
+    return Array.from(footer?.querySelectorAll("button") ?? []).find((button) =>
+        button.textContent?.trim().startsWith(text)
     );
 }
 
@@ -405,8 +406,8 @@ describe("ChangesPanel", () => {
         expect(opened).toBe(true);
 
         const cancelButton = Array.from(
-            document.querySelectorAll("button")
-        ).find((button) => button.textContent === "Cancel");
+            document.querySelectorAll('[data-slot="dialog-footer"] button')
+        ).find((button) => button.textContent?.trim().startsWith("Cancel"));
         expect(cancelButton).toBeDefined();
         await click(cancelButton!);
 
@@ -451,8 +452,8 @@ describe("ChangesPanel", () => {
         );
 
         const discardButton = Array.from(
-            document.querySelectorAll("button")
-        ).find((button) => button.textContent === "Discard");
+            document.querySelectorAll('[data-slot="dialog-footer"] button')
+        ).find((button) => button.textContent?.trim().startsWith("Discard"));
         expect(discardButton).toBeDefined();
         await click(discardButton!);
 

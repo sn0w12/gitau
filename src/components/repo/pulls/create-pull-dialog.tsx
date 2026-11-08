@@ -2,7 +2,6 @@ import { Tag } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { LabelBadge } from "@/components/forge/label-badge";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
     Combobox,
@@ -17,16 +16,14 @@ import {
 } from "@/components/ui/combobox";
 import {
     Dialog,
-    DialogClose,
     DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogPanel,
     DialogPopup,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogActions, DialogForm } from "@/components/ui/dialog-actions";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
     Select,
@@ -222,13 +219,7 @@ function CreatePullForm({
                         : `Opens a pull request on ${coords.owner}/${coords.repo}.`}
                 </DialogDescription>
             </DialogHeader>
-            <Form
-                className="contents"
-                onSubmit={(event) => {
-                    event.preventDefault();
-                    void handleSubmit();
-                }}
-            >
+            <DialogForm onSubmit={() => void handleSubmit()}>
                 <DialogPanel className="flex flex-col gap-3">
                     {notice == null ? (
                         <>
@@ -272,15 +263,12 @@ function CreatePullForm({
                         </p>
                     )}
                 </DialogPanel>
-                <DialogFooter>
-                    <DialogClose render={<Button variant="ghost" />}>
-                        Cancel
-                    </DialogClose>
-                    <Button type="submit" disabled={!canSubmit} loading={busy}>
-                        Create pull request
-                    </Button>
-                </DialogFooter>
-            </Form>
+                <DialogActions
+                    submitLabel="Create pull request"
+                    submitDisabled={!canSubmit}
+                    submitLoading={busy}
+                />
+            </DialogForm>
         </>
     );
 }

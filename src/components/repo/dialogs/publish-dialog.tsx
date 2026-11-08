@@ -1,19 +1,16 @@
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
     Dialog,
-    DialogClose,
     DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogPanel,
     DialogPopup,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogActions, DialogForm } from "@/components/ui/dialog-actions";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
     Select,
@@ -160,13 +157,7 @@ function PublishRepositoryDialogBody({
                         : "Creates the repository, points origin at it, and pushes your current branch."}
                 </DialogDescription>
             </DialogHeader>
-            <Form
-                className="contents"
-                onSubmit={(event) => {
-                    event.preventDefault();
-                    void handleSubmit();
-                }}
-            >
+            <DialogForm onSubmit={() => void handleSubmit()}>
                 <DialogPanel className="flex flex-col gap-3">
                     {target == null || activeGroup == null ? (
                         <p className="text-sm text-muted-foreground">
@@ -253,19 +244,12 @@ function PublishRepositoryDialogBody({
                         </>
                     )}
                 </DialogPanel>
-                <DialogFooter>
-                    <DialogClose render={<Button variant="ghost" />}>
-                        Cancel
-                    </DialogClose>
-                    <Button
-                        type="submit"
-                        disabled={!canSubmit}
-                        loading={mutation.isPending}
-                    >
-                        Create repository
-                    </Button>
-                </DialogFooter>
-            </Form>
+                <DialogActions
+                    submitLabel="Create repository"
+                    submitDisabled={!canSubmit}
+                    submitLoading={mutation.isPending}
+                />
+            </DialogForm>
         </>
     );
 }

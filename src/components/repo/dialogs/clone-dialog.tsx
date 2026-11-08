@@ -1,7 +1,10 @@
 import { useSelector } from "@tanstack/react-store";
+import { CornerDownLeft } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 
+import { Kbd } from "@/components/ui/kbd";
+import { Scritto } from "@/components/ui/scritto";
 import { useAppServices } from "@/contexts/services-context";
 import { useActiveConnection } from "@/hooks/forge/use-forge-account";
 import { CloneSessionController } from "@/lib/repositories/clone-session";
@@ -22,8 +25,8 @@ import {
     DialogPopup,
     DialogTitle,
 } from "../../ui/dialog";
+import { DialogForm } from "../../ui/dialog-actions";
 import { Field, FieldLabel } from "../../ui/field";
-import { Form } from "../../ui/form";
 import { Input } from "../../ui/input";
 import { CloneProgressPanel } from "./clone-progress-panel";
 import { DestinationInput } from "./destination-input";
@@ -128,13 +131,7 @@ export function CloneRepoDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <Form
-                    className="contents"
-                    onSubmit={(event) => {
-                        event.preventDefault();
-                        handleClone();
-                    }}
-                >
+                <DialogForm onSubmit={handleClone}>
                     <DialogPanel className="p-0">
                         <motion.div
                             layout
@@ -223,34 +220,27 @@ export function CloneRepoDialog({
                     </DialogPanel>
 
                     <DialogFooter>
-                        {running ? (
-                            <>
-                                <Button
-                                    variant="outline"
-                                    onClick={() => void controller.cancel()}
-                                >
-                                    Cancel clone
-                                </Button>
-                            </>
-                        ) : (
-                            <>
-                                <DialogClose
-                                    render={<Button variant="ghost" />}
-                                >
-                                    Cancel
-                                </DialogClose>
-                                <Button
-                                    type="submit"
-                                    disabled={!canClone}
-                                    variant="info"
-                                    data-testid="clone-submit"
-                                >
-                                    Clone
-                                </Button>
-                            </>
-                        )}
+                        <DialogClose render={<Button variant="secondary" />}>
+                            Cancel <Kbd>Esc</Kbd>
+                        </DialogClose>
+                        <Button
+                            type={running ? undefined : "submit"}
+                            disabled={running ? undefined : !canClone}
+                            onClick={() => {
+                                if (!running) return;
+                                void controller.cancel();
+                            }}
+                            variant={running ? "destructive" : "info"}
+                            data-testid="clone-submit"
+                            className="transition-colors"
+                        >
+                            <Scritto value={running ? "Cancel" : "Clone"} />{" "}
+                            <Kbd className="text-foreground dark:text-background">
+                                <CornerDownLeft />
+                            </Kbd>
+                        </Button>
                     </DialogFooter>
-                </Form>
+                </DialogForm>
             </DialogPopup>
         </Dialog>
     );

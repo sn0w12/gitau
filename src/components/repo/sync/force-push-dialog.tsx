@@ -1,16 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { TriangleAlert } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import {
     Dialog,
     DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogPanel,
     DialogPopup,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogActions } from "@/components/ui/dialog-actions";
 import { useAppServices } from "@/contexts/services-context";
 import { historyPageQuery } from "@/lib/backend/queries/repository-queries";
 
@@ -151,14 +150,12 @@ function ForcePushDialogBody({
                     </p>
                 </DialogPanel>
             )}
-            <DialogFooter>
-                <Button variant="outline" onClick={onClose}>
-                    Cancel
-                </Button>
-                <Button variant="destructive" onClick={() => void onConfirm()}>
-                    Force push
-                </Button>
-            </DialogFooter>
+            <DialogActions
+                onCancel={onClose}
+                submitLabel="Force push"
+                submitVariant="destructive"
+                onSubmit={onConfirm}
+            />
         </>
     );
 }

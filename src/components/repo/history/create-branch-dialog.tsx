@@ -1,18 +1,15 @@
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import {
     Dialog,
-    DialogClose,
     DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogPanel,
     DialogPopup,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogActions, DialogForm } from "@/components/ui/dialog-actions";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import type { CommitSummary } from "@/lib/backend/protocol";
 
@@ -82,13 +79,7 @@ function CreateBranchDialogBody({
                     Your current branch stays checked out.
                 </DialogDescription>
             </DialogHeader>
-            <Form
-                className="contents"
-                onSubmit={(event) => {
-                    event.preventDefault();
-                    void handleSubmit();
-                }}
-            >
+            <DialogForm onSubmit={() => void handleSubmit()}>
                 <DialogPanel className="flex flex-col gap-3">
                     <Field>
                         <FieldLabel>Name</FieldLabel>
@@ -100,19 +91,12 @@ function CreateBranchDialogBody({
                         />
                     </Field>
                 </DialogPanel>
-                <DialogFooter>
-                    <DialogClose render={<Button variant="ghost" />}>
-                        Cancel
-                    </DialogClose>
-                    <Button
-                        type="submit"
-                        disabled={!canSubmit}
-                        loading={submitting}
-                    >
-                        Create branch
-                    </Button>
-                </DialogFooter>
-            </Form>
+                <DialogActions
+                    submitLabel="Create branch"
+                    submitDisabled={!canSubmit}
+                    submitLoading={submitting}
+                />
+            </DialogForm>
         </>
     );
 }

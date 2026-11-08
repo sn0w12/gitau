@@ -242,7 +242,7 @@ function dialogButton(label: string): HTMLButtonElement {
     const popup = document.querySelector('[data-slot="dialog-popup"]');
     expect(popup).not.toBeNull();
     const button = Array.from(popup!.querySelectorAll("button")).find(
-        (candidate) => candidate.textContent === label
+        (candidate) => candidate.textContent?.trim().startsWith(label)
     );
     expect(button).toBeDefined();
     return button!;
@@ -343,7 +343,7 @@ describe("CommitContextMenu", () => {
 
         const popup = document.querySelector('[data-slot="dialog-popup"]');
         const submit = Array.from(popup!.querySelectorAll("button")).find(
-            (button) => button.textContent === "Amend commit"
+            (button) => button.textContent?.trim().startsWith("Amend commit")
         );
         expect(submit).toBeDefined();
         await click(submit!);
@@ -406,7 +406,7 @@ describe("CommitContextMenu", () => {
 
         const popup = document.querySelector('[data-slot="dialog-popup"]');
         const submit = Array.from(popup!.querySelectorAll("button")).find(
-            (button) => button.textContent === "Create tag"
+            (button) => button.textContent?.trim().startsWith("Create tag")
         );
         expect(submit).toBeDefined();
         await click(submit!);

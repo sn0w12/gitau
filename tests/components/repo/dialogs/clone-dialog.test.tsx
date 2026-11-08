@@ -101,7 +101,7 @@ async function typeInto(selector: string, value: string): Promise<void> {
 async function clickButtonWithText(text: string): Promise<void> {
     await flush();
     const button = [...document.body.querySelectorAll("button")].find(
-        (candidate) => candidate.textContent!.includes(text)
+        (candidate) => candidate.textContent?.trim() === text
     );
     if (!button) throw new Error(`button not found: ${text}`);
     await act(async () => {
@@ -188,7 +188,7 @@ describe("CloneRepoDialog", () => {
         await clickButtonWithText("Clone");
         await waitFor('[data-testid="clone-phase"]');
 
-        await clickButtonWithText("Cancel clone");
+        await clickButtonWithText("Cancel");
         expect(services.cancelCalls).toEqual([11]);
 
         services.emit({ event: "cancelled", operationId: 11 });

@@ -109,7 +109,7 @@ describe("useRemoveRepository", () => {
             promise = captured.remove!(REPO_PATH);
         });
         await act(async () => {
-            fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+            fireEvent.click(screen.getByRole("button", { name: /^Cancel/ }));
         });
         const outcome = await promise!;
 

@@ -4,16 +4,14 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
-    DialogClose,
     DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogPanel,
     DialogPopup,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogActions, DialogForm } from "@/components/ui/dialog-actions";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Form } from "@/components/ui/form";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
 import { ScrollTextarea } from "@/components/ui/textarea";
 import {
@@ -156,13 +154,7 @@ function HookEditorDialogBody({ repoId }: { repoId: number }) {
                     created on save.
                 </DialogDescription>
             </DialogHeader>
-            <Form
-                className="contents"
-                onSubmit={(event) => {
-                    event.preventDefault();
-                    void handleSave();
-                }}
-            >
+            <DialogForm onSubmit={() => void handleSave()}>
                 <DialogPanel>
                     <Tabs
                         orientation="vertical"
@@ -258,15 +250,12 @@ function HookEditorDialogBody({ repoId }: { repoId: number }) {
                         })}
                     </Tabs>
                 </DialogPanel>
-                <DialogFooter>
-                    <DialogClose render={<Button variant="ghost" />}>
-                        Cancel
-                    </DialogClose>
-                    <Button type="submit" disabled={!canSave} loading={saving}>
-                        Save
-                    </Button>
-                </DialogFooter>
-            </Form>
+                <DialogActions
+                    submitLabel="Save"
+                    submitDisabled={!canSave}
+                    submitLoading={saving}
+                />
+            </DialogForm>
         </>
     );
 }

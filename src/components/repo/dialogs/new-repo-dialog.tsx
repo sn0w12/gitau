@@ -13,20 +13,17 @@ import {
     rememberRepositoryDirectory,
 } from "@/lib/repositories/destination-memory";
 
-import { Button } from "../../ui/button";
 import { Checkbox } from "../../ui/checkbox";
 import {
     Dialog,
-    DialogClose,
     DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogPanel,
     DialogPopup,
     DialogTitle,
 } from "../../ui/dialog";
+import { DialogActions, DialogForm } from "../../ui/dialog-actions";
 import { Field, FieldLabel } from "../../ui/field";
-import { Form } from "../../ui/form";
 import {
     Select,
     SelectItem,
@@ -154,13 +151,7 @@ export function NewRepoDialog({
                         are never overwritten.
                     </DialogDescription>
                 </DialogHeader>
-                <Form
-                    className="contents"
-                    onSubmit={(event) => {
-                        event.preventDefault();
-                        void handleCreate();
-                    }}
-                >
+                <DialogForm onSubmit={() => void handleCreate()}>
                     <DialogPanel className="flex flex-col gap-3">
                         <Field>
                             <FieldLabel>Location</FieldLabel>
@@ -244,20 +235,12 @@ export function NewRepoDialog({
                             </p>
                         ) : null}
                     </DialogPanel>
-                    <DialogFooter>
-                        <DialogClose render={<Button variant="ghost" />}>
-                            Cancel
-                        </DialogClose>
-                        <Button
-                            type="submit"
-                            disabled={!canCreate}
-                            loading={submitting}
-                            data-testid="new-repo-submit"
-                        >
-                            Create
-                        </Button>
-                    </DialogFooter>
-                </Form>
+                    <DialogActions
+                        submitLabel="Create"
+                        submitDisabled={!canCreate}
+                        submitLoading={submitting}
+                    />
+                </DialogForm>
             </DialogPopup>
         </Dialog>
     );

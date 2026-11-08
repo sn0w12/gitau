@@ -365,8 +365,8 @@ async function openCreateDialog(services: Services) {
 }
 
 function dialogButton(label: string): HTMLButtonElement {
-    return Array.from(document.querySelectorAll("button")).find(
-        (button) => button.textContent === label
+    return Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.trim().startsWith(label)
     )!;
 }
 

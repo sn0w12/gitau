@@ -1,16 +1,15 @@
 import * as React from "react";
 
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
     Dialog,
     DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogPanel,
     DialogPopup,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogActions } from "@/components/ui/dialog-actions";
 import { Field, FieldLabel } from "@/components/ui/field";
 
 export type ConfirmVariant = "default" | "destructive";
@@ -91,18 +90,15 @@ function ConfirmActions({
     };
 
     return (
-        <>
-            <Button variant="outline" onClick={onCancel} disabled={loading}>
-                {cancelText}
-            </Button>
-            <Button
-                variant={variant === "destructive" ? "destructive" : "default"}
-                onClick={handleConfirm}
-                loading={loading}
-            >
-                {confirmText}
-            </Button>
-        </>
+        <DialogActions
+            cancelLabel={cancelText}
+            cancelDisabled={loading}
+            onCancel={onCancel}
+            submitLabel={confirmText}
+            submitVariant={variant === "destructive" ? "destructive" : "info"}
+            submitLoading={loading}
+            onSubmit={() => void handleConfirm()}
+        />
     );
 }
 
@@ -202,15 +198,13 @@ function ConfirmDialogBody({
                     </Field>
                 </DialogPanel>
             )}
-            <DialogFooter>
-                <ConfirmActions
-                    onConfirm={handleConfirm}
-                    onCancel={onCancel}
-                    confirmText={confirmText}
-                    cancelText={cancelText}
-                    variant={variant}
-                />
-            </DialogFooter>
+            <ConfirmActions
+                onConfirm={handleConfirm}
+                onCancel={onCancel}
+                confirmText={confirmText}
+                cancelText={cancelText}
+                variant={variant}
+            />
         </>
     );
 }

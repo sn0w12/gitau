@@ -3,16 +3,15 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect } from "react";
 import type { ReactNode } from "react";
 
-import { Button } from "@/components/ui/button";
 import {
     Dialog,
     DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogPanel,
     DialogPopup,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogActions } from "@/components/ui/dialog-actions";
 import { Progress } from "@/components/ui/progress";
 import { EASE_SNAPPY } from "@/lib/motion";
 import type { UpdateState } from "@/lib/updates/update-controller";
@@ -154,14 +153,12 @@ function AvailableView({
                     <CustomMarkdown>{body}</CustomMarkdown>
                 </DialogPanel>
             ) : null}
-            <DialogFooter>
-                <Button variant="ghost" onClick={onLater}>
-                    Later
-                </Button>
-                <Button variant="info" onClick={onInstall}>
-                    Restart and update
-                </Button>
-            </DialogFooter>
+            <DialogActions
+                cancelLabel="Later"
+                onCancel={onLater}
+                submitLabel="Restart and update"
+                onSubmit={onInstall}
+            />
         </>
     );
 }
@@ -235,14 +232,12 @@ function FailedView({
                     {message}
                 </p>
             </DialogPanel>
-            <DialogFooter>
-                <Button variant="ghost" onClick={onLater}>
-                    Later
-                </Button>
-                <Button variant="info" onClick={onRetry}>
-                    Try again
-                </Button>
-            </DialogFooter>
+            <DialogActions
+                cancelLabel="Later"
+                onCancel={onLater}
+                submitLabel="Try again"
+                onSubmit={onRetry}
+            />
         </>
     );
 }

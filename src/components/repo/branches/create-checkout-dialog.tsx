@@ -2,19 +2,16 @@ import { useQueryClient } from "@tanstack/react-query";
 import { FolderGit2, GitBranch } from "lucide-react";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import {
     Dialog,
-    DialogClose,
     DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogPanel,
     DialogPopup,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogActions, DialogForm } from "@/components/ui/dialog-actions";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTab } from "@/components/ui/tabs";
 import {
@@ -146,13 +143,7 @@ function CreateCheckoutForm({
                         : "Adds a linked checkout beside this repository."}
                 </DialogDescription>
             </DialogHeader>
-            <Form
-                className="contents"
-                onSubmit={(event) => {
-                    event.preventDefault();
-                    void handleSubmit();
-                }}
-            >
+            <DialogForm onSubmit={() => void handleSubmit()}>
                 <DialogPanel className="p-0">
                     <div className="flex flex-col gap-2 px-6 pb-6">
                         <Tabs
@@ -238,21 +229,16 @@ function CreateCheckoutForm({
                         </div>
                     </div>
                 </DialogPanel>
-                <DialogFooter>
-                    <DialogClose render={<Button variant="ghost" />}>
-                        Cancel
-                    </DialogClose>
-                    <Button
-                        type="submit"
-                        disabled={!canSubmit}
-                        loading={submitting}
-                    >
-                        {target === "branch"
+                <DialogActions
+                    submitLabel={
+                        target === "branch"
                             ? "Create branch"
-                            : "Create worktree"}
-                    </Button>
-                </DialogFooter>
-            </Form>
+                            : "Create worktree"
+                    }
+                    submitDisabled={!canSubmit}
+                    submitLoading={submitting}
+                />
+            </DialogForm>
         </>
     );
 }
