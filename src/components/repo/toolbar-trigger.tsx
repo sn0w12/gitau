@@ -1,12 +1,8 @@
-import { motion, useReducedMotion } from "motion/react";
 import type { ComponentProps, ReactNode } from "react";
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
 
+import { AnimatedSize } from "@/components/ui/animated-size";
 import { BORDER_GRADIENT, REPO_TOOLBAR_TRIGGER_CLASS } from "@/lib/constants";
-import { EASE_SNAPPY } from "@/lib/motion";
 import { cn } from "@/lib/utils";
-
-const WIDTH_TRANSITION = { duration: 0.2, ease: EASE_SNAPPY } as const;
 
 const ACTION_TRIGGER_EXTRAS =
     "text-left transition-opacity duration-200 disabled:pointer-events-none disabled:opacity-64";
@@ -44,41 +40,14 @@ const MEASURE_CLASS = cn("block h-full w-max", COLUMN_MIN);
  * the animation runs and while a narrow panel squeezes the row.
  */
 export function ToolbarTriggerFrame({ children }: { children: ReactNode }) {
-    const innerRef = useRef<HTMLSpanElement>(null);
-    const [width, setWidth] = useState<number | null>(null);
-    const reducedMotion = useReducedMotion();
-
-    const measure = useCallback(() => {
-        const inner = innerRef.current;
-        if (!inner) return;
-        // A zero width (jsdom, a hidden tab) keeps the last one rather than
-        // collapsing the frame.
-        const intrinsic = Math.round(inner.getBoundingClientRect().width);
-        setWidth((prev) => (intrinsic === 0 ? prev : intrinsic));
-    }, []);
-
-    useLayoutEffect(measure);
-
-    // The `lg:` breakpoints and font swaps resize the content without a render,
-    // so only an observer sees them.
-    useLayoutEffect(() => {
-        const inner = innerRef.current;
-        if (!inner || typeof ResizeObserver === "undefined") return;
-        const observer = new ResizeObserver(measure);
-        observer.observe(inner);
-        return () => observer.disconnect();
-    }, [measure]);
-
     return (
-        <motion.div
+        <AnimatedSize
+            height={false}
             className={FRAME_CLASS}
-            animate={{ width: width ?? "auto" }}
-            transition={reducedMotion ? { duration: 0 } : WIDTH_TRANSITION}
+            innerClassName={MEASURE_CLASS}
         >
-            <span ref={innerRef} className={MEASURE_CLASS}>
-                {children}
-            </span>
-        </motion.div>
+            {children}
+        </AnimatedSize>
     );
 }
 

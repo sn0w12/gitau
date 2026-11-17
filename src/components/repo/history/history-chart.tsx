@@ -13,19 +13,14 @@ import { scaleBand } from "@tanstack/charts/scales/band";
 import { scaleLinear } from "@tanstack/charts/scales/linear";
 import { tooltip } from "@tanstack/charts/tooltip";
 import { RendererChart } from "@tanstack/react-charts/tooltip";
-import {
-    useId,
-    useLayoutEffect,
-    useMemo,
-    useRef,
-    useState,
-    type CSSProperties,
-} from "react";
+import { useId, useMemo, type CSSProperties } from "react";
 
 import {
     HISTORY_CHART_HEIGHT,
     type HistoryChartRow,
 } from "@/components/repo/history/history-chart-types";
+import { AnimatedSize } from "@/components/ui/animated-size";
+import { EASE_SNAPPY } from "@/lib/motion";
 
 export { HISTORY_CHART_HEIGHT };
 export type { HistoryChartRow };
@@ -306,49 +301,36 @@ function HistoryTooltip({ row }: { row: HistoryChartRow | undefined }) {
 }
 
 function HistoryTooltipCard({ row }: { row: HistoryChartRow }) {
-    const contentRef = useRef<HTMLDivElement>(null);
-    const [width, setWidth] = useState<number>();
-
-    useLayoutEffect(() => {
-        const content = contentRef.current;
-        if (!content) return;
-        const measured = content.getBoundingClientRect().width;
-        if (measured > 0) setWidth(measured);
-    }, [row]);
-
     return (
-        <div
-            className="overflow-hidden rounded-lg border border-border/50 bg-background shadow-xl transition-[width] duration-150 ease-snappy"
-            style={width === undefined ? undefined : { width }}
+        <AnimatedSize
+            height={false}
+            transition={{ duration: 0.15, ease: EASE_SNAPPY }}
+            className="rounded-lg border border-border/50 bg-background shadow-xl"
+            innerClassName="grid w-max min-w-32 items-start gap-1 px-2.5 py-1.5 text-xs text-foreground"
         >
-            <div
-                ref={contentRef}
-                className="grid w-max min-w-32 items-start gap-1 px-2.5 py-1.5 text-xs text-foreground"
-            >
-                <div className="font-medium">{row.label}</div>
-                <div className="grid gap-0.5">
-                    {SERIES.map((series) => (
-                        <div
-                            key={series.field}
-                            className="flex items-center justify-between gap-4"
-                        >
-                            <div className="flex items-center gap-2">
-                                <span
-                                    aria-hidden="true"
-                                    className="size-2.5 shrink-0 rounded-xs"
-                                    style={{ background: series.color }}
-                                />
-                                <span className="text-muted-foreground">
-                                    {series.label}
-                                </span>
-                            </div>
-                            <span className="font-mono font-medium tabular-nums">
-                                {row[series.field].toLocaleString()}
+            <div className="font-medium">{row.label}</div>
+            <div className="grid gap-0.5">
+                {SERIES.map((series) => (
+                    <div
+                        key={series.field}
+                        className="flex items-center justify-between gap-4"
+                    >
+                        <div className="flex items-center gap-2">
+                            <span
+                                aria-hidden="true"
+                                className="size-2.5 shrink-0 rounded-xs"
+                                style={{ background: series.color }}
+                            />
+                            <span className="text-muted-foreground">
+                                {series.label}
                             </span>
                         </div>
-                    ))}
-                </div>
+                        <span className="font-mono font-medium tabular-nums">
+                            {row[series.field].toLocaleString()}
+                        </span>
+                    </div>
+                ))}
             </div>
-        </div>
+        </AnimatedSize>
     );
 }

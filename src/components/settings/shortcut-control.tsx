@@ -3,7 +3,7 @@ import { X } from "lucide-react";
 import type { ReactNode } from "react";
 import { Fragment } from "react";
 
-import { AnimatedWidth } from "@/components/ui/animated-width";
+import { AnimatedSize } from "@/components/ui/animated-size";
 import { BlurCrossfade } from "@/components/ui/blur-crossfade";
 import { Button } from "@/components/ui/button";
 import {
@@ -105,11 +105,16 @@ export function ShortcutControl({
                 </Button>
             </InsetInputAddition>
             <InsetInputValue className="cursor-text px-2">
-                <AnimatedWidth>
+                <AnimatedSize
+                    as="span"
+                    innerAs="span"
+                    height={false}
+                    className="inline-flex"
+                >
                     <BlurCrossfade valueKey={preview.key}>
                         {preview.node}
                     </BlurCrossfade>
-                </AnimatedWidth>
+                </AnimatedSize>
             </InsetInputValue>
             <InsetInputAddition
                 align="inline-end"

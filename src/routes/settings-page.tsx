@@ -1,9 +1,9 @@
 import { X } from "lucide-react";
-import { motion } from "motion/react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import { AttributionsCard } from "@/components/settings/attributions-card";
 import { ReleaseInfoCard } from "@/components/settings/release-info-card";
+import { AnimatedSize } from "@/components/ui/animated-size";
 import { Button } from "@/components/ui/button";
 import { Frame, FramePanel } from "@/components/ui/frame";
 import {
@@ -32,24 +32,6 @@ export function SettingsPage() {
     const [query, setQuery] = useState("");
     const schema = useSettingsSchema();
     const values = useSettingsValues();
-    const contentRef = useRef<HTMLDivElement>(null);
-    const [contentHeight, setContentHeight] = useState<number>();
-
-    useLayoutEffect(() => {
-        const element = contentRef.current;
-        if (!element) return;
-
-        const updateHeight = () => {
-            setContentHeight(element.scrollHeight);
-        };
-
-        updateHeight();
-
-        const observer = new ResizeObserver(updateHeight);
-        observer.observe(element);
-
-        return () => observer.disconnect();
-    }, [selectedTabId]);
 
     if (schema.tabs.length === 0) {
         return (
@@ -124,63 +106,60 @@ export function SettingsPage() {
                     </InputGroup>
                 </div>
                 <Frame className="ui-selectable w-full">
-                    <motion.div
-                        animate={{ height: contentHeight }}
+                    <AnimatedSize
+                        width={false}
                         transition={{
                             duration: 0.35,
                             ease: EASE_OUT,
                         }}
-                        style={{ overflow: "hidden" }}
                     >
-                        <div ref={contentRef}>
-                            {schema.tabs.map((tab) => (
-                                <TabsPanel
-                                    key={tab.id}
-                                    value={tab.id}
-                                    className="min-h-0 space-y-1"
-                                >
-                                    {tab.sections.map((section) =>
-                                        visibleSettings(section).length > 0 ? (
-                                            <SettingsSectionCard
-                                                key={section.id}
-                                                section={section}
-                                            />
-                                        ) : null
-                                    )}
-                                </TabsPanel>
-                            ))}
+                        {schema.tabs.map((tab) => (
                             <TabsPanel
-                                value={aboutTab.id}
+                                key={tab.id}
+                                value={tab.id}
                                 className="min-h-0 space-y-1"
                             >
-                                <ReleaseInfoCard />
-                                <AttributionsCard />
+                                {tab.sections.map((section) =>
+                                    visibleSettings(section).length > 0 ? (
+                                        <SettingsSectionCard
+                                            key={section.id}
+                                            section={section}
+                                        />
+                                    ) : null
+                                )}
                             </TabsPanel>
-                            {searching && (
-                                <TabsPanel
-                                    value={SEARCH_PANEL_ID}
-                                    className="min-h-0 space-y-1"
-                                >
-                                    {searchResults.length === 0 ? (
-                                        <FramePanel>
-                                            <p className="text-sm text-muted-foreground">
-                                                {`No settings match "${searchTerm}".`}
-                                            </p>
-                                        </FramePanel>
-                                    ) : (
-                                        searchResults.map((group) => (
-                                            <SettingsSectionCard
-                                                key={`${group.tabId}/${group.section.id}`}
-                                                section={group.section}
-                                                settings={group.settings}
-                                                tabLabel={group.tabLabel}
-                                            />
-                                        ))
-                                    )}
-                                </TabsPanel>
-                            )}
-                        </div>
-                    </motion.div>
+                        ))}
+                        <TabsPanel
+                            value={aboutTab.id}
+                            className="min-h-0 space-y-1"
+                        >
+                            <ReleaseInfoCard />
+                            <AttributionsCard />
+                        </TabsPanel>
+                        {searching && (
+                            <TabsPanel
+                                value={SEARCH_PANEL_ID}
+                                className="min-h-0 space-y-1"
+                            >
+                                {searchResults.length === 0 ? (
+                                    <FramePanel>
+                                        <p className="text-sm text-muted-foreground">
+                                            {`No settings match "${searchTerm}".`}
+                                        </p>
+                                    </FramePanel>
+                                ) : (
+                                    searchResults.map((group) => (
+                                        <SettingsSectionCard
+                                            key={`${group.tabId}/${group.section.id}`}
+                                            section={group.section}
+                                            settings={group.settings}
+                                            tabLabel={group.tabLabel}
+                                        />
+                                    ))
+                                )}
+                            </TabsPanel>
+                        )}
+                    </AnimatedSize>
                 </Frame>
             </Tabs>
         </ScrollArea>
