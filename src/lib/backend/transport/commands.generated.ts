@@ -13,7 +13,7 @@ export const commands = {
     /**
      * Families installed on this machine, used as the choices for the font
      * settings. Enumeration touches every font file, so it is cached for the
-     * life of the process.
+     * life of the process, including concurrent startup and Settings requests.
      */
     fonts_list: () =>
         invokeCommand<CommandResults["fonts_list"]>("fonts_list"),

@@ -49,7 +49,14 @@ export function FontControl({
                 <ComboboxEmpty>No fonts found.</ComboboxEmpty>
                 <ComboboxList>
                     {(family: string) => (
-                        <ComboboxItem key={family} value={family}>
+                        // Each row is shaped in its own family. Skipping
+                        // offscreen rows stops opening the list from paying for
+                        // every installed typeface at once.
+                        <ComboboxItem
+                            key={family}
+                            value={family}
+                            className="[contain-intrinsic-size:auto_1.75rem] [content-visibility:auto]"
+                        >
                             <span
                                 className="block truncate"
                                 style={{

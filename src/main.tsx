@@ -5,7 +5,6 @@ import { createRoot } from "react-dom/client";
 import { ActiveTabHost } from "@/components/active-tab-host";
 import { AppLayout } from "@/components/app-layout";
 import { AppServicesProvider } from "@/components/providers/app-services-provider";
-import { loadHistoryChart } from "@/components/repo/history/history-chart-loader";
 import { Button } from "@/components/ui/button";
 import { WindowReveal } from "@/components/window-reveal";
 import { AppCommandProvider } from "@/contexts/app-command-context";
@@ -26,6 +25,7 @@ import {
     reopenSessionRepositories,
     scheduleReopenRetry,
 } from "@/lib/bootstrap/session-persistence";
+import { scheduleStartupWarmups } from "@/lib/bootstrap/startup-warmups";
 import { startWindowControlsOverlay } from "@/lib/window-controls-overlay";
 
 import "./styles.css";
@@ -173,7 +173,7 @@ async function bootstrap(): Promise<void> {
     );
     bootMark("first.render");
     bootstrapSpan.end();
-    requestIdleCallback(() => void loadHistoryChart(), { timeout: 1000 });
+    scheduleStartupWarmups(services);
 }
 
 bootstrap().catch((error) => {

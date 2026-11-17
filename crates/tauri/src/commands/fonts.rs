@@ -1,27 +1,27 @@
 use std::collections::BTreeSet;
-use std::sync::OnceLock;
+
+use tokio::sync::OnceCell;
 
 use crate::commands::CommandResult;
 
-static SYSTEM_FONT_FAMILIES: OnceLock<Vec<String>> = OnceLock::new();
+static SYSTEM_FONT_FAMILIES: OnceCell<Vec<String>> = OnceCell::const_new();
 
 /// Families installed on this machine, used as the choices for the font
 /// settings. Enumeration touches every font file, so it is cached for the
-/// life of the process.
+/// life of the process, including concurrent startup and Settings requests.
 #[tauri::command]
 pub async fn fonts_list() -> CommandResult<Vec<String>> {
-    if let Some(families) = SYSTEM_FONT_FAMILIES.get() {
-        return Ok(families.clone());
-    }
-
-    let families = tauri::async_runtime::spawn_blocking(installed_font_families)
-        .await
-        .unwrap_or_else(|error| {
-            log::warn!("system font enumeration failed: {error}");
-            Vec::new()
-        });
-
-    Ok(SYSTEM_FONT_FAMILIES.get_or_init(|| families).clone())
+    let families = SYSTEM_FONT_FAMILIES
+        .get_or_init(|| async {
+            tauri::async_runtime::spawn_blocking(installed_font_families)
+                .await
+                .unwrap_or_else(|error| {
+                    log::warn!("system font enumeration failed: {error}");
+                    Vec::new()
+                })
+        })
+        .await;
+    Ok(families.clone())
 }
 
 fn installed_font_families() -> Vec<String> {
