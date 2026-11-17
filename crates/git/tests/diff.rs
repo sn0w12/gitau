@@ -214,8 +214,8 @@ fn root_commit_diff_lists_every_file_against_empty_tree() {
 }
 
 #[test]
-fn image_sections_carry_base64_data_urls() {
-    use base64::Engine as _;
+fn image_sections_resolve_sides_on_demand() {
+    use git::streaming::store::DiffImageSideKind;
 
     let repo = TestRepo::init("diff-image");
     let old: [u8; 10] = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00];
@@ -236,17 +236,16 @@ fn image_sections_carry_base64_data_urls() {
         other => panic!("first event must be Started, got {other:?}"),
     };
 
-    let image = op.read_image(section_id).unwrap().expect("image payload");
-    let decode = |url: &str| {
-        let encoded = url
-            .strip_prefix("data:image/png;base64,")
-            .expect("png data url");
-        base64::engine::general_purpose::STANDARD
-            .decode(encoded)
+    let source = op.image_source(section_id).unwrap().expect("image source");
+    assert_eq!(source.mime, "image/png");
+    let session = git::engines::gix::GixSession::discover(&repo.root).unwrap();
+    let read = |side| {
+        git::engines::gix::diff::read_image_side(&session, &source, side)
             .unwrap()
+            .expect("side bytes")
     };
-    assert_eq!(decode(&image.old.expect("old side").data_url), old.to_vec());
-    assert_eq!(decode(&image.new.expect("new side").data_url), new.to_vec());
+    assert_eq!(read(DiffImageSideKind::Old), old.to_vec());
+    assert_eq!(read(DiffImageSideKind::New), new.to_vec());
 }
 
 #[test]

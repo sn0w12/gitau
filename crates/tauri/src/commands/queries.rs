@@ -7,7 +7,7 @@ use crate::commands::channel::channel_send;
 use crate::commands::{to_serialized, CommandResult};
 use crate::state::{to_repo_id, SharedState};
 use git::domain::history::{BlameResult, FileContent, HistoryChart, HistoryPage, RepoListing};
-use git::streaming::store::RangeResult;
+use git::streaming::store::{DiffImage, DiffImageSide, DiffImageSideKind, RangeResult};
 
 #[tauri::command]
 pub async fn git_history_page(
@@ -141,16 +141,36 @@ pub async fn git_branch_ahead_behind(
         .map_err(to_serialized)
 }
 
+/// Returns `gitau-image` protocol URLs for an image section. The webview
+/// fetches the bytes itself, so no image data crosses the IPC payload.
 #[tauri::command]
 pub fn git_read_diff_image(
     state: SharedState<'_>,
+    webview: tauri::Webview,
     operation_id: u64,
     section_id: u32,
-) -> CommandResult<Option<git::streaming::store::DiffImage>> {
-    state
+) -> CommandResult<Option<DiffImage>> {
+    let Some(source) = state
         .backend
-        .read_diff_image(git::domain::OperationId(operation_id), section_id)
-        .map_err(to_serialized)
+        .diff_image_source(git::domain::OperationId(operation_id), section_id)
+        .map_err(to_serialized)?
+    else {
+        return Ok(None);
+    };
+
+    let side = |kind| -> CommandResult<Option<DiffImageSide>> {
+        if !source.has_side(kind) {
+            return Ok(None);
+        }
+        let url = crate::commands::diff_image::url(&webview, operation_id, section_id, kind)
+            .map_err(|error| to_serialized(git::error::GitError::internal(error.to_string())))?;
+        Ok(Some(DiffImageSide { url }))
+    };
+
+    Ok(Some(DiffImage {
+        old: side(DiffImageSideKind::Old)?,
+        new: side(DiffImageSideKind::New)?,
+    }))
 }
 
 #[tauri::command]

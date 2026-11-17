@@ -330,8 +330,8 @@ fn produce_section(
 ) -> Result<()> {
     let mut section =
         crate::engines::gix::diff::materialize(&job.session, &job.request, plan, &job.blobs)?;
-    if let Some(image) = section.image.clone() {
-        op.set_section_image(plan.meta.section_id, image)?;
+    if let Some(image) = section.image.take() {
+        op.set_section_image_source(plan.meta.section_id, image)?;
     }
     op.set_section_source(plan.meta.section_id, section.source.clone())?;
     let _ = tx.send((

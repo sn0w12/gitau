@@ -42,7 +42,8 @@ struct Inner {
 #[derive(Debug)]
 struct SectionData {
     meta: SectionMeta,
-    image: Option<DiffImage>,
+    /// Resolved on demand by the image protocol; streaming never touches blobs.
+    image_source: Option<DiffImageSource>,
     start_row: u64,
     declared_rows: Option<u64>,
     /// Maintained incrementally on append; equals the sum of chunk lengths.
@@ -84,7 +85,7 @@ impl DiffOperation {
             .iter()
             .map(|meta| SectionData {
                 meta: meta.clone(),
-                image: None,
+                image_source: None,
                 start_row: 0,
                 declared_rows: None,
                 row_count: 0,
@@ -96,10 +97,10 @@ impl DiffOperation {
         guard.estimated_total_rows = estimated_total_rows;
     }
 
-    pub fn set_section_image(&self, section_id: u32, image: DiffImage) -> Result<()> {
+    pub fn set_section_image_source(&self, section_id: u32, source: DiffImageSource) -> Result<()> {
         let mut guard = self.inner.lock().unwrap();
         let section = section_mut(&mut guard, section_id)?;
-        section.image = Some(image);
+        section.image_source = Some(source);
         Ok(())
     }
 
@@ -120,14 +121,14 @@ impl DiffOperation {
         Ok(section.source.clone())
     }
 
-    pub fn read_image(&self, section_id: u32) -> Result<Option<DiffImage>> {
+    pub fn image_source(&self, section_id: u32) -> Result<Option<DiffImageSource>> {
         let guard = self.inner.lock().unwrap();
         let section = guard
             .sections
             .get(section_id as usize)
             .filter(|section| section.meta.section_id == section_id)
             .ok_or_else(|| GitError::invalid_input(format!("unknown section id {section_id}")))?;
-        Ok(section.image.clone())
+        Ok(section.image_source.clone())
     }
 
     pub fn started_sections(&self) -> Vec<SectionMeta> {
@@ -291,9 +292,9 @@ fn section_mut(inner: &mut Inner, section_id: u32) -> Result<&mut SectionData> {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiffImageSide {
-    /// `data:<mime>;base64,...`; a byte array would cross IPC as a JSON
-    /// number array, several times larger and parsed element by element.
-    pub data_url: String,
+    /// Served by the `gitau-image` protocol; the webview fetches and decodes
+    /// the bytes itself instead of receiving them through the IPC payload.
+    pub url: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -303,6 +304,34 @@ pub struct DiffImage {
     pub old: Option<DiffImageSide>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub new: Option<DiffImageSide>,
+}
+
+/// Where an image section's bytes live, resolved only when the section is
+/// viewed. Holding this instead of the bytes keeps a commit that touches many
+/// images from reading and serving all of them while the diff streams.
+#[derive(Debug, Clone)]
+pub struct DiffImageSource {
+    pub path: String,
+    pub mime: String,
+    pub old_id: Option<ObjectId>,
+    pub new_id: Option<ObjectId>,
+    pub worktree: bool,
+    pub symlink: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiffImageSideKind {
+    Old,
+    New,
+}
+
+impl DiffImageSource {
+    pub fn has_side(&self, side: DiffImageSideKind) -> bool {
+        match side {
+            DiffImageSideKind::Old => self.old_id.is_some(),
+            DiffImageSideKind::New => self.new_id.is_some() || self.worktree,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]

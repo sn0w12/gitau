@@ -3,7 +3,11 @@ mod common;
 use common::TestRepo;
 use git::api::changes::StatusOptions;
 use git::api::history::HistoryPageQuery;
+use git::api::queries::DiffRequest;
 use git::domain::{ChangeKind, ChangeSide, Generation};
+use git::runtime::cancellation::CancellationToken;
+use git::streaming::model::DiffEvent;
+use git::streaming::store::DiffImageSideKind;
 use git::{Backend, BackendConfig};
 
 #[tokio::test]
@@ -70,6 +74,64 @@ async fn worktree_image_encodes_a_data_url() {
         .unwrap()
         .expect("data url");
     assert_eq!(url, "data:image/png;base64,iVBORw0KGgoAAAAA");
+}
+
+#[tokio::test]
+async fn diff_image_sides_resolve_from_the_operation_source() {
+    const OLD: [u8; 12] = [
+        0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x01,
+    ];
+    const NEW: [u8; 12] = [
+        0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x02,
+    ];
+    let repo = TestRepo::init("diff-image-sides");
+    repo.initial_commit(&[("README.md", "# hello\n")]);
+    std::fs::write(repo.root.join("pic.png"), OLD).unwrap();
+    repo.commit_all("add image");
+    std::fs::write(repo.root.join("pic.png"), NEW).unwrap();
+
+    let backend = Backend::new(BackendConfig {
+        watch_worktree: false,
+        ..Default::default()
+    });
+    let opened = backend.open_repository(&repo.root).await.unwrap();
+    let (operation, mut rx) = backend
+        .open_diff(opened.id, DiffRequest::default(), CancellationToken::new())
+        .await
+        .unwrap();
+
+    let mut section_id = None;
+    while let Some(event) = rx.recv().await {
+        if let DiffEvent::Started { sections, .. } = event {
+            section_id = sections
+                .iter()
+                .find(|section| section.image)
+                .map(|section| section.section_id);
+        }
+    }
+    let section_id = section_id.expect("image section");
+
+    let source = backend
+        .diff_image_source(operation, section_id)
+        .unwrap()
+        .expect("image source");
+    assert_eq!(source.mime, "image/png");
+    assert!(source.has_side(DiffImageSideKind::Old));
+    assert!(source.has_side(DiffImageSideKind::New));
+
+    let (mime, old) = backend
+        .read_diff_image_side(operation, section_id, DiffImageSideKind::Old)
+        .await
+        .unwrap()
+        .expect("old side");
+    assert_eq!(mime, "image/png");
+    assert_eq!(old, OLD.to_vec());
+    let (_, new) = backend
+        .read_diff_image_side(operation, section_id, DiffImageSideKind::New)
+        .await
+        .unwrap()
+        .expect("new side");
+    assert_eq!(new, NEW.to_vec());
 }
 
 #[tokio::test]

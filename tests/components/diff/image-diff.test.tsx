@@ -14,8 +14,8 @@ describe("ImageDiffView", () => {
             root.render(
                 <ImageDiffView
                     mode="sideBySide"
-                    oldImage={{ dataUrl: "data:image/png;base64,AAAA" }}
-                    newImage={{ dataUrl: "data:image/png;base64,BBBB" }}
+                    oldImage={{ url: "gitau-image://localhost/7-0-old" }}
+                    newImage={{ url: "gitau-image://localhost/7-0-new" }}
                 />
             );
         });
@@ -24,8 +24,8 @@ describe("ImageDiffView", () => {
             img.getAttribute("src")
         );
         expect(srcs).toEqual([
-            "data:image/png;base64,AAAA",
-            "data:image/png;base64,BBBB",
+            "gitau-image://localhost/7-0-old",
+            "gitau-image://localhost/7-0-new",
         ]);
 
         act(() => root.unmount());
@@ -40,8 +40,8 @@ describe("ImageDiffView", () => {
             root.render(
                 <ImageDiffView
                     mode="swipe"
-                    oldImage={{ dataUrl: "data:image/png;base64,AAAA" }}
-                    newImage={{ dataUrl: "data:image/png;base64,BBBB" }}
+                    oldImage={{ url: "gitau-image://localhost/7-0-old" }}
+                    newImage={{ url: "gitau-image://localhost/7-0-new" }}
                 />
             );
         });
@@ -63,16 +63,16 @@ describe("ImageDiffView", () => {
             root.render(
                 <ImageDiffView
                     mode="difference"
-                    oldImage={{ dataUrl: "data:image/png;base64,AAAA" }}
-                    newImage={{ dataUrl: "data:image/png;base64,BBBB" }}
+                    oldImage={{ url: "gitau-image://localhost/7-0-old" }}
+                    newImage={{ url: "gitau-image://localhost/7-0-new" }}
                 />
             );
         });
 
         const images = Array.from(container.querySelectorAll("img"));
         expect(images.map((img) => img.getAttribute("src"))).toEqual([
-            "data:image/png;base64,AAAA",
-            "data:image/png;base64,BBBB",
+            "gitau-image://localhost/7-0-old",
+            "gitau-image://localhost/7-0-new",
         ]);
         expect(images[1].classList.contains("mix-blend-difference")).toBe(true);
         expect(container.querySelector(".invert")).not.toBeNull();

@@ -66,7 +66,7 @@ use crate::streaming::graph::{GraphOperation, GraphOperationRegistry, GraphRange
 use crate::streaming::graph_pipeline::{self, GraphJob};
 use crate::streaming::model::{DiffEvent, GraphEvent};
 use crate::streaming::pipeline::{self, DiffJob};
-use crate::streaming::store::{DiffImage, DiffOperation, DiffOperationRegistry, RangeResult};
+use crate::streaming::store::{DiffOperation, DiffOperationRegistry, RangeResult};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -622,12 +622,41 @@ impl Backend {
         Ok((operation_id, rx))
     }
 
-    pub fn read_diff_image(
+    /// Where an image section's bytes live. Cheap: no blob read and no
+    /// encoding, so the caller can decide whether to serve a side at all.
+    pub fn diff_image_source(
         &self,
         operation_id: OperationId,
         section_id: u32,
-    ) -> Result<Option<DiffImage>> {
-        self.operations.get(operation_id)?.read_image(section_id)
+    ) -> Result<Option<crate::streaming::store::DiffImageSource>> {
+        self.operations.get(operation_id)?.image_source(section_id)
+    }
+
+    /// Resolves one image side for the `gitau-image` protocol. Runs the blob
+    /// read on the scheduler so a large image never blocks the webview thread.
+    pub async fn read_diff_image_side(
+        &self,
+        operation_id: OperationId,
+        section_id: u32,
+        side: crate::streaming::store::DiffImageSideKind,
+    ) -> Result<Option<(String, Vec<u8>)>> {
+        let operation = self.operations.get(operation_id)?;
+        let Some(source) = operation.image_source(section_id)? else {
+            return Ok(None);
+        };
+        if !source.has_side(side) {
+            return Ok(None);
+        }
+        let entry = self.registry.get(operation.repo_id)?;
+        let session = entry.gix.clone();
+        let mime = source.mime.clone();
+        let bytes = self
+            .scheduler
+            .run(&CancellationToken::new(), move || {
+                crate::engines::gix::diff::read_image_side(&session, &source, side)
+            })
+            .await?;
+        Ok(bytes.map(|bytes| (mime, bytes)))
     }
 
     pub fn read_diff_range(

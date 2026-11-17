@@ -25,8 +25,8 @@ export function ImageDiffView({
     newImage?: DiffImageSide;
     mode: ImageDiffViewMode;
 }) {
-    const oldUrl = oldImage?.dataUrl;
-    const newUrl = newImage?.dataUrl;
+    const oldUrl = oldImage?.url;
+    const newUrl = newImage?.url;
     if (mode === "swipe") {
         return <SwipeImage oldUrl={oldUrl} newUrl={newUrl} />;
     }

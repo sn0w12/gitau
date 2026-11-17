@@ -284,6 +284,10 @@ export const commands = {
         invokeCommand<CommandResults["git_read_commit_hook"]>("git_read_commit_hook", { args }),
     git_read_diff_context: (args: CommandArgs["git_read_diff_context"]) =>
         invokeCommand<CommandResults["git_read_diff_context"]>("git_read_diff_context", { args }),
+    /**
+     * Returns `gitau-image` protocol URLs for an image section. The webview
+     * fetches the bytes itself, so no image data crosses the IPC payload.
+     */
     git_read_diff_image: (args: CommandArgs["git_read_diff_image"]) =>
         invokeCommand<CommandResults["git_read_diff_image"]>("git_read_diff_image", { args }),
     git_read_diff_range: (args: CommandArgs["git_read_diff_range"]) =>

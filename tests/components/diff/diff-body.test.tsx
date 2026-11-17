@@ -16,7 +16,7 @@ const imageSection: SectionMeta = {
 };
 
 const image: DiffImage = {
-    new: { dataUrl: "data:image/png;base64,AAAA" },
+    new: { url: "gitau-image://localhost/7-0-new" },
 };
 
 describe("DiffBody", () => {
@@ -72,12 +72,12 @@ describe("DiffBody", () => {
 
         render(imageSection, image);
         expect(container.querySelector("img")?.getAttribute("src")).toBe(
-            "data:image/png;base64,AAAA"
+            "gitau-image://localhost/7-0-new"
         );
 
         render({ ...imageSection, sectionId: 1, path: "images/b.png" });
         expect(container.querySelector("img")?.getAttribute("src")).toBe(
-            "data:image/png;base64,AAAA"
+            "gitau-image://localhost/7-0-new"
         );
 
         act(() => root.unmount());

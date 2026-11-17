@@ -2330,7 +2330,6 @@ name = "git"
 version = "0.2.3"
 dependencies = [
  "ansi",
- "base64 0.22.1",
  "chrono",
  "criterion",
  "forge-core",

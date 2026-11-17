@@ -17,6 +17,7 @@ use crate::domain::{RelativePath, RevisionSpec};
 use crate::engines::gix::session::GixSession;
 use crate::error::{GitError, Result};
 use crate::streaming::model::{DiffComparison, DiffRow, DiffRowKind, SectionKind, SectionMeta};
+use crate::streaming::store::{DiffImageSideKind, DiffImageSource};
 
 const NO_NEWLINE_MARKER: &str = "\\ No newline at end of file";
 /// git's binary heuristic: a NUL byte within the leading 8000 bytes marks a
@@ -181,7 +182,7 @@ fn cached_blob(repo: &gix::Repository, cache: &BlobCache, id: Oid) -> Result<Arc
 /// resumable highlighter the emitter drives chunk-by-chunk.
 pub struct MaterializedSection {
     pub rows: Vec<DiffRow>,
-    pub image: Option<crate::streaming::store::DiffImage>,
+    pub image: Option<DiffImageSource>,
     pub highlighter: Option<crate::engines::gix::syntax::SectionHighlighter>,
     /// Retrieved lazily during context expansion.
     pub source: crate::streaming::store::SectionSource,
@@ -254,11 +255,29 @@ pub fn materialize(
     plan: &SectionPlan,
     blobs: &BlobCache,
 ) -> Result<MaterializedSection> {
-    let repo = session.handle();
     let source = crate::streaming::store::SectionSource {
         path: plan.meta.path.as_str().to_owned(),
         old_id: plan.old_id.map(crate::domain::ObjectId::from),
     };
+    if plan.meta.image {
+        return Ok(MaterializedSection {
+            rows: vec![file_header_row(&plan.meta)],
+            image: Some(DiffImageSource {
+                path: plan.meta.path.as_str().to_owned(),
+                mime: mime_type(plan.meta.path.as_str()),
+                old_id: plan.old_id.map(crate::domain::ObjectId::from),
+                new_id: plan.new_id.map(crate::domain::ObjectId::from),
+                worktree: plan.worktree,
+                symlink: plan.symlink,
+            }),
+            highlighter: None,
+            source,
+            old_line_count: 0,
+            new_line_count: 0,
+        });
+    }
+
+    let repo = session.handle();
     let old_arc = match plan.old_id {
         Some(id) => Some(cached_blob(&repo, blobs, id)?),
         None => None,
@@ -289,35 +308,10 @@ pub fn materialize(
         }
     };
 
-    if is_binary(old_bytes)
-        || is_binary(new_bytes)
-        || is_image_path(plan.meta.path.as_str().as_bytes())
-    {
-        let image = if plan.meta.image {
-            let mime = mime_type(plan.meta.path.as_str());
-            Some(crate::streaming::store::DiffImage {
-                old: plan
-                    .old_id
-                    .is_some()
-                    .then_some(crate::streaming::store::DiffImageSide {
-                        data_url: icons::encode_data_url(&mime, old_bytes),
-                    }),
-                new: (plan.new_id.is_some() || plan.worktree).then_some(
-                    crate::streaming::store::DiffImageSide {
-                        data_url: icons::encode_data_url(&mime, new_bytes),
-                    },
-                ),
-            })
-        } else {
-            None
-        };
-        let mut rows = vec![file_header_row(&plan.meta)];
-        if !plan.meta.image {
-            rows.push(binary_notice_row());
-        }
+    if is_binary(old_bytes) || is_binary(new_bytes) {
         return Ok(MaterializedSection {
-            rows,
-            image,
+            rows: vec![file_header_row(&plan.meta), binary_notice_row()],
+            image: None,
             highlighter: None,
             source,
             old_line_count: 0,
@@ -348,6 +342,42 @@ pub fn materialize(
         old_line_count,
         new_line_count,
     })
+}
+
+/// Reads one side of an image section for the `gitau-image` protocol. Returns
+/// `None` when that side does not exist (added or deleted image).
+pub fn read_image_side(
+    session: &GixSession,
+    source: &DiffImageSource,
+    side: DiffImageSideKind,
+) -> Result<Option<Vec<u8>>> {
+    let repo = session.handle();
+    match side {
+        DiffImageSideKind::Old => match source.old_id {
+            Some(id) => Ok(Some(read_blob(&repo, id)?)),
+            None => Ok(None),
+        },
+        DiffImageSideKind::New => {
+            if let Some(id) = source.new_id {
+                return Ok(Some(read_blob(&repo, id)?));
+            }
+            if !source.worktree {
+                return Ok(None);
+            }
+            let path = source.path.as_bytes();
+            Ok(Some(if source.symlink {
+                link_target(session, path)?
+            } else {
+                workdir_bytes(&repo, path)?
+            }))
+        }
+    }
+}
+
+fn read_blob(repo: &gix::Repository, id: crate::domain::ObjectId) -> Result<Vec<u8>> {
+    let id = gix::ObjectId::try_from(id).map_err(internal)?;
+    let blob = repo.find_blob(id).map_err(internal)?;
+    Ok(blob.data.to_vec())
 }
 
 fn internal(err: impl std::fmt::Display) -> GitError {
@@ -776,6 +806,12 @@ fn sniff_delta_binary(
     delta: &Renamed,
     repo: &mut Option<gix::Repository>,
 ) -> bool {
+    // Image sections render from served bytes, never as text, so reading their
+    // full blobs just to fill `SectionMeta.binary` would make a wide commit
+    // pay for every image twice: once to sniff, once to decode.
+    if is_image_path(delta.path.as_bytes()) {
+        return !is_svg_path(delta.path.as_bytes());
+    }
     if let Some(binary) = delta
         .old_id
         .and_then(|id| blob_is_binary(session, blobs, id, repo))
@@ -874,6 +910,13 @@ fn is_image_path(path: &[u8]) -> bool {
     IMAGE_EXTENSIONS
         .iter()
         .any(|candidate| extension.eq_ignore_ascii_case(candidate))
+}
+
+fn is_svg_path(path: &[u8]) -> bool {
+    let path = String::from_utf8_lossy(path);
+    path.rsplit('.')
+        .next()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("svg"))
 }
 
 fn file_header_row(meta: &SectionMeta) -> DiffRow {

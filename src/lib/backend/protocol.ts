@@ -638,10 +638,10 @@ export interface DiffImage {
 
 export interface DiffImageSide {
     /**
-     * `data:<mime>;base64,...`; a byte array would cross IPC as a JSON
-     * number array, several times larger and parsed element by element.
+     * Served by the `gitau-image` protocol; the webview fetches and decodes
+     * the bytes itself instead of receiving them through the IPC payload.
      */
-    dataUrl: string;
+    url: string;
 }
 
 export interface DiffRequest {

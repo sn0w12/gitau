@@ -87,6 +87,10 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(external_navigation_plugin())
         .plugin(prevent_default())
+        .register_asynchronous_uri_scheme_protocol(
+            commands::diff_image::SCHEME,
+            commands::diff_image::serve,
+        )
         .manage(AppState::default())
         .setup(move |app| {
             let handle = app.handle().clone();
