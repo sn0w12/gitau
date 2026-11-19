@@ -1,0 +1,62 @@
+name: Sync Release Notes
+
+on:
+    release:
+        types: [published, edited]
+    workflow_dispatch:
+        inputs:
+            tag:
+                description: "Release tag to sync, for example v0.2.3"
+                required: true
+                type: string
+
+permissions:
+    contents: write
+
+jobs:
+    sync:
+        runs-on: ubuntu-latest
+        env:
+            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            GH_REPO: ${{ github.repository }}
+        steps:
+            - name: Copy the release body into latest.json
+              shell: bash
+              env:
+                  TAG: ${{ inputs.tag || github.event.release.tag_name }}
+              run: |
+                  case "$TAG" in
+                      v[0-9]*.[0-9]*.[0-9]*) ;;
+                      *)
+                          echo "Not a version tag ($TAG), skipping."
+                          exit 0
+                          ;;
+                  esac
+
+                  work=$(mktemp -d)
+                  gh release download "$TAG" --pattern latest.json --dir "$work" --clobber 2>/dev/null || true
+                  if [ ! -f "$work/latest.json" ]; then
+                      echo "No latest.json on $TAG, skipping."
+                      exit 0
+                  fi
+
+                  notes=$(gh release view "$TAG" --json body --jq .body)
+                  current=$(jq -r '.notes // ""' "$work/latest.json")
+                  if [ "$current" = "$notes" ]; then
+                      echo "latest.json already carries the release body."
+                      exit 0
+                  fi
+
+                  jq --arg notes "$notes" '.notes = $notes' "$work/latest.json" > "$work/next.json"
+                  mv "$work/next.json" "$work/latest.json"
+                  version=$(jq -r .version "$work/latest.json")
+                  gh release upload "$TAG" "$work/latest.json" --clobber
+
+                  if [[ "$TAG" == *-* ]] && gh release view preview >/dev/null 2>&1; then
+                      preview=$(mktemp -d)
+                      gh release download preview --pattern latest.json --dir "$preview" --clobber 2>/dev/null || true
+                      if [ "$(jq -r '.version // ""' "$preview/latest.json" 2>/dev/null)" = "$version" ]; then
+                          cp "$work/latest.json" "$preview/latest.json"
+                          gh release upload preview "$preview/latest.json" --clobber
+                      fi
+                  fi
