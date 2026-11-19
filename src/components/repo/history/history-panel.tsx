@@ -138,9 +138,21 @@ export function HistoryPanel({
         error,
     ]);
 
+    const filter = (
+        <div className="border-b px-0.5 pb-0.5">
+            <Input
+                placeholder="Filter history..."
+                aria-label="Filter history"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+            />
+        </div>
+    );
+
+    let content: ReactNode;
     if (history.isPending) {
-        return (
-            <div className="divide-y">
+        content = (
+            <div className="min-h-0 flex-1 divide-y overflow-hidden">
                 {Array.from({ length: 40 }).map((_, index) => (
                     <Skeleton
                         key={index}
@@ -149,13 +161,10 @@ export function HistoryPanel({
                 ))}
             </div>
         );
-    }
-    if (history.error && commits.length === 0) {
-        return <HistoryError message={history.error.message} />;
-    }
-
-    if (commits.length === 0) {
-        return (
+    } else if (history.error && commits.length === 0) {
+        content = <HistoryError message={history.error.message} />;
+    } else if (commits.length === 0) {
+        content = (
             <p
                 className="p-4 text-center text-xs text-muted-foreground"
                 data-slot="history-empty"
@@ -165,19 +174,14 @@ export function HistoryPanel({
                     : "No commits yet"}
             </p>
         );
-    }
-
-    return (
-        <div ref={containerRef} className="flex size-full min-h-0 flex-col">
-            <div className="border-b px-0.5 pb-0.5">
-                <Input
-                    placeholder="Filter history..."
-                    aria-label="Filter history"
-                    value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                />
-            </div>
-            <ScrollArea scrollFade data-slot="history-list" render={<ul />}>
+    } else {
+        content = (
+            <ScrollArea
+                scrollFade
+                className="min-h-0 flex-1"
+                data-slot="history-list"
+                render={<ul />}
+            >
                 <div
                     className="relative"
                     style={{
@@ -231,6 +235,13 @@ export function HistoryPanel({
                     onRetry={() => void history.fetchNextPage()}
                 />
             </ScrollArea>
+        );
+    }
+
+    return (
+        <div ref={containerRef} className="flex size-full min-h-0 flex-col">
+            {filter}
+            {content}
         </div>
     );
 }

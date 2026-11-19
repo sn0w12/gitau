@@ -181,11 +181,18 @@ describe("HistoryPanel", () => {
         expect(
             view.container.querySelector('[data-slot="history-list"]')
         ).toBeNull();
+        // The filter stays reachable while the first page loads.
+        expect(
+            view.container.querySelector('[aria-label="Filter history"]')
+        ).not.toBeNull();
 
         await flushMicrotasks();
         // A resolved-but-empty repository renders the explicit empty state.
         expect(
             view.container.querySelector('[data-slot="history-empty"]')
+        ).not.toBeNull();
+        expect(
+            view.container.querySelector('[aria-label="Filter history"]')
         ).not.toBeNull();
         view.unmount();
     });
@@ -413,6 +420,11 @@ describe("HistoryPanel", () => {
         );
         expect(empty).not.toBeNull();
         expect(empty?.textContent).toContain("No commits match");
+        // The term survives the empty result so it can be edited or cleared.
+        const retained = view.container.querySelector<HTMLInputElement>(
+            '[aria-label="Filter history"]'
+        );
+        expect(retained?.value).toBe("nope");
         view.unmount();
     });
 });
