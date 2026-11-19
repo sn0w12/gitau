@@ -3,8 +3,10 @@ import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import type { RepoSnapshot, SessionDocument } from "@/lib/backend/protocol";
 import type { BackendClient } from "@/lib/backend/transport/client";
 import {
+    currentSessionDocument,
     hydrateSession,
     initSessionPersistence,
+    isScreenshotSession,
     reopenSessionRepositories,
     scheduleReopenRetry,
 } from "@/lib/bootstrap/session-persistence";
@@ -285,6 +287,21 @@ describe("session restore", () => {
         expect(failedPaths).toEqual([]);
         expect(idByPath.get("/r")).toBe(3);
         expect(open).toHaveBeenCalledWith("/r");
+    });
+
+    it("keeps the screenshot flag across a save", () => {
+        hydrateSession({
+            version: 1,
+            tabs: [],
+            activeTabId: null,
+            screenshot: true,
+        });
+
+        expect(isScreenshotSession()).toBe(true);
+        expect(currentSessionDocument().screenshot).toBe(true);
+
+        hydrateSession({ version: 1, tabs: [], activeTabId: null });
+        expect(isScreenshotSession()).toBe(false);
     });
 });
 

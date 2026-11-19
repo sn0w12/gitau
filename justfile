@@ -45,6 +45,12 @@ dev:
 dev-workspace:
     npm run tauri dev -- --config crates/tauri/tauri.dev.conf.json -- -- --session "{{ justfile_directory() }}/.dev-workspace/session.json"
 
+# Rebuild the fixture repos, then launch on the generated screenshot session
+[group('dev')]
+screenshots:
+    node scripts/create-screenshot-workspace.mjs
+    npm run tauri dev -- --config crates/tauri/tauri.dev.conf.json -- -- --session "{{ justfile_directory() }}/.screenshot-workspace/session.json"
+
 [group('build')]
 build:
     npm run tauri build

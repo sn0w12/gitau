@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { DialogActions } from "@/components/ui/dialog-actions";
 import { Progress } from "@/components/ui/progress";
+import { isScreenshotSession } from "@/lib/bootstrap/session-persistence";
 import { EASE_SNAPPY } from "@/lib/motion";
 import type { UpdateState } from "@/lib/updates/update-controller";
 import {
@@ -34,6 +35,7 @@ export function UpdateChecker() {
     const state = useSelector(updaterController.store, (value) => value);
 
     useEffect(() => {
+        if (isScreenshotSession()) return;
         void updaterController.start();
     }, []);
 

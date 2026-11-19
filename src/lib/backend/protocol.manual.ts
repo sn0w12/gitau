@@ -35,4 +35,6 @@ export interface SessionDocument {
      * repos survive restarts even with no tab referencing them.
      */
     repositories?: { path: string; addedAt: number }[];
+    /** Fixture session used for screenshots; suppresses the update notice. */
+    screenshot?: boolean;
 }

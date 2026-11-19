@@ -14,6 +14,12 @@ import {
 
 const PERSIST_DEBOUNCE_MS = 250;
 
+let screenshotSession = false;
+
+export function isScreenshotSession(): boolean {
+    return screenshotSession;
+}
+
 export const REOPEN_RETRY_DELAY_MS = 10_000;
 
 export interface ReopenResult {
@@ -132,6 +138,7 @@ export function hydrateSession(
     idByPath: Map<string, number> = new Map()
 ): void {
     hydrateFetchTimestamps(session.lastFetched);
+    screenshotSession = session.screenshot === true;
     if (!Array.isArray(session.tabs)) return;
 
     // Restored hrefs may embed a previous process-local repo id; rewrite
@@ -177,6 +184,7 @@ export function currentSessionDocument(): SessionDocument {
     const { tabs, activeTabId } = appStore.state;
     return {
         version: 1,
+        ...(screenshotSession ? { screenshot: true } : {}),
         tabs: tabs.map((tab) => ({
             tabId: tab.tabId,
             title: tab.title,

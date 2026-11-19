@@ -12,6 +12,7 @@ __unconfig*
 todos.json
 target
 .dev-workspace
+.screenshot-workspace
 .opencode
 /crates/tauri/tauri.preview-version.conf.json
 
