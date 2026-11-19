@@ -360,10 +360,10 @@ function TitlebarTab({ tab }: { tab: TabRecord }) {
     return (
         <TabsPrimitive.Tab
             className={cn(
-                "group/tab relative flex shrink-0 cursor-pointer items-center justify-center gap-1 rounded-t-md pl-2.5 text-sm font-medium whitespace-nowrap text-muted-foreground transition-[color] duration-150 hover:text-foreground/64 data-disabled:pointer-events-none data-disabled:opacity-64 data-active:h-7 data-active:rounded-t-lg data-active:bg-background data-active:text-foreground data-active:hover:text-foreground/84",
+                "relative flex shrink-0 cursor-pointer items-center justify-center gap-1 rounded-t-md pl-2.5 text-sm font-medium whitespace-nowrap text-muted-foreground transition-[color] duration-150 data-disabled:pointer-events-none data-disabled:opacity-64 data-active:h-7 data-active:rounded-t-lg data-active:bg-background data-active:text-foreground data-active:hover:text-foreground/84",
                 "data-active:filter-[drop-shadow(0px_-1px_1px_oklab(from_rgb(0_0_0_/_0.1)_l_a_b_/_9%))]",
                 "dark:data-active:filter-[drop-shadow(0px_-1px_1px_oklab(from_rgb(255_255_255_/_0.1)_l_a_b_/_12%))]",
-                "not-data-active:mb-1 not-data-active:h-6 not-data-active:rounded-b-md not-data-active:transition-colors not-data-active:hover:bg-accent",
+                "not-data-active:mb-1 not-data-active:h-6 not-data-active:rounded-b-md not-data-active:transition-colors not-data-active:group-data-[dnd-dragging=true]:bg-accent not-data-active:group-data-[dnd-dragging=true]:text-foreground/64 hover:text-foreground/64 not-data-active:hover:bg-accent",
                 hasMoreTabs ? "pr-0.5" : "pr-2.5"
             )}
             data-slot="tabs-tab"
@@ -498,6 +498,7 @@ const TitlebarTabContextMenu = memo(function TitlebarTabContextMenu({
         <ContextMenu>
             <ContextMenuTrigger
                 ref={ref}
+                className="group"
                 onMouseEnter={
                     onHoverChange ? () => onHoverChange(true) : undefined
                 }
