@@ -4,16 +4,41 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { XIcon } from "lucide-react";
+import { useState } from "react";
 import type React from "react";
 
 import { Button } from "@/components/ui/button";
+import { useModalBackdrop } from "@/components/ui/modal-backdrop";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
 export const DialogCreateHandle: typeof DialogPrimitive.createHandle =
     DialogPrimitive.createHandle;
 
-export const Dialog: typeof DialogPrimitive.Root = DialogPrimitive.Root;
+export function Dialog({
+    open: openProp,
+    defaultOpen,
+    onOpenChange,
+    ...props
+}: DialogPrimitive.Root.Props): React.ReactElement {
+    const [uncontrolledOpen, setUncontrolledOpen] = useState(
+        defaultOpen ?? false
+    );
+    const open = openProp ?? uncontrolledOpen;
+    useModalBackdrop(open);
+
+    return (
+        <DialogPrimitive.Root
+            {...props}
+            open={openProp}
+            defaultOpen={defaultOpen}
+            onOpenChange={(next, details) => {
+                if (openProp === undefined) setUncontrolledOpen(next);
+                onOpenChange?.(next, details);
+            }}
+        />
+    );
+}
 
 export const DialogPortal: typeof DialogPrimitive.Portal =
     DialogPrimitive.Portal;
@@ -38,7 +63,7 @@ export function DialogBackdrop({
         <>
             <DialogPrimitive.Backdrop
                 className={cn(
-                    "fixed inset-0 z-50 bg-black/32 backdrop-blur-sm transition-opacity duration-200 clip-inset-backdrop data-ending-style:opacity-0 data-starting-style:opacity-0",
+                    "fixed inset-0 z-50 clip-inset-backdrop",
                     className
                 )}
                 data-slot="dialog-backdrop"

@@ -2,6 +2,7 @@
 
 import { Dialog as CommandDialogPrimitive } from "@base-ui/react/dialog";
 import { SearchIcon } from "lucide-react";
+import { useState } from "react";
 import type * as React from "react";
 
 import {
@@ -15,6 +16,7 @@ import {
     AutocompleteList,
     AutocompleteSeparator,
 } from "@/components/ui/autocomplete";
+import { useModalBackdrop } from "@/components/ui/modal-backdrop";
 import { cn } from "@/lib/utils";
 
 export const CommandDialogPortal: typeof CommandDialogPrimitive.Portal =
@@ -23,15 +25,30 @@ export const CommandDialogPortal: typeof CommandDialogPrimitive.Portal =
 export const CommandCreateHandle: typeof CommandDialogPrimitive.createHandle =
     CommandDialogPrimitive.createHandle;
 
-export function CommandDialog(
-    props: CommandDialogPrimitive.Root.Props
-): React.ReactElement {
+export function CommandDialog({
+    open: openProp,
+    defaultOpen,
+    onOpenChange,
+    ...props
+}: CommandDialogPrimitive.Root.Props): React.ReactElement {
+    const [uncontrolledOpen, setUncontrolledOpen] = useState(
+        defaultOpen ?? false
+    );
+    const open = openProp ?? uncontrolledOpen;
+    useModalBackdrop(open);
+
     // trap-focus keeps focus trapped and outside clicks dismissing, while the
     // inset-clipped backdrop leaves the titlebar and sidebar clickable.
     return (
         <CommandDialogPrimitive.Root
             {...props}
+            open={openProp}
+            defaultOpen={defaultOpen}
             modal={props.modal ?? "trap-focus"}
+            onOpenChange={(next, details) => {
+                if (openProp === undefined) setUncontrolledOpen(next);
+                onOpenChange?.(next, details);
+            }}
         />
     );
 }
@@ -55,7 +72,7 @@ export function CommandDialogBackdrop({
         <>
             <CommandDialogPrimitive.Backdrop
                 className={cn(
-                    "fixed inset-0 z-50 bg-black/32 backdrop-blur-sm transition-opacity duration-200 clip-inset-backdrop data-ending-style:opacity-0 data-starting-style:opacity-0",
+                    "fixed inset-0 z-50 clip-inset-backdrop",
                     className
                 )}
                 data-slot="command-dialog-backdrop"

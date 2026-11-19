@@ -11,6 +11,7 @@ import { ExternalLinkGuard } from "./external-link-guard";
 import { OnboardingDialog } from "./onboarding-dialog";
 import { SelectionContextMenu } from "./selection/selection-context-menu";
 import { Titlebar } from "./titlebar";
+import { ModalBackdrop } from "./ui/modal-backdrop";
 import { SidebarInset, SidebarProvider } from "./ui/sidebar";
 import { ToastProvider } from "./ui/toast";
 import { UpdateChecker } from "./updates/update-checker";
@@ -20,6 +21,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
     return (
         <div className="w-vw flex h-svh flex-col bg-sidebar">
+            <ModalBackdrop />
             <ToastProvider>
                 <ConfirmProvider>
                     <AppShortcuts />
