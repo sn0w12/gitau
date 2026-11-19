@@ -4,8 +4,9 @@
 //! and repository creation: GitHub, GitLab, Gitea, and the like. This crate
 //! owns the shared DTOs, the [`ForgeProvider`] trait every provider
 //! implements, the [`ForgeRegistry`] that resolves a remote URL or a provider
-//! id to a provider, and [`ForgeAccounts`], which owns sign-in state and
-//! credentials across connections.
+//! id to a provider, [`ForgeAccounts`], which owns sign-in state and
+//! credentials across connections, and the [`http`] transport every provider
+//! sends through.
 //!
 //! Provider crates depend on this crate, plus `ansi` when they parse
 //! terminal-styled logs, and nothing else in the workspace.
@@ -32,6 +33,7 @@ pub mod accounts;
 pub mod capabilities;
 pub mod dto;
 pub mod error;
+pub mod http;
 pub mod id;
 pub mod provider;
 pub mod registry;

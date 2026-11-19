@@ -15,7 +15,7 @@ mod wire;
 use std::sync::Arc;
 use std::time::Duration;
 
-use http::{HttpTransport, Transport};
+use forge_core::http::{ConditionalTransport, HttpTransport, Transport};
 
 pub use job_log::split_job_log_for_test;
 
@@ -39,7 +39,7 @@ pub struct GithubProvider {
 impl GithubProvider {
     pub fn new(timeout: Duration) -> Self {
         Self {
-            transport: Arc::new(HttpTransport::new(timeout)),
+            transport: Arc::new(ConditionalTransport::new(HttpTransport::new(timeout))),
         }
     }
 

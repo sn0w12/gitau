@@ -13,7 +13,6 @@ path = "src/lib.rs"
 ansi.workspace = true
 chrono.workspace = true
 forge-core.workspace = true
-reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

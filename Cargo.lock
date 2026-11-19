@@ -1827,6 +1827,7 @@ version = "0.2.3"
 dependencies = [
  "ansi",
  "keyring",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
  "tempfile",
@@ -1841,7 +1842,6 @@ dependencies = [
  "ansi",
  "chrono",
  "forge-core",
- "reqwest 0.12.28",
  "serde",
  "serde_json",
  "tokio",

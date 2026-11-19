@@ -15,8 +15,8 @@ use forge_core::{
 
 use crate::device_flow::{parse_device_code, parse_token_poll, DeviceCodeResponse, TokenPoll};
 use crate::http::{
-    fetch_job_log, internal, malformed, page_has_more, send, send_full, Method, Request, Transport,
-    API_ROOT, DEVICE_GRANT_TYPE, ISSUES_PER_PAGE, LOGIN_ROOT, MAX_ISSUE_PAGES,
+    fetch_job_log, internal, malformed, page_has_more, send, send_full, GithubRequest, Method,
+    Request, Transport, API_ROOT, DEVICE_GRANT_TYPE, ISSUES_PER_PAGE, LOGIN_ROOT, MAX_ISSUE_PAGES,
     NOTIFICATIONS_PER_PAGE,
 };
 use crate::job_log::{collapse_teardown, slice_log_by_steps};
@@ -1199,6 +1199,7 @@ impl ForgeProvider for GithubProvider {
 mod tests {
     use super::*;
     use crate::http::{Body, Response};
+    use forge_core::http::ConditionalTransport;
     use std::sync::{Arc, Mutex};
 
     /// Transport that records the requests it is given and replays scripted
@@ -1236,12 +1237,30 @@ mod tests {
     }
 
     fn ok(body: impl Into<String>) -> Response {
-        Response {
-            status: 200,
-            body: body.into(),
-            has_next_page: false,
-            location: None,
-        }
+        Response::new(200, body)
+    }
+
+    fn authorization(request: &Request) -> Option<&str> {
+        request.header_value("authorization")
+    }
+
+    #[tokio::test]
+    async fn repeated_reads_revalidate_without_refetching_the_body() {
+        let recorder = Recorder::new(vec![
+            ok(r#"{"login":"octocat"}"#).with_header("ETag", "\"u1\""),
+            Response::new(304, ""),
+        ]);
+        let transport = Arc::new(ConditionalTransport::new(recorder.clone()));
+        let provider = GithubProvider::with_transport(transport);
+
+        let first = provider.authenticated_user("tok").await.unwrap();
+        let second = provider.authenticated_user("tok").await.unwrap();
+
+        assert_eq!(first.login, "octocat");
+        assert_eq!(second.login, "octocat");
+        let sent = recorder.sent();
+        assert_eq!(sent[0].header_value("if-none-match"), None);
+        assert_eq!(sent[1].header_value("if-none-match"), Some("\"u1\""));
     }
 
     fn provider(recorder: &Arc<Recorder>) -> GithubProvider {
@@ -1316,7 +1335,7 @@ mod tests {
         assert_eq!(issues.page, 2);
         let request = &recorder.sent()[0];
         assert_eq!(request.url, format!("{API_ROOT}/search/issues"));
-        assert_eq!(request.token.as_deref(), Some("tok"));
+        assert_eq!(authorization(request), Some("Bearer tok"));
         assert_eq!(
             param(request, "q").as_deref(),
             Some("is:issue repo:octocat/repo state:open label:\"bug\"")
@@ -1338,7 +1357,7 @@ mod tests {
         assert_eq!(challenge.0.user_code, "ABCD-1234");
         let request = &recorder.sent()[0];
         assert_eq!(request.url, format!("{LOGIN_ROOT}/login/device/code"));
-        assert!(request.token.is_none());
+        assert!(authorization(request).is_none());
         assert_eq!(
             form_fields(request),
             vec![
@@ -1508,12 +1527,7 @@ mod tests {
     async fn job_log_follows_the_redirect_without_the_auth_header() {
         let recorder = Recorder::new(vec![
             ok(r#"{"steps":[]}"#),
-            Response {
-                status: 302,
-                body: String::new(),
-                has_next_page: false,
-                location: Some("https://blob.example/log.txt".into()),
-            },
+            Response::new(302, "").with_header("Location", "https://blob.example/log.txt"),
             ok("hello"),
         ]);
         let log = provider(&recorder)
@@ -1523,10 +1537,10 @@ mod tests {
 
         assert_eq!(log.raw, "hello");
         let sent = recorder.sent();
-        assert!(sent[1].token.is_some());
+        assert!(authorization(&sent[1]).is_some());
         assert!(!sent[1].follow_redirects);
         assert_eq!(sent[2].url, "https://blob.example/log.txt");
-        assert!(sent[2].token.is_none());
+        assert!(authorization(&sent[2]).is_none());
     }
 
     #[tokio::test]
@@ -1546,17 +1560,12 @@ mod tests {
 
         let request = &recorder.sent()[0];
         assert_eq!(request.url, format!("{API_ROOT}/repos/octocat/repo"));
-        assert!(request.token.is_none());
+        assert!(authorization(request).is_none());
     }
 
     #[tokio::test]
     async fn an_invisible_repository_has_no_metadata() {
-        let recorder = Recorder::new(vec![Response {
-            status: 404,
-            body: r#"{"message":"Not Found"}"#.into(),
-            has_next_page: false,
-            location: None,
-        }]);
+        let recorder = Recorder::new(vec![Response::new(404, r#"{"message":"Not Found"}"#)]);
 
         let metadata = provider(&recorder)
             .repo_metadata("github.com", "octocat", "private")
