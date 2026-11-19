@@ -1,3 +1,5 @@
+import { formatForDisplay } from "@tanstack/hotkeys";
+
 import type { RepoView } from "@/lib/routing/repo-search";
 import type { ShortcutSettingKey } from "@/lib/settings/settings.generated";
 import { isMac } from "@/lib/utils";
@@ -23,7 +25,11 @@ export function displayToken(token: string): string {
         case "meta":
             return "⌘";
         default:
-            return token.length === 1 ? token.toUpperCase() : token;
+            return token.startsWith("[") && token.endsWith("]")
+                ? formatForDisplay(token)
+                : token.length === 1
+                  ? token.toUpperCase()
+                  : token;
     }
 }
 

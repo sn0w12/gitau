@@ -78,6 +78,9 @@ export function ShortcutControl({
     onChange: (value: string) => void;
 }) {
     const recorder = useHotkeyRecorder({
+        // The physical-code default stores tokens such as "Mod+[KeyK]", but
+        // the settings defaults and live preview use logical keys.
+        recordBy: "key",
         onRecord: (hotkey) => {
             onChange(typeof hotkey === "string" ? hotkey.trim() : "");
         },
