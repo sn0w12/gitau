@@ -15,7 +15,8 @@ function reactScan(): Plugin {
     return {
         name: "gitau:react-scan",
         apply: (_config, { command, mode }) =>
-            command === "serve" || mode === "react-scan",
+            process.env.GITAU_SCREENSHOTS !== "1" &&
+            (command === "serve" || mode === "react-scan"),
         configResolved(config) {
             production = config.command === "build";
         },

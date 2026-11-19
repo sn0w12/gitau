@@ -46,6 +46,7 @@ dev-workspace:
     npm run tauri dev -- --config crates/tauri/tauri.dev.conf.json -- -- --session "{{ justfile_directory() }}/.dev-workspace/session.json"
 
 # Rebuild the fixture repos, then launch on the generated screenshot session
+[env('GITAU_SCREENSHOTS', '1')]
 [group('dev')]
 screenshots:
     node scripts/create-screenshot-workspace.mjs
