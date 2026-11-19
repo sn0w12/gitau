@@ -9,6 +9,7 @@ import type { BackendClient } from "@/lib/backend/transport/client";
 import { expectOk } from "@/lib/backend/transport/result";
 
 import type { IssueStateFilter } from "./forge-issues-queries";
+import { THREAD_POLL } from "./forge-queries";
 import { forgeKeys } from "./query-keys";
 
 interface ForgePullsDeps {
@@ -48,6 +49,7 @@ export function infiniteRepoPullsQuery(
         getNextPageParam: (lastPage) =>
             lastPage.hasMore ? lastPage.page + 1 : undefined,
         staleTime: 30_000,
+        refetchInterval: 60_000,
         retry: false,
         enabled: enabled && provider != null && owner != null && repo != null,
     });
@@ -86,7 +88,8 @@ export function infiniteSearchPullRequestsQuery(
 
 /** Full pull request detail: draft, mergeability, refs, and diff stats.
  * Mergeability can be computed in the background, so a cached read can still
- * carry `mergeable: null`. */
+ * carry `mergeable: null`; an unresolved verdict is re-read sooner than the
+ * steady refresh so the merge button unblocks without a wait. */
 export function pullRequestQuery(
     deps: ForgePullsDeps,
     provider: string | null,
@@ -112,6 +115,17 @@ export function pullRequestQuery(
                 )
             ),
         staleTime: 30_000,
+        ...THREAD_POLL,
+        refetchInterval: (query) => {
+            const { data, dataUpdateCount } = query.state;
+            const unresolved =
+                data !== undefined &&
+                data.mergeable == null &&
+                dataUpdateCount <= MERGE_VERDICT_READS;
+            return unresolved
+                ? MERGE_VERDICT_POLL_MS
+                : THREAD_POLL.refetchInterval;
+        },
         retry: false,
         enabled:
             enabled &&
@@ -121,6 +135,12 @@ export function pullRequestQuery(
             number != null,
     });
 }
+
+/** GitHub usually resolves the verdict on the first or second read after a
+ * push. The read cap stops a provider that stays on `null` from polling at
+ * ten seconds forever. */
+const MERGE_VERDICT_POLL_MS = 10_000;
+const MERGE_VERDICT_READS = 6;
 
 /** CI only changes while the page is open, so results are polled until every
  * one has settled. A pull request whose CI already finished stops costing
@@ -354,6 +374,7 @@ export function pullReviewsQuery(
                 )
             ),
         staleTime: 30_000,
+        ...THREAD_POLL,
         retry: false,
         enabled:
             enabled &&
@@ -391,6 +412,7 @@ export function pullCommitsQuery(
                 )
             ),
         staleTime: 30_000,
+        ...THREAD_POLL,
         retry: false,
         enabled:
             enabled &&
@@ -426,6 +448,7 @@ export function pullReviewCommentsQuery(
                 )
             ),
         staleTime: 30_000,
+        ...THREAD_POLL,
         retry: false,
         enabled:
             enabled &&

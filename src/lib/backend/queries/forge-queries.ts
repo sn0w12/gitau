@@ -9,6 +9,15 @@ interface ForgeQueryDeps {
     backend: BackendClient;
 }
 
+/** Threads change from elsewhere: comments, reviews, and the merge verdict.
+ * Polling keeps an open conversation current without a push channel. Focus
+ * covers the gap the interval leaves after the app has been in the background,
+ * where polling is paused. */
+export const THREAD_POLL = {
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+} as const;
+
 /** Providers this build can talk to, with their capabilities. */
 export function providersQuery(deps: ForgeQueryDeps) {
     return queryOptions({

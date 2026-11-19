@@ -183,17 +183,17 @@ type PullInput = {
     number: number;
 };
 
-/** Invalidates the whole pull request scope: the detail, its reviews, the
- * issue-keyed conversation and timeline the pull page reads, the repo's pull
- * request list, and the search results, all of which the merged state
- * changes. */
+/** Invalidates the whole pull request scope: the detail, its reviews and
+ * commits, the issue-keyed conversation and timeline the pull page reads, the
+ * repo's pull request list, and the search results, all of which the merged
+ * state changes. */
 function invalidatePull(queryClient: QueryClient, input: PullInput): void {
     void queryClient.invalidateQueries({ queryKey: ["forge", "pulls"] });
     void queryClient.invalidateQueries({
         queryKey: ["forge", "search-pull-requests"],
     });
     void queryClient.invalidateQueries({
-        queryKey: forgeKeys.pullRequest(
+        queryKey: forgeKeys.pull(
             input.provider,
             input.owner,
             input.repo,
@@ -201,23 +201,7 @@ function invalidatePull(queryClient: QueryClient, input: PullInput): void {
         ),
     });
     void queryClient.invalidateQueries({
-        queryKey: forgeKeys.issueDetail(
-            input.provider,
-            input.owner,
-            input.repo,
-            input.number
-        ),
-    });
-    void queryClient.invalidateQueries({
-        queryKey: forgeKeys.pullReviews(
-            input.provider,
-            input.owner,
-            input.repo,
-            input.number
-        ),
-    });
-    void queryClient.invalidateQueries({
-        queryKey: forgeKeys.pullReviewComments(
+        queryKey: forgeKeys.issue(
             input.provider,
             input.owner,
             input.repo,

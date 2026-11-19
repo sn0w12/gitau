@@ -110,12 +110,19 @@ export const forgeKeys = {
         state: string,
         labels: string
     ) => ["forge", "pulls", provider, owner, repo, state, labels] as const,
+    /** Prefix for every read of one issue: detail, comments, and events. */
+    issue: (provider: string, owner: string, repo: string, number: number) =>
+        ["forge", "issue", provider, owner, repo, number] as const,
+    /** Prefix for every read of one pull request: detail, reviews, commits,
+     * and inline review comments. */
+    pull: (provider: string, owner: string, repo: string, number: number) =>
+        ["forge", "pull", provider, owner, repo, number] as const,
     pullRequest: (
         provider: string,
         owner: string,
         repo: string,
         number: number
-    ) => ["forge", "pull", provider, owner, repo, number] as const,
+    ) => forgeKeys.pull(provider, owner, repo, number),
     labels: (provider: string, owner: string, repo: string) =>
         ["forge", "labels", provider, owner, repo] as const,
     pullReviews: (
@@ -178,7 +185,7 @@ export const forgeKeys = {
         owner: string,
         repo: string,
         number: number
-    ) => ["forge", "issue", provider, owner, repo, number] as const,
+    ) => forgeKeys.issue(provider, owner, repo, number),
     issueComments: (
         provider: string,
         owner: string,

@@ -214,13 +214,7 @@ function invalidateIssue(
     void queryClient.invalidateQueries({ queryKey: ["forge", "issues"] });
     if (number !== undefined) {
         void queryClient.invalidateQueries({
-            queryKey: forgeKeys.issueDetail(provider, owner, repo, number),
-        });
-        void queryClient.invalidateQueries({
-            queryKey: forgeKeys.issueComments(provider, owner, repo, number),
-        });
-        void queryClient.invalidateQueries({
-            queryKey: forgeKeys.issueEvents(provider, owner, repo, number),
+            queryKey: forgeKeys.issue(provider, owner, repo, number),
         });
     }
 }

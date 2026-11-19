@@ -3,6 +3,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { BackendClient } from "@/lib/backend/transport/client";
 import { expectOk } from "@/lib/backend/transport/result";
 
+import { THREAD_POLL } from "./forge-queries";
 import { forgeKeys } from "./query-keys";
 
 interface ForgeIssuesDeps {
@@ -44,6 +45,7 @@ export function infiniteRepoIssuesQuery(
         getNextPageParam: (lastPage) =>
             lastPage.hasMore ? lastPage.page + 1 : undefined,
         staleTime: 30_000,
+        refetchInterval: 60_000,
         retry: false,
         enabled: enabled && provider != null && owner != null && repo != null,
     });
@@ -75,6 +77,7 @@ export function issueDetailQuery(
                 )
             ),
         staleTime: 30_000,
+        ...THREAD_POLL,
         retry: false,
         enabled:
             enabled &&
@@ -111,6 +114,7 @@ export function issueCommentsQuery(
                 )
             ),
         staleTime: 30_000,
+        ...THREAD_POLL,
         retry: false,
         enabled:
             enabled &&
@@ -198,6 +202,7 @@ export function issueEventsQuery(
                 )
             ),
         staleTime: 30_000,
+        ...THREAD_POLL,
         retry: false,
         enabled:
             enabled &&
