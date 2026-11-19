@@ -1234,6 +1234,64 @@ describe("ChangesPanel", () => {
         expect(selected).toEqual(["worktree:b.ts"]);
         view.unmount();
     });
+
+    it("windows a long change list inside the same scroll area", async () => {
+        seedSettingsForTests({});
+        const entries = Array.from({ length: 500 }, (_, index) =>
+            entry({ path: `file-${String(index).padStart(4, "0")}.ts` })
+        );
+        const services = recordingBackend(report(entries));
+        const view = renderWith(
+            services,
+            <ChangesPanel
+                repoId={5}
+                branch="main"
+                selectedId={null}
+                onSelectedChange={() => {}}
+                selectedStashId={null}
+                onSelectedStash={() => {}}
+            />
+        );
+        await flush();
+
+        const list = view.container.querySelector<HTMLElement>(
+            '[data-slot="changes-virtual-list"]'
+        );
+        expect(list).not.toBeNull();
+        // The spacer keeps the full scroll length; only rows in view mount.
+        expect(list!.style.height).toBe(`${500 * 28}px`);
+        expect(
+            view.container.querySelectorAll('[role="option"]').length
+        ).toBeLessThan(60);
+        expect(view.container.textContent).toContain("file-0000.ts");
+        expect(view.container.textContent).not.toContain("file-0499.ts");
+
+        const viewport = list!.closest<HTMLElement>(
+            '[data-slot="scroll-area-viewport"]'
+        )!;
+        expect(viewport).not.toBeNull();
+        Object.defineProperty(viewport, "clientHeight", {
+            value: 600,
+            configurable: true,
+        });
+        Object.defineProperty(viewport, "scrollTop", {
+            value: 2800,
+            configurable: true,
+        });
+        list!.getBoundingClientRect = () =>
+            ({ top: -2800, height: 500 * 28 }) as DOMRect;
+
+        await act(async () => {
+            viewport.dispatchEvent(new Event("scroll"));
+            await new Promise((resolve) => setTimeout(resolve, 20));
+        });
+
+        // Row index 100 is at scrollTop 2800; the window follows it without
+        // replacing the ScrollArea or its scroll position.
+        expect(view.container.textContent).toContain("file-0100.ts");
+        expect(view.container.textContent).not.toContain("file-0000.ts");
+        view.unmount();
+    });
 });
 
 afterEach(() => {

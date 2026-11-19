@@ -13,7 +13,15 @@ import {
     useReducedMotion,
     type Variants,
 } from "motion/react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+    memo,
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
 import type { ReactNode, RefObject } from "react";
 
 import { ChangeIcon } from "@/components/diff/change-icon";
@@ -40,11 +48,16 @@ import { useChangeActions } from "@/hooks/repositories/use-change-actions";
 import { useOpenInEditor } from "@/hooks/repositories/use-open-in-editor";
 import { useRepoPath } from "@/hooks/repositories/use-repo-path";
 import { useRevealInFileManager } from "@/hooks/repositories/use-reveal-in-file-manager";
+import { useWindowedRows } from "@/hooks/use-windowed-rows";
 import type { StatusEntry } from "@/lib/backend/protocol";
 import { EASE_SNAPPY } from "@/lib/motion";
 
 import { Badge } from "../../ui/badge";
 import { ScrollArea } from "../../ui/scroll-area";
+
+const VIRTUALIZE_AFTER_ROWS = 40;
+const CHANGE_ROW_FALLBACK_HEIGHT = 28;
+const CHANGE_ROW_OVERSCAN = 10;
 
 function changePath(changeId: string): string {
     const separator = changeId.indexOf(":");
@@ -316,6 +329,7 @@ export function ChangesPanel({
         checkedStaged.length > 0 ? checkedStaged : stagedEntries;
     const discardTargets =
         checkedUnstaged.length > 0 ? checkedUnstaged : unstagedEntries;
+    const busy = stage.isPending || unstage.isPending || discard.isPending;
 
     function isOpen(pending: boolean, items: number, open: boolean) {
         return !pending && items > 0 && open;
@@ -385,31 +399,22 @@ export function ChangesPanel({
                         </Button>
                     </SectionHeader>
                     <CollapsibleContent>
-                        <AnimatePresence initial={false}>
-                            {stagedEntries.map((entry) => (
-                                <ChangeRow
-                                    key={entry.id}
-                                    entry={entry}
-                                    checked={checkedIds.has(entry.id)}
-                                    side="index"
-                                    onCheckedChange={toggleChecked}
-                                    selected={isSelected(entry)}
-                                    onSelect={selectChange}
-                                    busy={
-                                        stage.isPending ||
-                                        unstage.isPending ||
-                                        discard.isPending
-                                    }
-                                    onStage={stageOne}
-                                    onUnstage={unstageOne}
-                                    onDiscard={discardOne}
-                                    onStash={stashOne}
-                                    stashLabel={stashLabel}
-                                    repoPath={repoPath}
-                                    animateOpRef={animateOpRef}
-                                />
-                            ))}
-                        </AnimatePresence>
+                        <ChangeRows
+                            entries={stagedEntries}
+                            side="index"
+                            checkedIds={checkedIds}
+                            onCheckedChange={toggleChecked}
+                            isSelected={isSelected}
+                            onSelect={selectChange}
+                            busy={busy}
+                            onStage={stageOne}
+                            onUnstage={unstageOne}
+                            onDiscard={discardOne}
+                            onStash={stashOne}
+                            stashLabel={stashLabel}
+                            repoPath={repoPath}
+                            animateOpRef={animateOpRef}
+                        />
                     </CollapsibleContent>
                 </Collapsible>
                 <Collapsible
@@ -502,31 +507,22 @@ export function ChangesPanel({
                         </Button>
                     </SectionHeader>
                     <CollapsibleContent className="flex flex-col">
-                        <AnimatePresence initial={false}>
-                            {unstagedEntries.map((entry) => (
-                                <ChangeRow
-                                    key={entry.id}
-                                    entry={entry}
-                                    checked={checkedIds.has(entry.id)}
-                                    side="worktree"
-                                    onCheckedChange={toggleChecked}
-                                    selected={isSelected(entry)}
-                                    onSelect={selectChange}
-                                    busy={
-                                        stage.isPending ||
-                                        unstage.isPending ||
-                                        discard.isPending
-                                    }
-                                    onStage={stageOne}
-                                    onUnstage={unstageOne}
-                                    onDiscard={discardOne}
-                                    onStash={stashOne}
-                                    stashLabel={stashLabel}
-                                    repoPath={repoPath}
-                                    animateOpRef={animateOpRef}
-                                />
-                            ))}
-                        </AnimatePresence>
+                        <ChangeRows
+                            entries={unstagedEntries}
+                            side="worktree"
+                            checkedIds={checkedIds}
+                            onCheckedChange={toggleChecked}
+                            isSelected={isSelected}
+                            onSelect={selectChange}
+                            busy={busy}
+                            onStage={stageOne}
+                            onUnstage={unstageOne}
+                            onDiscard={discardOne}
+                            onStash={stashOne}
+                            stashLabel={stashLabel}
+                            repoPath={repoPath}
+                            animateOpRef={animateOpRef}
+                        />
                     </CollapsibleContent>
                 </Collapsible>
             </ScrollArea>
@@ -607,6 +603,171 @@ function SectionHeader({
     );
 }
 
+const ChangeRows = memo(function ChangeRows({
+    entries,
+    side,
+    checkedIds,
+    onCheckedChange,
+    isSelected,
+    onSelect,
+    busy,
+    onStage,
+    onUnstage,
+    onDiscard,
+    onStash,
+    stashLabel,
+    repoPath,
+    animateOpRef,
+}: {
+    entries: StatusEntry[];
+    side: "index" | "worktree";
+    checkedIds: ReadonlySet<string>;
+    onCheckedChange: (id: string) => void;
+    isSelected: (entry: StatusEntry) => boolean;
+    onSelect: (entry: StatusEntry) => void;
+    busy: boolean;
+    onStage: (entry: StatusEntry) => void;
+    onUnstage: (entry: StatusEntry) => void;
+    onDiscard: (entry: StatusEntry) => void;
+    onStash: (entry: StatusEntry) => void;
+    stashLabel: string;
+    repoPath: string;
+    animateOpRef: RefObject<boolean>;
+}) {
+    if (entries.length > VIRTUALIZE_AFTER_ROWS) {
+        return (
+            <VirtualChangeRows
+                entries={entries}
+                side={side}
+                checkedIds={checkedIds}
+                onCheckedChange={onCheckedChange}
+                isSelected={isSelected}
+                onSelect={onSelect}
+                busy={busy}
+                onStage={onStage}
+                onUnstage={onUnstage}
+                onDiscard={onDiscard}
+                onStash={onStash}
+                stashLabel={stashLabel}
+                repoPath={repoPath}
+                animateOpRef={animateOpRef}
+            />
+        );
+    }
+    return (
+        <AnimatePresence initial={false}>
+            {entries.map((entry) => (
+                <ChangeRow
+                    key={entry.id}
+                    entry={entry}
+                    checked={checkedIds.has(entry.id)}
+                    onCheckedChange={onCheckedChange}
+                    side={side}
+                    selected={isSelected(entry)}
+                    onSelect={onSelect}
+                    busy={busy}
+                    onStage={onStage}
+                    onUnstage={onUnstage}
+                    onDiscard={onDiscard}
+                    onStash={onStash}
+                    stashLabel={stashLabel}
+                    repoPath={repoPath}
+                    animateOpRef={animateOpRef}
+                />
+            ))}
+        </AnimatePresence>
+    );
+});
+
+/**
+ * Windowing shares the panel's single ScrollArea rather than replacing it:
+ * the spacer keeps the full list height, so the scrollbar, scroll position,
+ * and both sections behave exactly as they do unwindowed. Rows are uniform
+ * height, measured from the first painted row instead of assumed.
+ */
+function VirtualChangeRows({
+    entries,
+    side,
+    checkedIds,
+    onCheckedChange,
+    isSelected,
+    onSelect,
+    busy,
+    onStage,
+    onUnstage,
+    onDiscard,
+    onStash,
+    stashLabel,
+    repoPath,
+    animateOpRef,
+}: {
+    entries: StatusEntry[];
+    side: "index" | "worktree";
+    checkedIds: ReadonlySet<string>;
+    onCheckedChange: (id: string) => void;
+    isSelected: (entry: StatusEntry) => boolean;
+    onSelect: (entry: StatusEntry) => void;
+    busy: boolean;
+    onStage: (entry: StatusEntry) => void;
+    onUnstage: (entry: StatusEntry) => void;
+    onDiscard: (entry: StatusEntry) => void;
+    onStash: (entry: StatusEntry) => void;
+    stashLabel: string;
+    repoPath: string;
+    animateOpRef: RefObject<boolean>;
+}) {
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const [rowHeight, setRowHeight] = useState(CHANGE_ROW_FALLBACK_HEIGHT);
+    const { start, end } = useWindowedRows({
+        count: entries.length,
+        rowHeight,
+        containerRef,
+        overscan: CHANGE_ROW_OVERSCAN,
+    });
+
+    useLayoutEffect(() => {
+        const row = containerRef.current?.firstElementChild;
+        if (!row) return;
+        const height = row.getBoundingClientRect().height;
+        if (height > 0 && height !== rowHeight) setRowHeight(height);
+    }, [rowHeight, start, end]);
+
+    return (
+        <div
+            ref={containerRef}
+            className="relative"
+            data-slot="changes-virtual-list"
+            style={{ height: entries.length * rowHeight }}
+        >
+            {entries.slice(start, end).map((entry, offset) => (
+                <div
+                    key={entry.id}
+                    className="absolute inset-x-0"
+                    style={{ top: (start + offset) * rowHeight }}
+                >
+                    <ChangeRow
+                        entry={entry}
+                        checked={checkedIds.has(entry.id)}
+                        onCheckedChange={onCheckedChange}
+                        side={side}
+                        selected={isSelected(entry)}
+                        onSelect={onSelect}
+                        busy={busy}
+                        onStage={onStage}
+                        onUnstage={onUnstage}
+                        onDiscard={onDiscard}
+                        onStash={onStash}
+                        stashLabel={stashLabel}
+                        repoPath={repoPath}
+                        animateOpRef={animateOpRef}
+                        animated={false}
+                    />
+                </div>
+            ))}
+        </div>
+    );
+}
+
 const ChangeRow = memo(function ChangeRow({
     entry,
     checked,
@@ -622,6 +783,7 @@ const ChangeRow = memo(function ChangeRow({
     stashLabel,
     repoPath,
     animateOpRef,
+    animated = true,
 }: {
     entry: StatusEntry;
     checked: boolean;
@@ -637,6 +799,7 @@ const ChangeRow = memo(function ChangeRow({
     stashLabel: string;
     repoPath: string;
     animateOpRef: RefObject<boolean>;
+    animated?: boolean;
 }) {
     const reducedMotion = useReducedMotion();
     const { enabled, openInEditor } = useOpenInEditor();
@@ -725,6 +888,74 @@ const ChangeRow = memo(function ChangeRow({
         </div>
     );
 
+    const content = (
+        <ContextMenu>
+            <ContextMenuTrigger className="block">{row}</ContextMenuTrigger>
+            <ContextMenuPopup>
+                {side === "worktree" ? (
+                    <>
+                        <ContextMenuItem
+                            disabled={busy}
+                            onClick={() => onStage(entry)}
+                        >
+                            <Plus />
+                            Stage
+                        </ContextMenuItem>
+                        <ContextMenuItem
+                            disabled={busy}
+                            variant="destructive"
+                            onClick={() => onDiscard(entry)}
+                        >
+                            <Undo2 />
+                            Discard changes
+                        </ContextMenuItem>
+                    </>
+                ) : (
+                    <ContextMenuItem
+                        disabled={busy}
+                        onClick={() => onUnstage(entry)}
+                    >
+                        <Minus />
+                        Unstage
+                    </ContextMenuItem>
+                )}
+                <ContextMenuItem
+                    disabled={busy}
+                    onClick={() => onStash(entry)}
+                    data-testid="change-menu-stash"
+                >
+                    <Archive />
+                    {stashLabel}
+                </ContextMenuItem>
+                {repoPath && (
+                    <>
+                        <ContextMenuSeparator />
+                        <ContextMenuItem
+                            disabled={!enabled}
+                            onClick={() =>
+                                void openInEditor(repoPath, entry.path)
+                            }
+                            data-testid="change-menu-open-in-editor"
+                        >
+                            <SquarePen />
+                            Open in editor
+                        </ContextMenuItem>
+                        <ContextMenuItem
+                            onClick={() =>
+                                void revealInFileManager(repoPath, entry.path)
+                            }
+                            data-testid="change-menu-reveal-in-file-manager"
+                        >
+                            <FolderOpen />
+                            Reveal in file manager
+                        </ContextMenuItem>
+                    </>
+                )}
+            </ContextMenuPopup>
+        </ContextMenu>
+    );
+
+    if (!animated) return content;
     return (
         <motion.div
             initial="enter"
@@ -732,73 +963,7 @@ const ChangeRow = memo(function ChangeRow({
             exit="exit"
             variants={rowVariants(animateOpRef, reducedMotion)}
         >
-            <ContextMenu>
-                <ContextMenuTrigger className="block">{row}</ContextMenuTrigger>
-                <ContextMenuPopup>
-                    {side === "worktree" ? (
-                        <>
-                            <ContextMenuItem
-                                disabled={busy}
-                                onClick={() => onStage(entry)}
-                            >
-                                <Plus />
-                                Stage
-                            </ContextMenuItem>
-                            <ContextMenuItem
-                                disabled={busy}
-                                variant="destructive"
-                                onClick={() => onDiscard(entry)}
-                            >
-                                <Undo2 />
-                                Discard changes
-                            </ContextMenuItem>
-                        </>
-                    ) : (
-                        <ContextMenuItem
-                            disabled={busy}
-                            onClick={() => onUnstage(entry)}
-                        >
-                            <Minus />
-                            Unstage
-                        </ContextMenuItem>
-                    )}
-                    <ContextMenuItem
-                        disabled={busy}
-                        onClick={() => onStash(entry)}
-                        data-testid="change-menu-stash"
-                    >
-                        <Archive />
-                        {stashLabel}
-                    </ContextMenuItem>
-                    {repoPath && (
-                        <>
-                            <ContextMenuSeparator />
-                            <ContextMenuItem
-                                disabled={!enabled}
-                                onClick={() =>
-                                    void openInEditor(repoPath, entry.path)
-                                }
-                                data-testid="change-menu-open-in-editor"
-                            >
-                                <SquarePen />
-                                Open in editor
-                            </ContextMenuItem>
-                            <ContextMenuItem
-                                onClick={() =>
-                                    void revealInFileManager(
-                                        repoPath,
-                                        entry.path
-                                    )
-                                }
-                                data-testid="change-menu-reveal-in-file-manager"
-                            >
-                                <FolderOpen />
-                                Reveal in file manager
-                            </ContextMenuItem>
-                        </>
-                    )}
-                </ContextMenuPopup>
-            </ContextMenu>
+            {content}
         </motion.div>
     );
 });
