@@ -43,6 +43,7 @@ import type { TabRecord } from "@/stores/app-store";
 
 import { RestrictToList } from "./dnd/restrict-to-list";
 import { createTabCollisionDetector } from "./titlebar/tab-collision-detector";
+import { AnimatedSize } from "./ui/animated-size";
 import { Button } from "./ui/button";
 import {
     ContextMenu,
@@ -387,7 +388,9 @@ function TitlebarTab({ tab }: { tab: TabRecord }) {
                     />
                 </>
             )}
-            <span
+            <AnimatedSize
+                height={false}
+                as="span"
                 className={cn(
                     "max-w-60 truncate text-xs text-edge-text",
                     isActive && "mb-1"
@@ -400,7 +403,7 @@ function TitlebarTab({ tab }: { tab: TabRecord }) {
                 ) : (
                     tab.title
                 )}
-            </span>
+            </AnimatedSize>
             <Button
                 variant="destructive-ghost"
                 size="icon-2xs"
