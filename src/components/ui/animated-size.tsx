@@ -39,6 +39,10 @@ type AnimatedSizeProps<T extends ElementType = "div"> = {
  * inner would report the frame's current size back and every change would
  * stall. `overflow-hidden` covers content larger than the frame while the
  * animation runs.
+ *
+ * The inner is observed for resizes and DOM changes rather than measured on
+ * renders alone: a parent can skip rendering this component (memoized element,
+ * identical props) while a descendant paints content that widens it.
  */
 export function AnimatedSize<T extends ElementType = "div">({
     as,
@@ -52,6 +56,8 @@ export function AnimatedSize<T extends ElementType = "div">({
     ...props
 }: AnimatedSizeProps<T>) {
     const innerRef = useRef<HTMLElement | null>(null);
+    const resizeObserver = useRef<ResizeObserver | null>(null);
+    const mutationObserver = useRef<MutationObserver | null>(null);
     const [size, setSize] = useState<{
         width: number | null;
         height: number | null;
@@ -62,10 +68,6 @@ export function AnimatedSize<T extends ElementType = "div">({
         () => motion.create(outer) as ElementType,
         [outer]
     );
-
-    const setInner = useCallback((node: HTMLElement | null) => {
-        innerRef.current = node;
-    }, []);
 
     const measure = useCallback(() => {
         const inner = innerRef.current;
@@ -86,15 +88,33 @@ export function AnimatedSize<T extends ElementType = "div">({
         });
     }, [height, width]);
 
-    useLayoutEffect(measure);
+    const setInner = useCallback(
+        (node: HTMLElement | null) => {
+            resizeObserver.current?.disconnect();
+            mutationObserver.current?.disconnect();
+            resizeObserver.current = null;
+            mutationObserver.current = null;
+            innerRef.current = node;
+            if (!node) return;
+            if (typeof ResizeObserver !== "undefined") {
+                const observer = new ResizeObserver(measure);
+                observer.observe(node);
+                resizeObserver.current = observer;
+            }
+            if (typeof MutationObserver !== "undefined") {
+                const observer = new MutationObserver(measure);
+                observer.observe(node, {
+                    childList: true,
+                    characterData: true,
+                    subtree: true,
+                });
+                mutationObserver.current = observer;
+            }
+        },
+        [measure]
+    );
 
-    useLayoutEffect(() => {
-        const inner = innerRef.current;
-        if (!inner || typeof ResizeObserver === "undefined") return;
-        const observer = new ResizeObserver(measure);
-        observer.observe(inner);
-        return () => observer.disconnect();
-    }, [measure]);
+    useLayoutEffect(measure);
 
     const animate = {
         ...(width ? { width: size.width ?? "auto" } : {}),
