@@ -26,6 +26,7 @@ import {
     ContextMenuItem,
     ContextMenuPopup,
     ContextMenuSeparator,
+    ContextMenuShortcut,
     ContextMenuTrigger,
 } from "../ui/context-menu";
 
@@ -107,6 +108,7 @@ export function RepoContextMenu({
                 >
                     <SquarePen />
                     Open in editor
+                    <ContextMenuShortcut shortcut="openInEditorShortcut" />
                 </ContextMenuItem>
                 <ContextMenuItem
                     onClick={() => void openInTerminal(repoPath)}
@@ -114,6 +116,7 @@ export function RepoContextMenu({
                 >
                     <Terminal />
                     Open in terminal
+                    <ContextMenuShortcut shortcut="openInTerminalShortcut" />
                 </ContextMenuItem>
                 <ContextMenuItem
                     onClick={() => void revealInFileManager(repoPath)}

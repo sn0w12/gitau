@@ -21,6 +21,11 @@ import { seedSettingsForTests } from "@/stores/settings-store";
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 const REPO_PATH = "C:\\repos\\alpha";
+const MENU_SETTINGS = {
+    editorCommand: "code",
+    openInEditorShortcut: "Mod+Shift+E",
+    openInTerminalShortcut: "Mod+Alt+T",
+};
 
 function fakeServices() {
     const editorCalls: Array<{ path: string; relativePath?: string }> = [];
@@ -144,7 +149,7 @@ describe("RepoContextMenu", () => {
     });
 
     it("opens the repo folder in the configured editor", async () => {
-        seedSettingsForTests({ editorCommand: "code" });
+        seedSettingsForTests(MENU_SETTINGS);
         const services = fakeServices();
         const view = renderWith(
             services,
@@ -172,7 +177,7 @@ describe("RepoContextMenu", () => {
     });
 
     it("opens the repo folder in the default terminal without configuration", async () => {
-        seedSettingsForTests({ editorCommand: "code" });
+        seedSettingsForTests(MENU_SETTINGS);
         const services = fakeServices();
         const view = renderWith(
             services,
@@ -203,7 +208,7 @@ describe("RepoContextMenu", () => {
     });
 
     it("reveals the repo folder in the file manager", async () => {
-        seedSettingsForTests({ editorCommand: "code" });
+        seedSettingsForTests(MENU_SETTINGS);
         const services = fakeServices();
         const view = renderWith(
             services,
@@ -231,7 +236,7 @@ describe("RepoContextMenu", () => {
     });
 
     it("disables the editor item until an editor command is set", async () => {
-        seedSettingsForTests({ editorCommand: "" });
+        seedSettingsForTests({ ...MENU_SETTINGS, editorCommand: "" });
         const services = fakeServices();
         const view = renderWith(
             services,
@@ -258,7 +263,7 @@ describe("RepoContextMenu", () => {
     });
 
     it("opens the repository in the active tab", async () => {
-        seedSettingsForTests({ editorCommand: "code" });
+        seedSettingsForTests(MENU_SETTINGS);
         const services = fakeServices();
         const view = renderWith(
             services,
@@ -283,7 +288,7 @@ describe("RepoContextMenu", () => {
     });
 
     it("opens the repository in a new tab bound to this session's id", async () => {
-        seedSettingsForTests({ editorCommand: "code" });
+        seedSettingsForTests(MENU_SETTINGS);
         const services = fakeServices();
         const view = renderWith(
             services,

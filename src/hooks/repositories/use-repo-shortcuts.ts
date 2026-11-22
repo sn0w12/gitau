@@ -6,6 +6,8 @@ import type { RepoStateAction, RepoView } from "@/lib/routing/repo-search";
 import { REPO_VIEW_SHORTCUTS } from "@/lib/shortcuts";
 
 import { useChangeActions } from "./use-change-actions";
+import { useOpenInEditor } from "./use-open-in-editor";
+import { useOpenInTerminal } from "./use-open-in-terminal";
 import { useSyncActions } from "./use-sync-actions";
 
 interface RepoShortcutScope {
@@ -31,6 +33,8 @@ export function useRepoShortcuts({
     const changes = useChangeActions(repoId);
     const sync = useSyncActions(repoId ?? 0, repoPath);
     const access = useRepoViewAccess(repoId);
+    const editor = useOpenInEditor();
+    const openInTerminal = useOpenInTerminal();
 
     // Tab panels stay mounted, so the target exists before the switch
     // paints; focusing is deferred one frame so it lands when visible.
@@ -56,6 +60,16 @@ export function useRepoShortcuts({
     useSettingHotkey("fetchShortcut", () => void sync.fetch(), { enabled });
     useSettingHotkey("pullShortcut", () => void sync.pull(), { enabled });
     useSettingHotkey("pushShortcut", () => void sync.push(), { enabled });
+    useSettingHotkey(
+        "openInEditorShortcut",
+        () => void editor.openInEditor(repoPath),
+        { enabled: enabled && editor.enabled }
+    );
+    useSettingHotkey(
+        "openInTerminalShortcut",
+        () => void openInTerminal(repoPath),
+        { enabled }
+    );
     useSettingHotkey(
         "switchChangesPanelShortcut",
         () => dispatch({ type: "SET_TAB", data: "changes" }),

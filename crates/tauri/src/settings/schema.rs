@@ -306,6 +306,12 @@ pub fn builtin() -> SettingsSchema {
                             shortcut("pushShortcut", "Push")
                                 .description("Pushes to the primary remote.")
                                 .default_value(SettingValue::Str("Mod+Shift+P".to_owned())),
+                            shortcut("openInEditorShortcut", "Open in editor")
+                                .description("Opens the current repository in the configured editor.")
+                                .default_value(SettingValue::Str("Mod+Shift+E".to_owned())),
+                            shortcut("openInTerminalShortcut", "Open in terminal")
+                                .description("Opens the current repository in the terminal.")
+                                .default_value(SettingValue::Str("Mod+Alt+T".to_owned())),
                         ],
                     },
                     SettingsSection {

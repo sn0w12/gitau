@@ -45,6 +45,8 @@ export interface SettingsValues {
     fetchShortcut: string;
     pullShortcut: string;
     pushShortcut: string;
+    openInEditorShortcut: string;
+    openInTerminalShortcut: string;
     newTabShortcut: string;
     closeTabShortcut: string;
     reopenClosedTabShortcut: string;
@@ -74,6 +76,8 @@ export const SHORTCUT_SETTING_KEYS = [
     "fetchShortcut",
     "pullShortcut",
     "pushShortcut",
+    "openInEditorShortcut",
+    "openInTerminalShortcut",
     "newTabShortcut",
     "closeTabShortcut",
     "reopenClosedTabShortcut",
