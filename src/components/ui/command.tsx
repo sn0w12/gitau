@@ -89,7 +89,7 @@ export function CommandDialogViewport({
     return (
         <CommandDialogPrimitive.Viewport
             className={cn(
-                "fixed inset-0 z-50 flex flex-col items-center px-4 py-[max(--spacing(4),4vh)] clip-inset-backdrop sm:py-[10vh]",
+                "fixed inset-0 z-50 flex flex-col items-center px-4 pt-[max(--spacing(10),4vh)] pb-[max(--spacing(4),4vh)] clip-inset-backdrop sm:py-[10vh]",
                 className
             )}
             data-slot="command-dialog-viewport"
