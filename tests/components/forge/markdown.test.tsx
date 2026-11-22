@@ -657,9 +657,141 @@ describe("Mermaid diagrams", () => {
         await waitFor(() => {
             expect(screen.getByRole("dialog")).not.toBeNull();
         });
-        expect(
-            screen.getByRole("button", { name: "Close diagram" })
-        ).not.toBeNull();
+        expect(screen.getByRole("button", { name: "Close" })).not.toBeNull();
+    });
+
+    it("zooms the diagram with the controls", async () => {
+        const view = renderMarkdown("```mermaid\nflowchart LR\n  A --> B\n```");
+        const open = await waitFor(() =>
+            view.getByRole("button", { name: "Expand diagram" })
+        );
+        fireEvent.click(open);
+        await waitFor(() => {
+            expect(screen.getByRole("dialog")).not.toBeNull();
+        });
+        expect(screen.getByText("100%")).toBeDefined();
+
+        fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+        expect(screen.getByText("125%")).toBeDefined();
+
+        const canvas = document.querySelector<HTMLElement>(
+            '[data-slot="diagram-canvas"]'
+        );
+        if (!canvas) throw new Error("diagram canvas not rendered");
+    });
+
+    it("zooms the diagram with the wheel", async () => {
+        const view = renderMarkdown("```mermaid\nflowchart LR\n  A --> B\n```");
+        const open = await waitFor(() =>
+            view.getByRole("button", { name: "Expand diagram" })
+        );
+        fireEvent.click(open);
+        await waitFor(() => {
+            expect(screen.getByRole("dialog")).not.toBeNull();
+        });
+
+        const viewport = document.querySelector<HTMLElement>(
+            '[data-slot="diagram-viewport"]'
+        );
+        if (!viewport) throw new Error("diagram viewport not rendered");
+        fireEvent.wheel(viewport, {
+            deltaY: -100,
+            clientX: 100,
+            clientY: 100,
+        });
+
+        expect(screen.getByText("116%")).toBeDefined();
+    });
+
+    it("keeps the point under the cursor fixed while zooming", async () => {
+        const view = renderMarkdown("```mermaid\nflowchart LR\n  A --> B\n```");
+        const open = await waitFor(() =>
+            view.getByRole("button", { name: "Expand diagram" })
+        );
+        fireEvent.click(open);
+        await waitFor(() => {
+            expect(screen.getByRole("dialog")).not.toBeNull();
+        });
+
+        const viewport = document.querySelector<HTMLElement>(
+            '[data-slot="diagram-viewport"]'
+        );
+        const canvas = document.querySelector<HTMLElement>(
+            '[data-slot="diagram-canvas"]'
+        );
+        if (!viewport || !canvas) throw new Error("diagram not rendered");
+
+        fireEvent.pointerDown(viewport, {
+            pointerId: 1,
+            button: 0,
+            clientX: 10,
+            clientY: 10,
+        });
+        fireEvent.pointerMove(viewport, {
+            pointerId: 1,
+            clientX: 40,
+            clientY: 30,
+        });
+        fireEvent.pointerUp(viewport, {
+            pointerId: 1,
+            clientX: 40,
+            clientY: 30,
+        });
+        fireEvent.wheel(viewport, {
+            deltaY: -100,
+            clientX: 100,
+            clientY: 100,
+        });
+
+        const match =
+            /translate\(([-\d.]+)px, ([-\d.]+)px\) scale\(([-\d.]+)\)/.exec(
+                canvas.style.transform
+            );
+        if (!match) {
+            throw new Error(`unexpected transform ${canvas.style.transform}`);
+        }
+        const factor = Math.exp(0.15);
+        expect(Number(match[3])).toBeCloseTo(factor, 5);
+        expect(Number(match[1])).toBeCloseTo(100 + (30 - 100) * factor, 3);
+        expect(Number(match[2])).toBeCloseTo(100 + (20 - 100) * factor, 3);
+    });
+
+    it("pans the diagram by dragging", async () => {
+        const view = renderMarkdown("```mermaid\nflowchart LR\n  A --> B\n```");
+        const open = await waitFor(() =>
+            view.getByRole("button", { name: "Expand diagram" })
+        );
+        fireEvent.click(open);
+        await waitFor(() => {
+            expect(screen.getByRole("dialog")).not.toBeNull();
+        });
+
+        const viewport = document.querySelector<HTMLElement>(
+            '[data-slot="diagram-viewport"]'
+        );
+        const canvas = document.querySelector<HTMLElement>(
+            '[data-slot="diagram-canvas"]'
+        );
+        if (!viewport || !canvas) throw new Error("diagram not rendered");
+
+        fireEvent.pointerDown(viewport, {
+            pointerId: 1,
+            button: 0,
+            clientX: 10,
+            clientY: 10,
+        });
+        fireEvent.pointerMove(viewport, {
+            pointerId: 1,
+            clientX: 40,
+            clientY: 30,
+        });
+        fireEvent.pointerUp(viewport, {
+            pointerId: 1,
+            clientX: 40,
+            clientY: 30,
+        });
+
+        expect(canvas.style.transform).toBe("translate(30px, 20px) scale(1)");
     });
 });
 

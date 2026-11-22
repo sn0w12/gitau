@@ -81,7 +81,7 @@ export function DialogViewport({
         <DialogPrimitive.Viewport
             data-slot="dialog-viewport"
             className={cn(
-                "fixed inset-0 z-50 grid grid-rows-[1fr_auto_3fr] justify-items-center p-4 pt-10 clip-inset-backdrop",
+                "fixed inset-0 z-50 grid grid-rows-[1fr_auto_3fr] justify-items-center p-4 pt-10 pl-13.5 clip-inset-backdrop",
                 className
             )}
             {...props}
