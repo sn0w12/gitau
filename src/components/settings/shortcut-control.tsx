@@ -14,7 +14,8 @@ import {
 import { KbdGroup } from "@/components/ui/kbd";
 import { Scritto } from "@/components/ui/scritto";
 import { useHeldChord } from "@/hooks/use-held-chord";
-import { displayToken, splitChord } from "@/lib/shortcuts";
+import { displayToken, SHORTCUT_ICON_CLASS, splitChord } from "@/lib/shortcuts";
+import { cn } from "@/lib/utils";
 
 type Preview = { key: string; node: ReactNode };
 
@@ -24,11 +25,10 @@ function Chord({ chord }: { chord: string }) {
     if (parts.length === 0) return null;
 
     return (
-        <KbdGroup className="h-full items-center">
+        <KbdGroup className={cn("flex items-center", SHORTCUT_ICON_CLASS)}>
             {parts.map((part, index) => (
                 <Fragment key={`${part}-${index}`}>
                     <span>{displayToken(part)}</span>
-                    {index + 1 !== parts.length && <span>+</span>}
                 </Fragment>
             ))}
         </KbdGroup>
@@ -107,7 +107,7 @@ export function ShortcutControl({
                     <Scritto value={recorder.isRecording ? "Cancel" : "Edit"} />
                 </Button>
             </InsetInputAddition>
-            <InsetInputValue className="cursor-text px-2">
+            <InsetInputValue className="flex cursor-text items-center px-2">
                 <AnimatedSize
                     as="span"
                     innerAs="span"

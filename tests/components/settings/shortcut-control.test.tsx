@@ -4,6 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ShortcutControl } from "@/components/settings/shortcut-control";
 
+vi.mock("@tauri-apps/plugin-os", () => ({
+    platform: () => "windows",
+}));
+
 afterEach(cleanup);
 
 describe("ShortcutControl", () => {
@@ -26,9 +30,11 @@ describe("ShortcutControl", () => {
     });
 
     it("renders a stored physical-code chord as its key", () => {
-        render(<ShortcutControl value="Mod+[KeyK]" onChange={() => {}} />);
+        const { container } = render(
+            <ShortcutControl value="Mod+[KeyK]" onChange={() => {}} />
+        );
 
-        expect(screen.getByText("Ctrl")).toBeDefined();
+        expect(container.querySelector("svg.lucide-chevron-up")).not.toBeNull();
         expect(screen.getByText("K")).toBeDefined();
         expect(screen.queryByText("[KeyK]")).toBeNull();
     });

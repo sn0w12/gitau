@@ -1,11 +1,10 @@
-import { CornerDownLeft } from "lucide-react";
 import type React from "react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { DialogClose, DialogFooter } from "@/components/ui/dialog";
 import { Form } from "@/components/ui/form";
-import { Kbd } from "@/components/ui/kbd";
+import { KeyboardShortcut } from "@/components/ui/kbd";
 import { cn } from "@/lib/utils";
 
 export function DialogForm({
@@ -61,11 +60,11 @@ export function DialogActions({
                     onClick={onCancel}
                     disabled={cancelDisabled}
                 >
-                    {cancelLabel} <Kbd>Esc</Kbd>
+                    {cancelLabel} <KeyboardShortcut shortcut="Escape" />
                 </Button>
             ) : (
                 <DialogClose render={<Button variant="secondary" />}>
-                    {cancelLabel} <Kbd>Esc</Kbd>
+                    {cancelLabel} <KeyboardShortcut shortcut="Escape" />
                 </DialogClose>
             )}
             {submitLabel ? (
@@ -76,16 +75,15 @@ export function DialogActions({
                     loading={submitLoading}
                 >
                     {submitLabel}{" "}
-                    <Kbd
-                        className={cn(
+                    <KeyboardShortcut
+                        shortcut="Enter"
+                        keyClassName={cn(
                             "bg-dark/18",
                             submitVariant === "info"
                                 ? "text-dark"
                                 : "text-light"
                         )}
-                    >
-                        <CornerDownLeft />
-                    </Kbd>
+                    />
                 </Button>
             ) : null}
         </DialogFooter>

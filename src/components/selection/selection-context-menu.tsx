@@ -1,8 +1,12 @@
 import { useHotkey } from "@tanstack/react-hotkeys";
 import * as React from "react";
 
-import { Kbd, KbdGroup } from "@/components/ui/kbd";
-import { Menu, MenuItem, MenuPopup, MenuShortcut } from "@/components/ui/menu";
+import {
+    Menu,
+    MenuItem,
+    MenuPopup,
+    MenuShortcutBinding,
+} from "@/components/ui/menu";
 import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
 import {
     clearSelection,
@@ -10,7 +14,6 @@ import {
     selectElementContents,
     selectionInSurface,
 } from "@/lib/selection/text-selection";
-import { displayToken } from "@/lib/shortcuts";
 
 type SelectionSnapshot = {
     pointX: number;
@@ -36,18 +39,6 @@ function rectAtPoint(x: number, y: number): DOMRect {
             return this;
         },
     } as DOMRect;
-}
-
-function ShortcutHint({ tokens }: { tokens: string[] }): React.ReactElement {
-    return (
-        <MenuShortcut>
-            <KbdGroup>
-                {tokens.map((token) => {
-                    return <Kbd key={token}>{displayToken(token)}</Kbd>;
-                })}
-            </KbdGroup>
-        </MenuShortcut>
-    );
 }
 
 export function SelectionContextMenu(): React.ReactElement | null {
@@ -146,7 +137,7 @@ export function SelectionContextMenu(): React.ReactElement | null {
                     onClick={handleCopy}
                 >
                     Copy
-                    <ShortcutHint tokens={["mod", "c"]} />
+                    <MenuShortcutBinding shortcut="Mod+C" />
                 </MenuItem>
                 <MenuItem
                     disabled={!snapshot.hasSelection}
@@ -163,7 +154,7 @@ export function SelectionContextMenu(): React.ReactElement | null {
                     }}
                 >
                     Deselect
-                    <ShortcutHint tokens={["mod", "d"]} />
+                    <MenuShortcutBinding shortcut="Mod+D" />
                 </MenuItem>
                 <MenuItem
                     onClick={() => {
@@ -184,7 +175,7 @@ export function SelectionContextMenu(): React.ReactElement | null {
                     }}
                 >
                     Select all
-                    <ShortcutHint tokens={["mod", "a"]} />
+                    <MenuShortcutBinding shortcut="Mod+A" />
                 </MenuItem>
             </MenuPopup>
         </Menu>

@@ -7,7 +7,7 @@ import {
     SHORTCUT_SETTING_KEYS,
     type ShortcutSettingKey,
 } from "@/lib/settings/settings.generated";
-import { displayToken, splitChord } from "@/lib/shortcuts";
+import { displayToken, SHORTCUT_ICON_CLASS, splitChord } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
 export function Kbd({
@@ -17,7 +17,8 @@ export function Kbd({
     return (
         <kbd
             className={cn(
-                "pointer-events-none inline-flex h-5 min-w-5 items-center justify-center gap-1 rounded-[.25rem] bg-muted px-1 text-xs font-medium text-muted-foreground select-none [&_svg:not([class*='size-'])]:size-3",
+                "pointer-events-none inline-flex h-5 min-w-5 items-center justify-center gap-1 rounded-[.25rem] bg-muted px-1 text-xs font-medium text-muted-foreground select-none",
+                SHORTCUT_ICON_CLASS,
                 className
             )}
             data-slot="kbd"
@@ -42,17 +43,17 @@ export function KbdGroup({
 function InternalKeyboardShortcut({
     shortcut,
     className,
+    keyClassName,
 }: {
     shortcut: string[];
-    className?: string;
-}) {
+} & ShortcutProps) {
     if (shortcut.length === 0) return null;
 
     return (
         <KbdGroup className={className}>
             {shortcut.map((part, index) => (
                 <Fragment key={`${part}-${index}`}>
-                    <Kbd>{displayToken(part)}</Kbd>
+                    <Kbd className={keyClassName}>{displayToken(part)}</Kbd>
                 </Fragment>
             ))}
         </KbdGroup>
@@ -66,38 +67,61 @@ function isShortcutSettingKey(value: unknown): value is ShortcutSettingKey {
     );
 }
 
-export type AnyShortcut = RegisterableHotkey | ShortcutSettingKey;
+type StringChord = `${string}+${string}`;
+export type AnyShortcut = RegisterableHotkey | ShortcutSettingKey | StringChord;
+interface ShortcutProps {
+    className?: string;
+    keyClassName?: string;
+}
 
 export function KeyboardShortcut({
     shortcut,
     className,
+    keyClassName,
 }: {
     shortcut: AnyShortcut;
-    className?: string;
-}) {
+} & ShortcutProps) {
     if (isShortcutSettingKey(shortcut)) {
         return (
             <SettingKeyboardShortcut
                 shortcut={shortcut}
                 className={className}
+                keyClassName={keyClassName}
             />
         );
     }
 
-    return <HotkeyKeyboardShortcut shortcut={shortcut} className={className} />;
+    if (typeof shortcut === "string") {
+        return (
+            <InternalKeyboardShortcut
+                shortcut={splitChord(shortcut)}
+                className={className}
+                keyClassName={keyClassName}
+            />
+        );
+    }
+
+    return (
+        <HotkeyKeyboardShortcut
+            shortcut={shortcut}
+            className={className}
+            keyClassName={keyClassName}
+        />
+    );
 }
 
 function HotkeyKeyboardShortcut({
     shortcut,
     className,
+    keyClassName,
 }: {
     shortcut: RegisterableHotkey;
-    className?: string;
-}) {
+} & ShortcutProps) {
     return (
         <InternalKeyboardShortcut
             shortcut={shortcut.toString().split("+")}
             className={className}
+            keyClassName={keyClassName}
         />
     );
 }
@@ -105,12 +129,18 @@ function HotkeyKeyboardShortcut({
 function SettingKeyboardShortcut({
     shortcut,
     className,
+    keyClassName,
 }: {
     shortcut: ShortcutSettingKey;
-    className?: string;
-}) {
+} & ShortcutProps) {
     const chord = useSettingValue(shortcut);
     const parts = splitChord(chord);
 
-    return <InternalKeyboardShortcut shortcut={parts} className={className} />;
+    return (
+        <InternalKeyboardShortcut
+            shortcut={parts}
+            className={className}
+            keyClassName={keyClassName}
+        />
+    );
 }

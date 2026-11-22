@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TabContext } from "@/contexts/tab-context";
 import type { SettingsSchema } from "@/lib/backend/protocol";
@@ -12,6 +12,10 @@ import {
     initializeSettings,
     resetSettingsForTests,
 } from "@/stores/settings-store";
+
+vi.mock("@tauri-apps/plugin-os", () => ({
+    platform: () => "windows",
+}));
 
 // jsdom has no ResizeObserver; the settings page constructs one to measure
 // its animated tab panel during render.
@@ -168,8 +172,8 @@ describe("SettingsPage", () => {
         // boolean -> switch (Base UI renders a span[role=switch])
         expect(container.querySelector('[role="switch"]')).not.toBeNull();
 
-        // shortcut -> kbd chord tokens (Mod resolves to Ctrl off-macOS)
-        expect(screen.getByText("Ctrl")).toBeDefined();
+        // shortcut -> kbd chord tokens (Mod resolves to the chevron icon)
+        expect(container.querySelector("svg.lucide-chevron-up")).not.toBeNull();
         expect(screen.getByText("T")).toBeDefined();
     });
 

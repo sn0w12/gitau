@@ -1,9 +1,8 @@
 import { useSelector } from "@tanstack/react-store";
-import { CornerDownLeft } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 
-import { Kbd } from "@/components/ui/kbd";
+import { KeyboardShortcut } from "@/components/ui/kbd";
 import { Scritto } from "@/components/ui/scritto";
 import { useAppServices } from "@/contexts/services-context";
 import { useActiveConnection } from "@/hooks/forge/use-forge-account";
@@ -221,7 +220,7 @@ export function CloneRepoDialog({
 
                     <DialogFooter>
                         <DialogClose render={<Button variant="secondary" />}>
-                            Cancel <Kbd>Esc</Kbd>
+                            Cancel <KeyboardShortcut shortcut="Escape" />
                         </DialogClose>
                         <Button
                             type={running ? undefined : "submit"}
@@ -235,9 +234,10 @@ export function CloneRepoDialog({
                             className="transition-colors"
                         >
                             <Scritto value={running ? "Cancel" : "Clone"} />{" "}
-                            <Kbd className="text-dark">
-                                <CornerDownLeft />
-                            </Kbd>
+                            <KeyboardShortcut
+                                shortcut="Enter"
+                                keyClassName="text-dark"
+                            />
                         </Button>
                     </DialogFooter>
                 </DialogForm>

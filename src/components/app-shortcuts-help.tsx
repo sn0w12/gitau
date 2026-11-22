@@ -9,34 +9,20 @@ import {
     DialogPopup,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { Kbd, KbdGroup, KeyboardShortcut } from "@/components/ui/kbd";
+import { KeyboardShortcut } from "@/components/ui/kbd";
 import { useSettingsSchema } from "@/hooks/settings/use-setting";
 import { useSettingHotkey } from "@/hooks/settings/use-setting-hotkey";
 import { visibleSettings } from "@/lib/settings/schema";
 import type { ShortcutSettingKey } from "@/lib/settings/settings.generated";
-import { displayToken, splitChord } from "@/lib/shortcuts";
 
 /** Bindings with no settings key; they cannot be rebound. */
-const FIXED_BINDINGS: { label: string; chord: string }[] = [
+const FIXED_BINDINGS = [
     { label: "Go to tab", chord: "Mod+1-9" },
     { label: "Commit", chord: "Mod+Enter" },
     { label: "Clear selection", chord: "Escape" },
     { label: "Deselect text", chord: "Mod+D" },
     { label: "Toggle fullscreen", chord: "F11" },
-];
-
-function StaticChord({ chord }: { chord: string }) {
-    const parts = splitChord(chord);
-    if (parts.length === 0) return null;
-
-    return (
-        <KbdGroup>
-            {parts.map((part, index) => (
-                <Kbd key={`${part}-${index}`}>{displayToken(part)}</Kbd>
-            ))}
-        </KbdGroup>
-    );
-}
+] as const;
 
 function ShortcutRow({ label, badge }: { label: string; badge: ReactNode }) {
     return (
@@ -112,7 +98,9 @@ export function AppShortcutsHelp() {
                                     key={binding.label}
                                     label={binding.label}
                                     badge={
-                                        <StaticChord chord={binding.chord} />
+                                        <KeyboardShortcut
+                                            shortcut={binding.chord}
+                                        />
                                     }
                                 />
                             ))}
