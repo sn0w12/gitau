@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { DialogClose, DialogFooter } from "@/components/ui/dialog";
 import { Form } from "@/components/ui/form";
 import { Kbd } from "@/components/ui/kbd";
+import { cn } from "@/lib/utils";
 
 export function DialogForm({
     onSubmit,
@@ -75,7 +76,14 @@ export function DialogActions({
                     loading={submitLoading}
                 >
                     {submitLabel}{" "}
-                    <Kbd className="bg-dark/18 text-dark">
+                    <Kbd
+                        className={cn(
+                            "bg-dark/18",
+                            submitVariant === "info"
+                                ? "text-dark"
+                                : "text-light"
+                        )}
+                    >
                         <CornerDownLeft />
                     </Kbd>
                 </Button>
