@@ -152,7 +152,7 @@ function RepoViewBody({
                 />
             );
         }
-        return <ReadmeView repoId={repoId} />;
+        return <ReadmeView key={repoId} repoId={repoId} />;
     }
 
     if (view === "graph") {

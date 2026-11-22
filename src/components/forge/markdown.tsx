@@ -63,6 +63,13 @@ function isMermaid(lang: string | undefined): boolean {
 const InsideLinkContext = createContext(false);
 const ImageHostsContext = createContext<readonly string[]>([]);
 
+interface RelativeLinks {
+    basePath: string;
+    onOpen: (path: string, fragment: string | undefined) => void;
+}
+
+const RelativeLinksContext = createContext<RelativeLinks | null>(null);
+
 interface LocalImageSource {
     repoId: number;
     basePath: string;
@@ -76,19 +83,20 @@ function isAbsoluteSrc(src: string): boolean {
     return ABSOLUTE_SRC.test(src) || src.startsWith("//");
 }
 
-/**
- * Resolves a markdown image source against the repository root, or returns
- * `null` for an absolute source or one that climbs out of the worktree.
- */
-function repoImagePath(src: string, basePath: string): string | null {
-    let decoded = src;
+function decodePath(value: string): string {
     try {
-        decoded = decodeURIComponent(src);
+        return decodeURIComponent(value);
     } catch {
-        decoded = src;
+        return value;
     }
-    if (isAbsoluteSrc(decoded)) return null;
-    const path = decoded.split(/[?#]/, 1)[0] ?? "";
+}
+
+/**
+ * Resolves a repository-relative path against a document's directory, or
+ * returns `null` for an absolute path or one that climbs out of the worktree.
+ */
+function repoRelativePath(path: string, basePath: string): string | null {
+    if (isAbsoluteSrc(path)) return null;
     const segments = path.startsWith("/")
         ? []
         : basePath.split("/").filter(Boolean);
@@ -102,6 +110,37 @@ function repoImagePath(src: string, basePath: string): string | null {
         segments.push(part);
     }
     return segments.length > 0 ? segments.join("/") : null;
+}
+
+function repoImagePath(src: string, basePath: string): string | null {
+    const decoded = decodePath(src);
+    if (isAbsoluteSrc(decoded)) return null;
+    return repoRelativePath(decoded.split(/[?#]/, 1)[0] ?? "", basePath);
+}
+
+interface RelativeLinkTarget {
+    path: string;
+    fragment: string | undefined;
+}
+
+function relativeLinkTarget(
+    href: string,
+    basePath: string
+): RelativeLinkTarget | null {
+    const hashAt = href.indexOf("#");
+    const beforeHash = hashAt === -1 ? href : href.slice(0, hashAt);
+    const fragment = hashAt === -1 ? "" : decodePath(href.slice(hashAt + 1));
+    const queryAt = beforeHash.indexOf("?");
+    const rawPath = queryAt === -1 ? beforeHash : beforeHash.slice(0, queryAt);
+    if (rawPath === "") return null;
+    const path = repoRelativePath(decodePath(rawPath), basePath);
+    if (!path) return null;
+    return { path, fragment: fragment || undefined };
+}
+
+function scrollToAnchor(id: string): void {
+    const target = document.getElementById(id);
+    target?.scrollIntoView?.({ block: "start" });
 }
 
 function LocalImage({
@@ -144,6 +183,52 @@ const components = {
         // The heading anchor arrives with its own classes; merge so the
         // hover-reveal styling survives the link color.
         const className = cn("text-info hover:text-info/70", props.className);
+        const relativeLinks = useContext(RelativeLinksContext);
+
+        if (relativeLinks && href && !isAbsoluteSrc(href)) {
+            if (href.startsWith("#")) {
+                return (
+                    <InsideLinkContext value={true}>
+                        <a
+                            {...props}
+                            href={href}
+                            className={className}
+                            onClick={(event) => {
+                                event.preventDefault();
+                                scrollToAnchor(decodePath(href.slice(1)));
+                            }}
+                        />
+                    </InsideLinkContext>
+                );
+            }
+            const target = relativeLinkTarget(href, relativeLinks.basePath);
+            if (target) {
+                return (
+                    <InsideLinkContext value={true}>
+                        <a
+                            {...props}
+                            href={href}
+                            className={className}
+                            onClick={(event) => {
+                                event.preventDefault();
+                                relativeLinks.onOpen(
+                                    target.path,
+                                    target.fragment
+                                );
+                            }}
+                        />
+                    </InsideLinkContext>
+                );
+            }
+            // A relative link that escapes the repository has no in-app
+            // target, so it must not reach the router.
+            return (
+                <InsideLinkContext value={true}>
+                    <span className={className}>{props.children}</span>
+                </InsideLinkContext>
+            );
+        }
+
         return (
             <InsideLinkContext value={true}>
                 {external ? (
@@ -412,6 +497,7 @@ export function CustomMarkdown({
     repo,
     imageRepoId,
     imageBasePath,
+    onOpenRelative,
 }: {
     children: React.ComponentProps<typeof Markdown>["children"];
     /** Repository the message belongs to; `#123` only links when both are set. */
@@ -419,8 +505,12 @@ export function CustomMarkdown({
     repo?: string;
     /** Repository whose worktree serves relative `<img>` sources. */
     imageRepoId?: number;
-    /** Directory of the rendered document, used to resolve relative images. */
+    /** Directory of the rendered document, used to resolve relative images
+     * and links. */
     imageBasePath?: string;
+    /** When set, relative links and `#anchor` links stay in the app instead
+     * of reaching the router. */
+    onOpenRelative?: (path: string, fragment: string | undefined) => void;
 }) {
     const extensions = useMemo(
         () => [
@@ -448,25 +538,34 @@ export function CustomMarkdown({
                 : { repoId: imageRepoId, basePath: imageBasePath ?? "" },
         [imageRepoId, imageBasePath]
     );
+    const relativeLinks = useMemo(
+        () =>
+            onOpenRelative
+                ? { basePath: imageBasePath ?? "", onOpen: onOpenRelative }
+                : null,
+        [onOpenRelative, imageBasePath]
+    );
     return (
-        <ImageHostsContext value={imageHosts}>
-            <LocalImagesContext value={localImages}>
-                <div className="min-w-0 break-words">
-                    <Markdown
-                        extensions={extensions}
-                        components={components}
-                        // Required so the parser can tell real html from escaped
-                        // `\<b>` text. It is safe because `safeHtmlExtension`
-                        // rewrites every html node before the renderer sees one,
-                        // so the renderer's innerHTML branch stays unreachable.
-                        allowHtml
-                    >
-                        {typeof children === "string"
-                            ? normalizeHtmlBlocks(children)
-                            : children}
-                    </Markdown>
-                </div>
-            </LocalImagesContext>
-        </ImageHostsContext>
+        <RelativeLinksContext value={relativeLinks}>
+            <ImageHostsContext value={imageHosts}>
+                <LocalImagesContext value={localImages}>
+                    <div className="min-w-0 break-words">
+                        <Markdown
+                            extensions={extensions}
+                            components={components}
+                            // Required so the parser can tell real html from escaped
+                            // `\<b>` text. It is safe because `safeHtmlExtension`
+                            // rewrites every html node before the renderer sees one,
+                            // so the renderer's innerHTML branch stays unreachable.
+                            allowHtml
+                        >
+                            {typeof children === "string"
+                                ? normalizeHtmlBlocks(children)
+                                : children}
+                        </Markdown>
+                    </div>
+                </LocalImagesContext>
+            </ImageHostsContext>
+        </RelativeLinksContext>
     );
 }

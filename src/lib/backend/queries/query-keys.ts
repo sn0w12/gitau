@@ -4,6 +4,8 @@ export const repositoryKeys = {
     all: (repoId: number) => ["repository", repoId] as const,
     snapshot: (repoId: number) => ["repository", repoId, "snapshot"] as const,
     readme: (repoId: number) => ["repository", repoId, "readme"] as const,
+    readmeText: (repoId: number, path: string) =>
+        ["repository", repoId, "readme", path] as const,
     image: (repoId: number, path: string) =>
         ["repository", repoId, "image", path] as const,
     operation: (repoId: number) => ["repository", repoId, "operation"] as const,

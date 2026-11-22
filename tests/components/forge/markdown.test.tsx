@@ -69,6 +69,7 @@ interface MarkdownOptions {
         repoId: number,
         path: string
     ) => Promise<Result<string | null>>;
+    onOpenRelative?: (path: string, fragment: string | undefined) => void;
 }
 
 function renderMarkdown(
@@ -120,6 +121,7 @@ function renderMarkdown(
                 repo={repo}
                 imageRepoId={options.imageRepoId}
                 imageBasePath={options.imageBasePath}
+                onOpenRelative={options.onOpenRelative}
             >
                 {source}
             </CustomMarkdown>
@@ -376,6 +378,68 @@ describe("Images", () => {
             worktreeImage,
         });
         expect(worktreeImage).not.toHaveBeenCalled();
+    });
+});
+
+describe("Relative links", () => {
+    it("resolves a document link against its directory and keeps the anchor", () => {
+        const onOpenRelative = vi.fn();
+        const view = renderMarkdown(
+            "[guide](guide.md#setup)",
+            undefined,
+            undefined,
+            { imageBasePath: "docs", onOpenRelative }
+        );
+
+        fireEvent.click(view.getByText("guide"));
+
+        expect(onOpenRelative).toHaveBeenCalledWith("docs/guide.md", "setup");
+    });
+
+    it("resolves a leading slash from the repository root", () => {
+        const onOpenRelative = vi.fn();
+        const view = renderMarkdown(
+            "[license](/LICENSE.md)",
+            undefined,
+            undefined,
+            { imageBasePath: "docs", onOpenRelative }
+        );
+
+        fireEvent.click(view.getByText("license"));
+
+        expect(onOpenRelative).toHaveBeenCalledWith("LICENSE.md", undefined);
+    });
+
+    it("does not open a link that escapes the repository", () => {
+        const onOpenRelative = vi.fn();
+        const view = renderMarkdown(
+            "[outside](../outside.md)",
+            undefined,
+            undefined,
+            { onOpenRelative }
+        );
+
+        fireEvent.click(view.getByText("outside"));
+
+        expect(onOpenRelative).not.toHaveBeenCalled();
+        expect(view.container.querySelector("a")).toBeNull();
+    });
+
+    it("scrolls to a heading in the current document", () => {
+        const scrollIntoView = vi.fn();
+        const original = Element.prototype.scrollIntoView;
+        Element.prototype.scrollIntoView = scrollIntoView;
+        const view = renderMarkdown(
+            "## Usage\n\n[jump](#usage)",
+            undefined,
+            undefined,
+            { onOpenRelative: vi.fn() }
+        );
+
+        fireEvent.click(view.getByText("jump"));
+
+        expect(scrollIntoView).toHaveBeenCalled();
+        Element.prototype.scrollIntoView = original;
     });
 });
 

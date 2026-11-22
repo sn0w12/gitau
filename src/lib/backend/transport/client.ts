@@ -47,6 +47,8 @@ function createRawBackendClient() {
             readme: (repoId: number) => commands.git_readme({ repoId }),
             worktreeImage: (repoId: number, path: string) =>
                 commands.git_read_worktree_image({ repoId, path }),
+            worktreeText: (repoId: number, path: string) =>
+                commands.git_read_worktree_text({ repoId, path }),
             create: (request: CreateRepositoryRequest) =>
                 commands.git_init_repository({ request }),
             gitignoreTemplates: () => commands.git_list_gitignore_templates(),

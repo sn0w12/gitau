@@ -296,6 +296,8 @@ export const commands = {
         invokeCommand<CommandResults["git_read_graph_range"]>("git_read_graph_range", { args }),
     git_read_worktree_image: (args: CommandArgs["git_read_worktree_image"]) =>
         invokeCommand<CommandResults["git_read_worktree_image"]>("git_read_worktree_image", { args }),
+    git_read_worktree_text: (args: CommandArgs["git_read_worktree_text"]) =>
+        invokeCommand<CommandResults["git_read_worktree_text"]>("git_read_worktree_text", { args }),
     git_readme: (args: CommandArgs["git_readme"]) =>
         invokeCommand<CommandResults["git_readme"]>("git_readme", { args }),
     git_remote_repo_info: (args: CommandArgs["git_remote_repo_info"]) =>

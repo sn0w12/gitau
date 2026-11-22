@@ -2006,6 +2006,7 @@ export type CommandName =
     | "git_read_diff_range"
     | "git_read_graph_range"
     | "git_read_worktree_image"
+    | "git_read_worktree_text"
     | "git_readme"
     | "git_remote_repo_info"
     | "git_remote_repo_info_by_path"
@@ -2136,6 +2137,7 @@ export interface CommandArgs {
     git_read_diff_range: { operationId: number; startRow: number; maxRows: number };
     git_read_graph_range: { operationId: number; startRow: number; maxRows: number };
     git_read_worktree_image: { repoId: number; path: string };
+    git_read_worktree_text: { repoId: number; path: string };
     git_readme: { repoId: number };
     git_remote_repo_info: { repoId: number };
     git_remote_repo_info_by_path: { path: string };
@@ -2267,6 +2269,7 @@ export interface CommandResults {
     git_read_diff_range: RangeResult;
     git_read_graph_range: GraphRangeResult;
     git_read_worktree_image: string | null;
+    git_read_worktree_text: string | null;
     git_readme: ReadmeContent | null;
     git_remote_repo_info: RemoteRepoInfo;
     git_remote_repo_info_by_path: RemoteRepoInfo;

@@ -165,6 +165,39 @@ async fn worktree_image_skips_missing_non_image_and_escaping_paths() {
 }
 
 #[tokio::test]
+async fn worktree_text_reads_relative_files_and_rejects_escapes() {
+    let repo = TestRepo::init("readme-text");
+    repo.initial_commit(&[("README.md", "# hello\n")]);
+    std::fs::create_dir_all(repo.root.join("docs")).unwrap();
+    std::fs::write(repo.root.join("docs/guide.md"), "# guide\n").unwrap();
+
+    let backend = Backend::new(BackendConfig::default());
+    let opened = backend.open_repository(&repo.root).await.unwrap();
+
+    assert_eq!(
+        backend
+            .worktree_text(opened.id, "docs/guide.md")
+            .await
+            .unwrap()
+            .as_deref(),
+        Some("# guide\n")
+    );
+    assert!(
+        backend
+            .worktree_text(opened.id, "docs/missing.md")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        backend
+            .worktree_text(opened.id, "../outside.md")
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
 async fn open_repository_from_subdirectory_deduplicates() {
     let repo = TestRepo::init("dedupe");
     repo.initial_commit(&[("src/lib.rs", "pub fn f() {}")]);

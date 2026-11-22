@@ -508,6 +508,40 @@ impl Backend {
             .await
     }
 
+    /// Reads a worktree file as UTF-8 text. `None` when the repository is
+    /// bare, the path is missing or not a file, the file exceeds
+    /// [`MAX_WORKTREE_TEXT_BYTES`], or its bytes are not valid UTF-8.
+    pub async fn worktree_text(&self, id: RepoId, path: &str) -> Result<Option<String>> {
+        let entry = self.registry.get(id)?;
+        let Some(workdir) = entry.gix.workdir().map(Path::to_path_buf) else {
+            return Ok(None);
+        };
+        let relative = RelativePath::parse(path)?;
+        self.scheduler
+            .run(&CancellationToken::new(), move || {
+                let full = workdir.join(relative.to_path_buf());
+                let Ok(metadata) = std::fs::metadata(&full) else {
+                    return Ok(None);
+                };
+                if !metadata.is_file() || metadata.len() > MAX_WORKTREE_TEXT_BYTES as u64 {
+                    return Ok(None);
+                }
+                match std::fs::read_to_string(&full) {
+                    Ok(text) => Ok(Some(text)),
+                    Err(error)
+                        if matches!(
+                            error.kind(),
+                            std::io::ErrorKind::NotFound | std::io::ErrorKind::InvalidData
+                        ) =>
+                    {
+                        Ok(None)
+                    }
+                    Err(error) => Err(error.into()),
+                }
+            })
+            .await
+    }
+
     pub fn clear_repository_caches(&self, id: RepoId) -> Result<()> {
         let entry = self.registry.get(id)?;
         entry.clear_cache();
@@ -2784,6 +2818,9 @@ fn commit_detail_blocking(
 /// Ceiling for a README image served to the webview; anything larger falls
 /// back to its alt text rather than shipping megabytes over IPC.
 const MAX_WORKTREE_IMAGE_BYTES: usize = 10 * 1024 * 1024;
+
+/// Ceiling for a worktree document opened from a README link.
+const MAX_WORKTREE_TEXT_BYTES: usize = 1024 * 1024;
 
 const README_NAMES: [&str; 6] = [
     "README.md",

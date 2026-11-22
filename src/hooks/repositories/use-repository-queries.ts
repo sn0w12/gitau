@@ -27,6 +27,7 @@ import {
     operationStateQuery,
     rareReadQuery,
     readmeQuery,
+    readmeTextQuery,
     remoteRepoInfoByPathQuery,
     remoteRepoInfoQuery,
     remotesByPathQuery,
@@ -66,6 +67,17 @@ export function useRepoReadme(repoId: number | undefined) {
     return useQuery({
         ...readmeQuery({ backend }, repoId ?? 0),
         enabled: hasValidRepoId(repoId),
+    });
+}
+
+export function useReadmeText(
+    repoId: number | undefined,
+    path: string | undefined
+) {
+    const { backend } = useAppServices();
+    return useQuery({
+        ...readmeTextQuery({ backend }, repoId ?? 0, path ?? ""),
+        enabled: hasValidRepoId(repoId) && !!path,
     });
 }
 

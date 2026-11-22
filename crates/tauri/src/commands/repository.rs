@@ -88,6 +88,19 @@ pub async fn git_read_worktree_image(
 }
 
 #[tauri::command]
+pub async fn git_read_worktree_text(
+    state: SharedState<'_>,
+    repo_id: u64,
+    path: String,
+) -> CommandResult<Option<String>> {
+    state
+        .backend
+        .worktree_text(to_repo_id(repo_id), &path)
+        .await
+        .map_err(to_serialized)
+}
+
+#[tauri::command]
 pub async fn git_init_repository(
     state: SharedState<'_>,
     request: CreateRepositoryRequest,
