@@ -169,7 +169,11 @@ export function HookChecker({
                                         size="icon-2xs"
                                         variant="ghost"
                                         aria-label="Edit commit hooks"
-                                        onClick={() => setEditorOpen(true)}
+                                        onClick={() => {
+                                            if (onOpenChange)
+                                                onOpenChange(false);
+                                            setEditorOpen(true);
+                                        }}
                                     >
                                         <Pencil />
                                     </Button>
