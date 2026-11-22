@@ -4,10 +4,11 @@ import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { ChevronRightIcon } from "lucide-react";
 import type * as React from "react";
 
+import { activateMenuShortcut } from "@/lib/menu-shortcuts";
 import { cn } from "@/lib/utils";
 
 import type { AnyShortcut } from "./kbd";
-import { KeyboardShortcut } from "./kbd";
+import { KeyboardShortcut, MenuShortcutContext } from "./kbd";
 
 export const MenuCreateHandle: typeof MenuPrimitive.createHandle =
     MenuPrimitive.createHandle;
@@ -35,6 +36,7 @@ export function MenuTrigger({
 export function MenuPopup({
     children,
     className,
+    onKeyDown,
     sideOffset = 4,
     align = "center",
     alignOffset,
@@ -67,11 +69,17 @@ export function MenuPopup({
                         className
                     )}
                     data-slot="menu-popup"
+                    onKeyDown={(event) => {
+                        if (activateMenuShortcut(event)) return;
+                        onKeyDown?.(event);
+                    }}
                     {...props}
                 >
-                    <div className="max-h-(--available-height) w-full overflow-y-auto p-1">
-                        {children}
-                    </div>
+                    <MenuShortcutContext.Provider value>
+                        <div className="max-h-(--available-height) w-full overflow-y-auto p-1">
+                            {children}
+                        </div>
+                    </MenuShortcutContext.Provider>
                 </MenuPrimitive.Popup>
             </MenuPrimitive.Positioner>
         </MenuPortal>

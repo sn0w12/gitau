@@ -125,6 +125,27 @@ async function click(element: Element): Promise<void> {
     });
 }
 
+async function pressKey(
+    key: string,
+    init: KeyboardEventInit = {}
+): Promise<void> {
+    const popup = document.querySelector<HTMLElement>(
+        '[data-slot="context-menu-popup"]'
+    );
+    if (!popup) throw new Error("context menu is not open");
+    await act(async () => {
+        popup.dispatchEvent(
+            new KeyboardEvent("keydown", {
+                key,
+                bubbles: true,
+                cancelable: true,
+                ...init,
+            })
+        );
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+}
+
 async function waitFor(predicate: () => boolean): Promise<boolean> {
     const deadline = Date.now() + 1_000;
     while (Date.now() < deadline) {
@@ -204,6 +225,112 @@ describe("RepoContextMenu", () => {
         const settled = await waitFor(() => services.terminalCalls.length > 0);
         expect(settled).toBe(true);
         expect(services.terminalCalls[0]).toBe(REPO_PATH);
+        view.unmount();
+    });
+
+    it("opens the editor when its shortcut letter is pressed", async () => {
+        seedSettingsForTests(MENU_SETTINGS);
+        const services = fakeServices();
+        const view = renderWith(
+            services,
+            <RepoContextMenu repoPath={REPO_PATH}>
+                <button data-testid="repo-row">alpha</button>
+            </RepoContextMenu>
+        );
+
+        await rightClick(
+            view.container.querySelector('[data-testid="repo-row"]')!
+        );
+        await waitFor(() =>
+            Boolean(document.querySelector('[data-slot="context-menu-popup"]'))
+        );
+
+        const activation = menuItem(
+            "repo-menu-open-in-editor"
+        ).querySelectorAll("[data-activation]");
+        expect(activation).toHaveLength(1);
+        expect(activation[0].textContent).toBe("E");
+
+        await pressKey("e");
+        const settled = await waitFor(() => services.editorCalls.length > 0);
+        expect(settled).toBe(true);
+        expect(services.editorCalls[0]).toEqual({
+            path: REPO_PATH,
+            relativePath: undefined,
+        });
+        view.unmount();
+    });
+
+    it("opens the terminal when its shortcut letter is pressed", async () => {
+        seedSettingsForTests(MENU_SETTINGS);
+        const services = fakeServices();
+        const view = renderWith(
+            services,
+            <RepoContextMenu repoPath={REPO_PATH}>
+                <button data-testid="repo-row">alpha</button>
+            </RepoContextMenu>
+        );
+
+        await rightClick(
+            view.container.querySelector('[data-testid="repo-row"]')!
+        );
+        await waitFor(() =>
+            Boolean(document.querySelector('[data-slot="context-menu-popup"]'))
+        );
+
+        await pressKey("t");
+        const settled = await waitFor(() => services.terminalCalls.length > 0);
+        expect(settled).toBe(true);
+        expect(services.terminalCalls[0]).toBe(REPO_PATH);
+        view.unmount();
+    });
+
+    it("ignores shortcut letters held with a modifier", async () => {
+        seedSettingsForTests(MENU_SETTINGS);
+        const services = fakeServices();
+        const view = renderWith(
+            services,
+            <RepoContextMenu repoPath={REPO_PATH}>
+                <button data-testid="repo-row">alpha</button>
+            </RepoContextMenu>
+        );
+
+        await rightClick(
+            view.container.querySelector('[data-testid="repo-row"]')!
+        );
+        await waitFor(() =>
+            Boolean(document.querySelector('[data-slot="context-menu-popup"]'))
+        );
+
+        await pressKey("e", { ctrlKey: true });
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(services.editorCalls).toHaveLength(0);
+        expect(
+            document.querySelector('[data-slot="context-menu-popup"]')
+        ).not.toBeNull();
+        view.unmount();
+    });
+
+    it("ignores the editor letter while the editor is unconfigured", async () => {
+        seedSettingsForTests({ ...MENU_SETTINGS, editorCommand: "" });
+        const services = fakeServices();
+        const view = renderWith(
+            services,
+            <RepoContextMenu repoPath={REPO_PATH}>
+                <button data-testid="repo-row">alpha</button>
+            </RepoContextMenu>
+        );
+
+        await rightClick(
+            view.container.querySelector('[data-testid="repo-row"]')!
+        );
+        await waitFor(() =>
+            Boolean(document.querySelector('[data-slot="context-menu-popup"]'))
+        );
+
+        await pressKey("e");
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(services.editorCalls).toHaveLength(0);
         view.unmount();
     });
 

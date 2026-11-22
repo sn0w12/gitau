@@ -52,6 +52,26 @@ export function displayToken(token: string): React.ReactNode {
     }
 }
 
+const MODIFIER_TOKENS = new Set([
+    "mod",
+    "ctrl",
+    "control",
+    "alt",
+    "option",
+    "shift",
+    "meta",
+    "cmd",
+    "command",
+    "super",
+    "win",
+]);
+
+export function isActivationToken(token: string): boolean {
+    if (!token || MODIFIER_TOKENS.has(token.toLowerCase())) return false;
+    const characters = Array.from(token);
+    return characters.length === 1 && characters[0] !== " ";
+}
+
 export function splitChord(chord: string): string[] {
     return chord
         .split("+")

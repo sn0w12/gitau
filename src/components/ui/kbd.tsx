@@ -1,14 +1,21 @@
 import type { RegisterableHotkey } from "@tanstack/react-hotkeys";
 import type * as React from "react";
-import { Fragment } from "react";
+import { createContext, Fragment, useContext } from "react";
 
 import { useSettingValue } from "@/hooks/settings/use-setting";
 import {
     SHORTCUT_SETTING_KEYS,
     type ShortcutSettingKey,
 } from "@/lib/settings/settings.generated";
-import { displayToken, SHORTCUT_ICON_CLASS, splitChord } from "@/lib/shortcuts";
+import {
+    displayToken,
+    isActivationToken,
+    SHORTCUT_ICON_CLASS,
+    splitChord,
+} from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
+
+export const MenuShortcutContext = createContext(false);
 
 export function Kbd({
     className,
@@ -44,18 +51,39 @@ function InternalKeyboardShortcut({
     shortcut,
     className,
     keyClassName,
+    dataShortcut,
 }: {
     shortcut: string[];
+    dataShortcut: string;
 } & ShortcutProps) {
+    const highlightActivationKey = useContext(MenuShortcutContext);
+    const lastPart = shortcut.at(-1);
+    const activationIndex =
+        highlightActivationKey && lastPart && isActivationToken(lastPart)
+            ? shortcut.length - 1
+            : -1;
+
     if (shortcut.length === 0) return null;
 
     return (
-        <KbdGroup className={className}>
-            {shortcut.map((part, index) => (
-                <Fragment key={`${part}-${index}`}>
-                    <Kbd className={keyClassName}>{displayToken(part)}</Kbd>
-                </Fragment>
-            ))}
+        <KbdGroup className={className} data-shortcut={dataShortcut}>
+            {shortcut.map((part, index) => {
+                const activation = index === activationIndex;
+                return (
+                    <Fragment key={`${part}-${index}`}>
+                        <Kbd
+                            className={cn(
+                                activation &&
+                                    "bg-primary text-primary-foreground",
+                                keyClassName
+                            )}
+                            data-activation={activation ? "true" : undefined}
+                        >
+                            {displayToken(part)}
+                        </Kbd>
+                    </Fragment>
+                );
+            })}
         </KbdGroup>
     );
 }
@@ -81,12 +109,16 @@ export function KeyboardShortcut({
 }: {
     shortcut: AnyShortcut;
 } & ShortcutProps) {
+    const dataShortcut =
+        typeof shortcut === "string" ? shortcut : shortcut.toString();
+
     if (isShortcutSettingKey(shortcut)) {
         return (
             <SettingKeyboardShortcut
                 shortcut={shortcut}
                 className={className}
                 keyClassName={keyClassName}
+                dataShortcut={dataShortcut}
             />
         );
     }
@@ -97,6 +129,7 @@ export function KeyboardShortcut({
                 shortcut={splitChord(shortcut)}
                 className={className}
                 keyClassName={keyClassName}
+                dataShortcut={dataShortcut}
             />
         );
     }
@@ -106,6 +139,7 @@ export function KeyboardShortcut({
             shortcut={shortcut}
             className={className}
             keyClassName={keyClassName}
+            dataShortcut={dataShortcut}
         />
     );
 }
@@ -114,14 +148,17 @@ function HotkeyKeyboardShortcut({
     shortcut,
     className,
     keyClassName,
+    dataShortcut,
 }: {
     shortcut: RegisterableHotkey;
+    dataShortcut: string;
 } & ShortcutProps) {
     return (
         <InternalKeyboardShortcut
             shortcut={shortcut.toString().split("+")}
             className={className}
             keyClassName={keyClassName}
+            dataShortcut={dataShortcut}
         />
     );
 }
@@ -130,8 +167,10 @@ function SettingKeyboardShortcut({
     shortcut,
     className,
     keyClassName,
+    dataShortcut,
 }: {
     shortcut: ShortcutSettingKey;
+    dataShortcut: string;
 } & ShortcutProps) {
     const chord = useSettingValue(shortcut);
     const parts = splitChord(chord);
@@ -141,6 +180,7 @@ function SettingKeyboardShortcut({
             shortcut={parts}
             className={className}
             keyClassName={keyClassName}
+            dataShortcut={dataShortcut}
         />
     );
 }

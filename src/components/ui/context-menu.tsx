@@ -4,9 +4,10 @@ import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu
 import { ChevronRightIcon } from "lucide-react";
 import type * as React from "react";
 
+import { activateMenuShortcut } from "@/lib/menu-shortcuts";
 import { cn } from "@/lib/utils";
 
-import { KeyboardShortcut, type AnyShortcut } from "./kbd";
+import { KeyboardShortcut, MenuShortcutContext, type AnyShortcut } from "./kbd";
 
 export const ContextMenu: typeof ContextMenuPrimitive.Root =
     ContextMenuPrimitive.Root;
@@ -33,6 +34,7 @@ export function ContextMenuTrigger({
 export function ContextMenuPopup({
     children,
     className,
+    onKeyDown,
     sideOffset = 4,
     align = "start",
     alignOffset,
@@ -65,11 +67,17 @@ export function ContextMenuPopup({
                         className
                     )}
                     data-slot="context-menu-popup"
+                    onKeyDown={(event) => {
+                        if (activateMenuShortcut(event)) return;
+                        onKeyDown?.(event);
+                    }}
                     {...props}
                 >
-                    <div className="max-h-(--available-height) w-full overflow-y-auto p-1">
-                        {children}
-                    </div>
+                    <MenuShortcutContext.Provider value>
+                        <div className="max-h-(--available-height) w-full overflow-y-auto p-1">
+                            {children}
+                        </div>
+                    </MenuShortcutContext.Provider>
                 </ContextMenuPrimitive.Popup>
             </ContextMenuPrimitive.Positioner>
         </ContextMenuPortal>
