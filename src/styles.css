@@ -394,6 +394,27 @@
         @apply border-border outline-ring/50;
     }
 
+    html[data-input-modality="pointer"]
+        :focus-visible:not(input, textarea, select, [contenteditable]) {
+        outline: none !important;
+        --tw-inset-ring-shadow: 0 0 #0000 !important;
+        --tw-ring-offset-shadow: 0 0 #0000 !important;
+        --tw-ring-shadow: 0 0 #0000 !important;
+    }
+
+    html[data-input-modality="pointer"]
+        :has(:focus-visible):not(
+            :has(input:focus-visible),
+            :has(textarea:focus-visible),
+            :has(select:focus-visible),
+            :has([contenteditable]:focus-visible)
+        ) {
+        outline: none !important;
+        --tw-inset-ring-shadow: 0 0 #0000 !important;
+        --tw-ring-offset-shadow: 0 0 #0000 !important;
+        --tw-ring-shadow: 0 0 #0000 !important;
+    }
+
     body {
         @apply bg-background text-foreground;
         @apply select-none;

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { ConfirmProvider } from "@/contexts/confirm-context";
+import { useInputModality } from "@/hooks/use-input-modality";
 import { useInsetBackdropClip } from "@/hooks/use-inset-backdrop-clip";
 
 import { AppCommand } from "./app-command";
@@ -18,6 +19,7 @@ import { UpdateChecker } from "./updates/update-checker";
 
 export function AppLayout({ children }: { children: ReactNode }) {
     useInsetBackdropClip();
+    useInputModality();
 
     return (
         <div className="w-vw flex h-svh flex-col bg-sidebar">
