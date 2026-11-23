@@ -11,6 +11,7 @@ dist-ssr
 __unconfig*
 todos.json
 target
+.appimage
 .dev-workspace
 .screenshot-workspace
 .opencode

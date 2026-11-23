@@ -37,10 +37,13 @@ jobs:
                     - platform: "macos-latest"
                       args: "--target universal-apple-darwin --bundles dmg"
                       targets: "aarch64-apple-darwin,x86_64-apple-darwin"
-                    - platform: "ubuntu-24.04"
-                      args: "--bundles appimage"
-                    - platform: "ubuntu-24.04-arm"
-                      args: "--bundles appimage"
+                    # 26.04 bundles glibc 2.43, which can load current host
+                    # graphics drivers. 24.04's 2.39 cannot, so Chromium falls
+                    # back to software rendering on newer distros.
+                    - platform: "ubuntu-26.04"
+                      args: "--bundles appimage --config .appimage/tauri.appimage.conf.json"
+                    - platform: "ubuntu-26.04-arm"
+                      args: "--bundles appimage --config .appimage/tauri.appimage.conf.json"
 
         runs-on: ${{ matrix.platform }}
         env:
@@ -87,6 +90,10 @@ jobs:
             - name: Install frontend dependencies
               run: npm ci
 
+            - name: Configure AppImage NSS libraries
+              if: runner.os == 'Linux'
+              run: node scripts/appimage-nss.mjs
+
             - name: Build and publish
               uses: tauri-apps/tauri-action@v1
               env:
@@ -104,3 +111,31 @@ jobs:
                   prerelease: false
                   uploadUpdaterJson: true
                   args: ${{ matrix.args }}
+
+            - name: Verify AppImage NSS modules
+              if: runner.os == 'Linux'
+              run: |
+                  appimage="$(find target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -n 1)"
+                  workdir="$(mktemp -d)"
+                  (cd "$workdir" && "$GITHUB_WORKSPACE/$appimage" --appimage-extract 'lib/libsoftokn3.so' >/dev/null)
+                  found="$(find "$workdir" -name libsoftokn3.so -print -quit)"
+                  test -n "$found" || {
+                      echo "libsoftokn3.so is missing from $appimage"
+                      exit 1
+                  }
+
+            - name: Verify AppImage glibc
+              if: runner.os == 'Linux'
+              run: |
+                  appimage="$(find target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -n 1)"
+                  workdir="$(mktemp -d)"
+                  (cd "$workdir" && "$GITHUB_WORKSPACE/$appimage" --appimage-extract 'lib/libc.so.6' >/dev/null)
+                  libc="$(find "$workdir" -name libc.so.6 -print -quit)"
+                  test -n "$libc" || {
+                      echo "libc.so.6 is missing from $appimage"
+                      exit 1
+                  }
+                  readelf -V "$libc" | grep -q 'GLIBC_2.43' || {
+                      echo "$appimage does not bundle glibc 2.43"
+                      exit 1
+                  }
