@@ -1,0 +1,32 @@
+[package]
+name = "telemetry"
+version.workspace = true
+edition = "2021"
+rust-version.workspace = true
+description = "Optional anonymous timing and error telemetry with compile-time call-site instrumentation"
+
+[features]
+default = []
+enabled = ["dep:quanta", "dep:tokio", "telemetry-macros/enabled"]
+
+[dependencies]
+quanta = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+telemetry-macros = { path = "../telemetry-macros", default-features = false }
+thiserror.workspace = true
+tokio = { workspace = true, optional = true }
+
+[dev-dependencies]
+criterion.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
+
+[[example]]
+name = "waterfall"
+required-features = ["enabled"]
+
+[[bench]]
+name = "overhead"
+harness = false
+required-features = ["enabled"]
