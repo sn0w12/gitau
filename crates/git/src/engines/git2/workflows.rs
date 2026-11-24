@@ -49,6 +49,7 @@ fn conflicted_paths(repo: &Repository) -> Result<Vec<String>> {
         .collect())
 }
 
+#[telemetry::trace]
 pub fn merge(repo: &Repository, request: &MergeRequest) -> Result<WorkflowOutcome> {
     let _gate = crate::engines::index_lock::gate();
     if merge_in_progress(repo)? {
@@ -748,6 +749,7 @@ pub fn stash_pop(repo: &mut Repository, request: &StashPopRequest) -> Result<()>
     Ok(())
 }
 
+#[telemetry::trace]
 pub fn start_rebase(
     repo: &Repository,
     upstream: &crate::domain::RevisionSpec,

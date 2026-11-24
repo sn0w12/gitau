@@ -13,6 +13,52 @@ pub struct SpanGuard {
     inner: Option<imp::Guard>,
 }
 
+/// A scope captured on one thread so blocking work on another thread can join
+/// the same trace. Create with [`ScopeHandle::capture`], resume with
+/// [`attach_scope`].
+#[derive(Clone)]
+pub struct ScopeHandle {
+    #[cfg(feature = "enabled")]
+    inner: Option<imp::ScopeHandle>,
+}
+
+impl ScopeHandle {
+    /// Captures the active scope. Returns `None` outside a [`crate::scope`] or
+    /// [`crate::sync_scope`], and when collection is off.
+    #[inline]
+    pub fn capture() -> Option<Self> {
+        #[cfg(feature = "enabled")]
+        {
+            imp::capture_scope().map(|inner| Self { inner: Some(inner) })
+        }
+        #[cfg(not(feature = "enabled"))]
+        {
+            None
+        }
+    }
+}
+
+/// Runs blocking code with a captured scope installed on the current thread,
+/// so spans it opens join the parent trace instead of starting a new one.
+///
+/// Attaching does not sample and does not open a trace. Pass `None` to run `f`
+/// unchanged; that is what [`ScopeHandle::capture`] returns when collection is
+/// off.
+pub fn attach_scope<R>(handle: Option<ScopeHandle>, f: impl FnOnce() -> R) -> R {
+    #[cfg(feature = "enabled")]
+    {
+        match handle.and_then(|handle| handle.inner) {
+            Some(inner) => imp::attach_scope(&inner, f),
+            None => f(),
+        }
+    }
+    #[cfg(not(feature = "enabled"))]
+    {
+        let _ = handle;
+        f()
+    }
+}
+
 impl SpanGuard {
     #[inline]
     pub fn enter(name: &'static str) -> Self {

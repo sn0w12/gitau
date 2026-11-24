@@ -342,6 +342,22 @@ pub(crate) fn sync_scope<R>(f: impl FnOnce() -> R) -> R {
     f()
 }
 
+#[derive(Clone)]
+pub(crate) struct ScopeHandle(Arc<SpinLock<TraceState>>);
+
+pub(crate) fn capture_scope() -> Option<ScopeHandle> {
+    if !is_enabled() {
+        return None;
+    }
+    current_state().map(ScopeHandle)
+}
+
+pub(crate) fn attach_scope<R>(handle: &ScopeHandle, f: impl FnOnce() -> R) -> R {
+    let previous = THREAD_STATE.with(|slot| slot.replace(Some(Arc::clone(&handle.0))));
+    let _restore = ThreadStateRestore(previous);
+    f()
+}
+
 struct ThreadStateRestore(Option<Arc<SpinLock<TraceState>>>);
 
 impl Drop for ThreadStateRestore {

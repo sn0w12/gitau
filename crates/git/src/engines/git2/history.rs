@@ -14,6 +14,21 @@ use crate::engines::git2::session::Git2Session;
 use crate::error::{GitError, Result};
 use crate::runtime::history_cache::CommitStatPoint;
 
+#[telemetry::trace(skip = [
+    "cloned",
+    "enumerate",
+    "filter",
+    "is_default_revision",
+    "is_merge",
+    "oid_bytes",
+    "stat",
+    "store_stat",
+    "store_summary",
+    "store_tags",
+    "store_walk",
+    "summary",
+    "with_capacity",
+])]
 pub fn history_page(
     session: &Git2Session,
     query: &HistoryPageQuery,
@@ -313,6 +328,7 @@ const PARALLEL_DELTA_THRESHOLD: usize = 16;
 /// commit across the rayon pool. A single commit touching hundreds of files is
 /// otherwise one indivisible task inside the commit-level parallel walk, so its
 /// blob reads and Myers runs pin one core while the rest idle.
+#[telemetry::trace]
 pub(crate) fn per_delta_numstat(
     repo: &git2::Repository,
     pairs: &[(git2::Oid, git2::Oid)],

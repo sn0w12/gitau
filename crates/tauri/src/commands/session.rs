@@ -24,10 +24,19 @@ pub(crate) async fn open_session_repositories(
     backend: Arc<Backend>,
     paths: Vec<String>,
 ) -> Vec<SessionRepository> {
+    telemetry::scope(open_session_repositories_inner(backend, paths)).await
+}
+
+#[telemetry::trace(skip = ["scope", "spawn"], name = "app.open_session_repositories")]
+async fn open_session_repositories_inner(
+    backend: Arc<Backend>,
+    paths: Vec<String>,
+) -> Vec<SessionRepository> {
+    let requested = paths.len() as u64;
     let mut set = tokio::task::JoinSet::new();
     for path in paths {
         let backend = Arc::clone(&backend);
-        set.spawn(async move {
+        set.spawn(telemetry::scope(async move {
             match backend.open_repository(Path::new(&path)).await {
                 Ok(opened) => SessionRepository {
                     path,
@@ -40,7 +49,7 @@ pub(crate) async fn open_session_repositories(
                     error: Some(error.to_string()),
                 },
             }
-        });
+        }));
     }
     let mut opened = Vec::new();
     while let Some(joined) = set.join_next().await {
@@ -48,6 +57,12 @@ pub(crate) async fn open_session_repositories(
             opened.push(repo);
         }
     }
+    let succeeded = opened.iter().filter(|repo| repo.repo_id.is_some()).count() as u64;
+    telemetry::context! {
+        "requested" => requested,
+        "opened" => succeeded,
+        "failed" => opened.len() as u64 - succeeded,
+    };
     opened
 }
 
@@ -56,6 +71,15 @@ pub async fn session_repositories(
     state: SharedState<'_>,
     paths: Vec<String>,
 ) -> CommandResult<Vec<SessionRepository>> {
+    telemetry::scope(restore_repositories(state, paths)).await
+}
+
+#[telemetry::trace(name = "app.session_repositories")]
+async fn restore_repositories(
+    state: SharedState<'_>,
+    paths: Vec<String>,
+) -> CommandResult<Vec<SessionRepository>> {
+    let requested = paths.len() as u64;
     let backend = Arc::clone(&state.backend);
     let cell = Arc::clone(&state.startup_repos);
     let session_paths = crate::session::repo_paths(&state.session.load());
@@ -82,5 +106,11 @@ pub async fn session_repositories(
             },
         });
     }
+    let opened = out.iter().filter(|repo| repo.repo_id.is_some()).count() as u64;
+    telemetry::context! {
+        "requested" => requested,
+        "opened" => opened,
+        "failed" => out.len() as u64 - opened,
+    };
     Ok(out)
 }

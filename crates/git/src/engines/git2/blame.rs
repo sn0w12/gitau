@@ -5,6 +5,16 @@ use crate::domain::history::{BlameLine, BlameResult};
 use crate::domain::{ObjectId, RelativePath};
 use crate::error::{GitError, Result};
 
+#[telemetry::trace(skip = [
+    "final_commit_id",
+    "final_start_line",
+    "from_bytes",
+    "ignore_whitespace",
+    "is_boundary",
+    "lines_in_hunk",
+    "parse",
+    "sort_by_key",
+])]
 pub fn blame(repo: &git2::Repository, query: &BlameQuery) -> Result<BlameResult> {
     let path = RelativePath::parse(&query.path)?;
     let mut options = BlameOptions::default();

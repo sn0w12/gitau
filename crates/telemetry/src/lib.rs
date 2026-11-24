@@ -67,7 +67,7 @@ pub use config::{Arch, BuildProfile, Config, CpuTier, EnvironmentContext, InitEr
 pub use error::ErrorRecord;
 pub use model::{AttrValue, Batch, Span, Trace, SCHEMA_VERSION};
 pub use sink::{CallbackSink, FileSink, FlushReport, Sink};
-pub use span::SpanGuard;
+pub use span::{attach_scope, ScopeHandle, SpanGuard};
 pub use telemetry_macros::trace;
 
 /// Installs the global collector. Call once during startup, after consent.

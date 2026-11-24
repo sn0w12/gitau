@@ -144,6 +144,7 @@ fn remove_empty_parents(workdir: &Path, rel: &RelativePath) {
     }
 }
 
+#[telemetry::trace]
 pub fn commit(
     repo: &git2::Repository,
     request: &CommitRequest,
@@ -241,6 +242,7 @@ pub fn amend(repo: &git2::Repository, request: &AmendRequest) -> Result<CommitSu
     summarize_commit(repo, oid)
 }
 
+#[telemetry::trace]
 pub fn checkout(repo: &mut git2::Repository, request: &CheckoutRequest) -> Result<()> {
     let _gate = crate::engines::index_lock::gate();
     if !request.paths.is_empty() {
@@ -401,6 +403,7 @@ pub fn rename_branch(
     branch_info(repo, new.clone())
 }
 
+#[telemetry::trace]
 pub fn branch_ahead_behind(
     repo: &git2::Repository,
     head: &crate::domain::BranchName,
@@ -421,6 +424,7 @@ pub fn branch_ahead_behind(
     })
 }
 
+#[telemetry::trace(skip = ["name", "shorthand", "sort_by"])]
 pub fn list_branches(repo: &git2::Repository) -> Result<Vec<BranchInfo>> {
     let head_shorthand = repo
         .head()
@@ -506,6 +510,16 @@ fn build_upstream(
     })
 }
 
+#[telemetry::trace(skip = [
+    "from_bytes",
+    "id",
+    "name",
+    "parse",
+    "peel_to_tag",
+    "short_from_full",
+    "sort_by",
+    "target",
+])]
 pub fn list_tags(repo: &git2::Repository) -> Result<Vec<TagInfo>> {
     let references = repo.references_glob("refs/tags/*")?;
     let mut tags = Vec::new();

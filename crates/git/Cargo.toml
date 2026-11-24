@@ -24,6 +24,7 @@ language.workspace = true
 thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+telemetry.workspace = true
 tokio = { workspace = true, features = ["fs", "io-util", "process"] }
 notify.workspace = true
 keyring.workspace = true

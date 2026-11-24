@@ -33,6 +33,7 @@ fn internal(err: impl std::fmt::Display) -> GitError {
     }
 }
 
+#[telemetry::trace(skip = ["cmp", "sort_by", "then_with", "SnapshotId", "Generation"])]
 pub fn status(session: &GixSession, opts: &ApiStatusOptions) -> Result<StatusReport> {
     // The staged and worktree sides are independent computations sharing only
     // the session, so overlap them on two threads. Each builds its own

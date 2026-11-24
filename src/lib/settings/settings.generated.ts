@@ -27,6 +27,7 @@ export interface SettingsValues {
     defaultBranchName: string;
     historyPageSize: number;
     globalGitignore: string;
+    telemetryEnabled: boolean;
     goToSettings: string;
     openCommand: string;
     openShortcutsHelp: string;

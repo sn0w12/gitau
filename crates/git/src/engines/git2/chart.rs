@@ -39,6 +39,7 @@ const SECONDS_PER_YEAR: i64 = 365 * SECONDS_PER_DAY + SECONDS_PER_QUARTER_DAY;
 /// without walking or diffing anything. `points` holds per-commit stats keyed
 /// by oid, which is what keeps a moved tip cheap: only commits that are
 /// genuinely new pay for a tree diff.
+#[telemetry::trace]
 pub fn history_chart_with_store(
     session: &Git2Session,
     query: &HistoryChartQuery,

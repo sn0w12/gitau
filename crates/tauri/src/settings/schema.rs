@@ -230,6 +230,17 @@ pub fn builtin() -> SettingsSchema {
                                 .default_value(SettingValue::Str(String::new())),
                         ],
                     },
+                    SettingsSection {
+                        id: "privacy",
+                        title: "Privacy",
+                        settings: vec![
+                            boolean("telemetryEnabled", "Send anonymous telemetry")
+                                .description(
+                                    "Share anonymous timing and error data to help improve Gitau. Repository names, paths, branch names, and file contents are never sent.",
+                                )
+                                .default_value(SettingValue::Bool(false)),
+                        ],
+                    },
                 ],
             },
             SettingsTab {

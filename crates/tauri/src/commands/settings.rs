@@ -29,6 +29,15 @@ pub fn settings_set(
     if key == SYNTAX_THEME_LIGHT_KEY || key == SYNTAX_THEME_DARK_KEY {
         apply_syntax_theme(&state);
     }
+    if key == crate::telemetry_service::ENABLED_SETTING_KEY {
+        crate::telemetry_service::set_enabled(
+            snapshot
+                .values
+                .get(crate::telemetry_service::ENABLED_SETTING_KEY)
+                .and_then(SettingValue::as_bool)
+                .unwrap_or(false),
+        );
+    }
     Ok(snapshot)
 }
 

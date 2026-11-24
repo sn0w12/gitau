@@ -99,6 +99,19 @@ const schema: SettingsSchema = {
                         },
                     ],
                 },
+                {
+                    id: "privacy",
+                    title: "Privacy",
+                    settings: [
+                        {
+                            key: "telemetryEnabled",
+                            label: "Send anonymous telemetry",
+                            kind: "boolean",
+                            defaultValue: false,
+                            hidden: false,
+                        },
+                    ],
+                },
             ],
         },
     ],
@@ -111,6 +124,7 @@ function initialize(): void {
             onboardingComplete: false,
             theme: "system",
             editorCommand: "",
+            telemetryEnabled: false,
         },
         savedKeys: [],
     });
@@ -207,10 +221,25 @@ describe("OnboardingDialog", () => {
         expect(getSetting("editorCommand")).toBe("nvim");
     });
 
+    it("keeps telemetry off until enabled", () => {
+        renderDialog();
+        advance(2);
+
+        expect(screen.getByText("Help improve Gitau")).toBeDefined();
+        const card = screen.getByRole("switch");
+        expect(getSetting("telemetryEnabled")).toBe(false);
+        expect(card.getAttribute("aria-checked")).toBe("false");
+
+        fireEvent.click(screen.getByText("Send anonymous telemetry"));
+
+        expect(getSetting("telemetryEnabled")).toBe(true);
+        expect(card.getAttribute("aria-checked")).toBe("true");
+    });
+
     it("runs a repository action from the last step", () => {
         const onCommand = vi.fn();
         renderDialog(onCommand);
-        advance(2);
+        advance(3);
 
         expect(screen.getByText("Add a repository")).toBeDefined();
         fireEvent.click(

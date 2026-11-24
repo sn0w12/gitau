@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Scritto } from "@/components/ui/scritto";
+import { SwitchIndicator } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTab } from "@/components/ui/tabs";
 import type { AppCommandActions } from "@/contexts/app-command-context";
 import { useAppCommands } from "@/contexts/app-command-context";
@@ -41,6 +42,12 @@ const STEPS = [
         title: "Choose your editor",
         description:
             "Gitau opens changed files in this editor. Pick one you already use, or set your own command.",
+    },
+    {
+        id: "privacy",
+        title: "Help improve Gitau",
+        description:
+            "Share anonymous timing and error data so slow paths and failures can be fixed. Off unless you turn it on.",
     },
     {
         id: "start",
@@ -185,6 +192,22 @@ export function OnboardingDialog() {
                                         }}
                                     >
                                         <EditorStep />
+                                    </motion.div>
+                                )}
+                                {activeTab === "privacy" && (
+                                    <motion.div
+                                        key="privacy"
+                                        className="flex-none"
+                                        variants={STEP_VARIANTS}
+                                        initial="initial"
+                                        animate="animate"
+                                        exit="exit"
+                                        transition={{
+                                            duration: 0.2,
+                                            ease: EASE_SNAPPY,
+                                        }}
+                                    >
+                                        <PrivacyStep />
                                     </motion.div>
                                 )}
                                 {activeTab === "start" && (
@@ -458,6 +481,36 @@ function EditorStep() {
                 </p>
             </div>
         </div>
+    );
+}
+
+function PrivacyStep() {
+    const { value, setValue } = useSetting("telemetryEnabled");
+
+    return (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={value}
+            aria-label="Send anonymous telemetry"
+            onClick={() => setValue(!value)}
+            className={cn(
+                CHOICE_CARD,
+                value ? CHOICE_CARD_SELECTED : CHOICE_CARD_IDLE,
+                "gap-6"
+            )}
+        >
+            <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium">
+                    Send anonymous telemetry
+                </span>
+                <span className="block text-sm text-muted-foreground">
+                    Timing and error data only. Repository names, paths, branch
+                    names, and file contents are never sent.
+                </span>
+            </span>
+            <SwitchIndicator checked={value} />
+        </button>
     );
 }
 

@@ -57,11 +57,11 @@ The wrapped expression and every call nested inside it stay out of the trace.
 
 The cost depends on which switch is off:
 
-| State | Cost |
-| --- | --- |
-| Feature off | Zero. The attribute is a pass-through and every entry point is a no-op. |
-| Feature on, runtime off | One relaxed atomic load per instrumented call site. No clock reads, no allocation. |
-| Feature on, enabled | Per span: a state lookup, two clock reads, one spinlock pair, and an arena push and pop. Child links are rebuilt in `flush`, not during capture. |
+| State                   | Cost                                                                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Feature off             | Zero. The attribute is a pass-through and every entry point is a no-op.                                                                          |
+| Feature on, runtime off | One relaxed atomic load per instrumented call site. No clock reads, no allocation.                                                               |
+| Feature on, enabled     | Per span: a state lookup, two clock reads, one spinlock pair, and an arena push and pop. Child links are rebuilt in `flush`, not during capture. |
 
 The benchmark in `benches/overhead.rs` covers primitive costs, a flat call
 loop, a nested CPU-bound load with 137 spans and attributes, an async load with
@@ -73,23 +73,23 @@ cargo bench -p telemetry --bench overhead --features enabled
 
 Measured on a Windows desktop with a 1 s warmup and a 3 s measurement:
 
-| Case | Time |
-| --- | --- |
-| `std::time::Instant::now` | 20.4 ns |
-| `quanta::Instant::now` | 8.5 ns |
+| Case                          | Time    |
+| ----------------------------- | ------- |
+| `std::time::Instant::now`     | 20.4 ns |
+| `quanta::Instant::now`        | 8.5 ns  |
 | `std::time::Instant::elapsed` | 22.1 ns |
-| `quanta::Instant::elapsed` | 10.5 ns |
-| Mutex lock and unlock | 8.2 ns |
-| Arc clone and drop | 8.0 ns |
-| Empty sync scope | 89 ns |
-| Scope plus one span | 178 ns |
-| 32 tiny calls | 1.72 µs |
-| Realistic baseline | 61.0 µs |
-| Realistic instrumented | 73.0 µs |
-| Async baseline | 25.1 µs |
-| Async instrumented | 29.0 µs |
-| Runtime off, realistic | 60.9 µs |
-| Flush, 16 traces | 0.19 µs |
+| `quanta::Instant::elapsed`    | 10.5 ns |
+| Mutex lock and unlock         | 8.2 ns  |
+| Arc clone and drop            | 8.0 ns  |
+| Empty sync scope              | 89 ns   |
+| Scope plus one span           | 178 ns  |
+| 32 tiny calls                 | 1.72 µs |
+| Realistic baseline            | 61.0 µs |
+| Realistic instrumented        | 73.0 µs |
+| Async baseline                | 25.1 µs |
+| Async instrumented            | 29.0 µs |
+| Runtime off, realistic        | 60.9 µs |
+| Flush, 16 traces              | 0.19 µs |
 
 An enabled span costs about 50 ns in the flat case. The realistic trace adds
 12 µs for 137 spans over a 61 µs CPU-bound operation; the extra per-span cost
@@ -126,6 +126,20 @@ let result = telemetry::scope(async move {
 `scope` reuses an enclosing scope, so it is safe to call at every task root.
 Blocking code uses `telemetry::sync_scope(|| ...)` and must not cross an
 `.await`.
+
+A task-local scope does not follow work into `spawn_blocking`, and calling
+`sync_scope` there would start a separate trace. Capture the scope on the
+calling task and attach it inside the blocking closure instead:
+
+```rust
+let scope = telemetry::ScopeHandle::capture();
+let join = tokio::task::spawn_blocking(move || {
+    telemetry::attach_scope(scope, || blocking_git_work())
+});
+```
+
+`capture` returns `None` outside a scope or when collection is off, and
+`attach_scope` runs the closure unchanged in that case.
 
 ## Errors
 
@@ -174,14 +188,14 @@ every batch.
 
 ## Kill switches
 
-| Switch | Effect |
-| --- | --- |
-| `enabled` feature off | Attribute is a pass-through; runtime entry points are no-ops; no clock reads |
-| `Config::enabled(false)` | No scopes are created |
-| `telemetry::set_enabled(bool)` | Works at any time; before `init` it stores the preference, after `init` it applies immediately and clears buffers when disabling |
-| `telemetry::enable()` / `disable()` | Shorthand for `set_enabled` |
-| `TELEMETRY_ENABLED=0\|false\|no\|off\|disabled` | Hard-disables collection for the process |
-| `Config::env_kill_switch(false)` | Ignores the environment variable |
+| Switch                                          | Effect                                                                                                                           |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled` feature off                           | Attribute is a pass-through; runtime entry points are no-ops; no clock reads                                                     |
+| `Config::enabled(false)`                        | No scopes are created                                                                                                            |
+| `telemetry::set_enabled(bool)`                  | Works at any time; before `init` it stores the preference, after `init` it applies immediately and clears buffers when disabling |
+| `telemetry::enable()` / `disable()`             | Shorthand for `set_enabled`                                                                                                      |
+| `TELEMETRY_ENABLED=0\|false\|no\|off\|disabled` | Hard-disables collection for the process                                                                                         |
+| `Config::env_kill_switch(false)`                | Ignores the environment variable                                                                                                 |
 
 For the settings UI:
 

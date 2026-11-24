@@ -305,6 +305,7 @@ impl Backend {
         self.registry.len()
     }
 
+    #[telemetry::trace]
     pub async fn open_repository(&self, path: &Path) -> Result<OpenedRepository> {
         if !path.exists() {
             return Err(GitError::RepositoryNotFound {
@@ -555,6 +556,7 @@ impl Backend {
         Ok(())
     }
 
+    #[telemetry::trace(skip = ["generation", "next_snapshot_id", "Status"])]
     pub async fn status(
         &self,
         id: RepoId,
@@ -618,6 +620,7 @@ impl Backend {
         best.map(|(_, report)| report)
     }
 
+    #[telemetry::trace(span_only)]
     pub async fn open_diff(
         &self,
         id: RepoId,
@@ -642,14 +645,14 @@ impl Backend {
 
         let op_for_job = operation.clone();
         let scheduler = self.scheduler.clone();
-        tokio::spawn(async move {
+        tokio::spawn(telemetry::scope(async move {
             let _ = scheduler
                 .run(&token, move || {
                     pipeline::run(job, op_for_job, tx);
                     Ok(())
                 })
                 .await;
-        });
+        }));
 
         self.operations
             .prune_completed(self.config.keep_completed_operations);
@@ -737,6 +740,7 @@ impl Backend {
         })
     }
 
+    #[telemetry::trace(span_only)]
     pub async fn open_graph(
         &self,
         id: RepoId,
@@ -761,14 +765,14 @@ impl Backend {
 
         let op_for_job = operation.clone();
         let scheduler = self.scheduler.clone();
-        tokio::spawn(async move {
+        tokio::spawn(telemetry::scope(async move {
             let _ = scheduler
                 .run(&token, move || {
                     graph_pipeline::run(job, op_for_job, tx);
                     Ok(())
                 })
                 .await;
-        });
+        }));
 
         self.graph_operations
             .prune_completed(self.config.keep_completed_operations);
@@ -802,6 +806,7 @@ impl Backend {
         Ok(self.operations.get(operation_id)?.snapshot_meta())
     }
 
+    #[telemetry::trace(skip = ["generation", "history_cache", "next_snapshot_id", "History"])]
     pub async fn history_page(
         &self,
         id: RepoId,
@@ -854,6 +859,7 @@ impl Backend {
         Ok(arc)
     }
 
+    #[telemetry::trace(skip = ["generation", "history_cache", "next_snapshot_id", "HistoryChart"])]
     pub async fn history_chart(
         &self,
         id: RepoId,
@@ -896,6 +902,7 @@ impl Backend {
         Ok(arc)
     }
 
+    #[telemetry::trace(skip = ["generation", "next_snapshot_id"])]
     pub async fn commit_detail(
         &self,
         id: RepoId,
@@ -990,6 +997,7 @@ impl Backend {
         }))
     }
 
+    #[telemetry::trace]
     pub async fn blame(
         &self,
         id: RepoId,
@@ -1007,6 +1015,7 @@ impl Backend {
             .await
     }
 
+    #[telemetry::trace]
     pub async fn list_branches_and_tags(
         &self,
         id: RepoId,
@@ -1026,6 +1035,7 @@ impl Backend {
             .await
     }
 
+    #[telemetry::trace(skip = ["parse"])]
     pub async fn branch_ahead_behind(
         &self,
         id: RepoId,
@@ -1272,6 +1282,7 @@ impl Backend {
         .await
     }
 
+    #[telemetry::trace]
     pub async fn commit(
         &self,
         id: RepoId,
@@ -1298,6 +1309,7 @@ impl Backend {
         .await
     }
 
+    #[telemetry::trace]
     pub async fn checkout(
         &self,
         id: RepoId,
@@ -1601,6 +1613,7 @@ impl Backend {
             .await
     }
 
+    #[telemetry::trace]
     pub async fn fetch(
         &self,
         id: RepoId,
@@ -1626,6 +1639,7 @@ impl Backend {
         Ok(())
     }
 
+    #[telemetry::trace]
     pub async fn push(
         &self,
         id: RepoId,
@@ -1652,6 +1666,7 @@ impl Backend {
         Ok(outcomes)
     }
 
+    #[telemetry::trace]
     pub async fn pull(
         &self,
         id: RepoId,
@@ -1909,6 +1924,7 @@ impl Backend {
     /// terminal event. Resolves with the operation id immediately; the
     /// download itself runs detached on the blocking scheduler so cancel
     /// works while the caller holds the receiver.
+    #[telemetry::trace]
     pub async fn open_clone(
         &self,
         mut request: CloneRequest,
@@ -2730,6 +2746,18 @@ fn build_snapshot(entry: &Arc<crate::runtime::registry::RepoEntry>) -> Result<Re
     })
 }
 
+#[telemetry::trace(skip = [
+    "build_options",
+    "copied",
+    "deltas",
+    "id",
+    "include_untracked",
+    "new_file",
+    "old_file",
+    "recurse_untracked_dirs",
+    "transpose",
+    "with_capacity",
+])]
 fn commit_detail_blocking(
     path: PathBuf,
     query: CommitDetailQuery,

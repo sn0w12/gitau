@@ -3,6 +3,7 @@ mod commands;
 pub mod session;
 pub mod settings;
 mod state;
+mod telemetry_service;
 
 use std::sync::Arc;
 
@@ -94,6 +95,7 @@ pub fn run() {
         .manage(AppState::default())
         .setup(move |app| {
             let handle = app.handle().clone();
+            crate::telemetry_service::initialize(&app.package_info().version.to_string());
             let _launch = boot_trace::span_from("rust.launch", started_at, started_wall);
             let _hook = boot_trace::span("rust.setup.hook");
 
@@ -122,6 +124,14 @@ pub fn run() {
                 }
             }
             settings_span.end();
+
+            crate::telemetry_service::set_enabled(
+                state
+                    .settings
+                    .get(crate::telemetry_service::ENABLED_SETTING_KEY)
+                    .and_then(|value| value.as_bool())
+                    .unwrap_or(false),
+            );
 
             // Remote icons and remote repo info caches under the platform
             // cache dir; without it both stay in-memory only.
@@ -272,6 +282,7 @@ pub fn run() {
                 if let Err(error) = state.session.persist_current() {
                     log::error!("could not flush session on close: {error}");
                 }
+                crate::telemetry_service::flush();
             }
         })
         .invoke_handler(tauri::generate_handler![

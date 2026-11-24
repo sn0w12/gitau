@@ -208,6 +208,20 @@ fn builds_traces_and_reports_errors() {
     assert_eq!(telemetry::sync_scope(outer_traced), 1);
     assert_eq!(telemetry::sync_scope(skips_one_call), 11);
 
+    telemetry::sync_scope(|| {
+        let root = SpanGuard::enter("attached_root");
+        let scope = telemetry::ScopeHandle::capture();
+        assert!(scope.is_some(), "captured scope");
+        std::thread::spawn(move || {
+            telemetry::attach_scope(scope, || {
+                let _child = SpanGuard::enter("attached_child");
+            });
+        })
+        .join()
+        .unwrap();
+        drop(root);
+    });
+
     let mut polled = Box::pin(telemetry::scope(async { 7 }));
     let waker = std::task::Waker::noop();
     let mut poll_context = std::task::Context::from_waker(waker);
@@ -245,6 +259,10 @@ fn builds_traces_and_reports_errors() {
         child.attributes.get("cached"),
         Some(&AttrValue::Bool(false))
     );
+
+    let attached = trace_named(&batch, "attached_root");
+    assert_eq!(attached.root.children.len(), 1);
+    assert_eq!(attached.root.children[0].name, "attached_child");
 
     let error = manual.root.error.as_ref().expect("error on root");
     assert_eq!(error.code, "manual_failure");

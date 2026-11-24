@@ -29,11 +29,14 @@ impl Scheduler {
         token.check()?;
         let permit = self.permits.clone().acquire_owned().await?;
         let token_for_job = token.clone();
+        let scope = telemetry::ScopeHandle::capture();
         let join = tokio::task::spawn_blocking(move || {
             let _permit = permit;
-            let result = job();
-            crate::engines::git2::local::clear_all_cached_handles();
-            result
+            telemetry::attach_scope(scope, || {
+                let result = job();
+                crate::engines::git2::local::clear_all_cached_handles();
+                result
+            })
         });
         match join.await? {
             Ok(value) => Ok(value),

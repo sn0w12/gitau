@@ -108,6 +108,7 @@ pub fn set_url(repo: &Repository, name: &str, url: &str) -> Result<()> {
     Ok(())
 }
 
+#[telemetry::trace]
 pub fn fetch(
     repo: &mut Repository,
     request: &FetchRequest,
@@ -144,6 +145,7 @@ pub fn fetch(
     Ok(())
 }
 
+#[telemetry::trace]
 pub fn push(
     repo: &mut Repository,
     request: &PushRequest,
