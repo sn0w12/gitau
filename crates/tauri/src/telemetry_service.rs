@@ -4,7 +4,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedReceiver;
 
-const DEFAULT_ENDPOINT: &str = "http://127.0.0.1:18080/v1/batches";
+const DEFAULT_ENDPOINT: &str = "https://gitau-telemetry.arathia.net/v1/batches";
 const FLUSH_INTERVAL: Duration = Duration::from_secs(15);
 
 pub(crate) const ENABLED_SETTING_KEY: &str = "telemetryEnabled";
