@@ -20,13 +20,12 @@ pub async fn git_open_repository(
     telemetry::scope(open_repository(state, request)).await
 }
 
-#[telemetry::trace(skip = ["to_repo_id", "to_serialized", "span_detailed"], name = "git.open_repository")]
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.open_repository")]
 async fn open_repository(
     state: SharedState<'_>,
     request: OpenRepositoryRequest,
 ) -> CommandResult<git::application::OpenedRepository> {
     let path = std::path::PathBuf::from(&request.path);
-    let span = crate::boot_trace::span_detailed("git.open_repository", request.path.as_str());
     let opened = state
         .backend
         .open_repository(&path)
@@ -41,7 +40,6 @@ async fn open_repository(
         "has_worktree" => opened.snapshot.workdir.is_some(),
         "head" => head,
     };
-    span.end();
     Ok(opened)
 }
 
@@ -162,7 +160,7 @@ pub async fn git_open_diff(
     telemetry::scope(open_diff(app, state, repo_id, request, on_event)).await
 }
 
-#[telemetry::trace(skip = ["to_repo_id", "to_serialized", "span_detailed"], name = "git.open_diff")]
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.open_diff")]
 async fn open_diff(
     app: AppHandle,
     state: SharedState<'_>,

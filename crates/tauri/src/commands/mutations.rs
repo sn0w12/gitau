@@ -151,7 +151,7 @@ pub async fn git_checkout(
     .await
 }
 
-#[telemetry::trace(skip = ["to_repo_id", "to_serialized", "span_detailed"], name = "git.checkout")]
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.checkout")]
 #[allow(clippy::too_many_arguments)]
 async fn checkout(
     state: SharedState<'_>,

@@ -14,7 +14,7 @@ pub async fn git_status(
     telemetry::scope(status(state, repo_id, options)).await
 }
 
-#[telemetry::trace(skip = ["to_repo_id", "to_serialized", "span_detailed"], name = "git.status")]
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.status")]
 async fn status(
     state: SharedState<'_>,
     repo_id: u64,
@@ -129,7 +129,7 @@ pub async fn git_commit(
     .await
 }
 
-#[telemetry::trace(skip = ["to_repo_id", "to_serialized", "span_detailed"], name = "git.commit")]
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.commit")]
 #[allow(clippy::too_many_arguments)]
 async fn commit(
     state: SharedState<'_>,

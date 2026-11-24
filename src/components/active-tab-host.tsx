@@ -3,7 +3,6 @@ import { useSelector } from "@tanstack/react-store";
 import { Activity, memo, useEffect, useLayoutEffect } from "react";
 
 import { useAppServices } from "@/contexts/services-context";
-import { bootMark } from "@/lib/bootstrap/boot-timing";
 import {
     createTabRouter,
     type TabRouter,
@@ -28,9 +27,6 @@ import {
  * in the runtime registry so each tab's memory history persists. Always
  * keeps at least one tab.
  */
-let reportedFirstMount = false;
-let reportedFirstPaint = false;
-
 export function ActiveTabHost() {
     const services = useAppServices();
 
@@ -47,19 +43,6 @@ export function ActiveTabHost() {
     // Runtime creation is a side effect: it bumps the registry version
     // store, which must not happen during render.
     useLayoutEffect(() => {
-        if (!reportedFirstMount) {
-            reportedFirstMount = true;
-            bootMark("first.mount");
-            // Double rAF lands after the browser painted the committed tree.
-            requestAnimationFrame(() =>
-                requestAnimationFrame(() => {
-                    if (!reportedFirstPaint) {
-                        reportedFirstPaint = true;
-                        bootMark("first.paint");
-                    }
-                })
-            );
-        }
         for (const tab of tabs) {
             const runtime = getOrCreateRuntime(tab);
             runtime.router ??= createTabRouter(

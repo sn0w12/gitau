@@ -18,7 +18,7 @@ pub async fn git_history_page(
     telemetry::scope(history_page(state, repo_id, query)).await
 }
 
-#[telemetry::trace(skip = ["to_repo_id", "to_serialized", "span_detailed"], name = "git.history_page")]
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.history_page")]
 async fn history_page(
     state: SharedState<'_>,
     repo_id: u64,
@@ -63,7 +63,7 @@ pub async fn git_history_chart(
     telemetry::scope(history_chart(state, repo_id, query)).await
 }
 
-#[telemetry::trace(skip = ["to_repo_id", "to_serialized", "span_detailed"], name = "git.history_chart")]
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.history_chart")]
 async fn history_chart(
     state: SharedState<'_>,
     repo_id: u64,

@@ -107,7 +107,7 @@ pub async fn git_fetch(
     telemetry::scope(fetch(state, repo_id, remote, prune, credential)).await
 }
 
-#[telemetry::trace(skip = ["to_repo_id", "to_serialized", "span_detailed"], name = "git.fetch")]
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.fetch")]
 async fn fetch(
     state: SharedState<'_>,
     repo_id: u64,
@@ -158,7 +158,7 @@ pub async fn git_push(
     .await
 }
 
-#[telemetry::trace(skip = ["to_repo_id", "to_serialized", "span_detailed"], name = "git.push")]
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.push")]
 #[allow(clippy::too_many_arguments)]
 async fn push(
     state: SharedState<'_>,
@@ -220,7 +220,7 @@ pub async fn git_pull(
     .await
 }
 
-#[telemetry::trace(skip = ["to_repo_id", "to_serialized", "span_detailed"], name = "git.pull")]
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.pull")]
 #[allow(clippy::too_many_arguments)]
 async fn pull(
     state: SharedState<'_>,
@@ -269,7 +269,7 @@ pub async fn git_clone(
     telemetry::scope(clone(state, request, on_event)).await
 }
 
-#[telemetry::trace(skip = ["to_repo_id", "to_serialized", "span_detailed"], name = "git.clone")]
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.clone")]
 async fn clone(
     state: SharedState<'_>,
     request: CloneRequest,
