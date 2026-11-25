@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 
 use serde::Serialize;
@@ -46,6 +46,9 @@ pub struct RepoEntry {
     pub canonical_path: PathBuf,
     generation: AtomicU64,
     snapshot_seq: AtomicU64,
+    /// Set by the first interactive read. Speculative warmups for a repository
+    /// nobody looked at only burn disk.
+    viewed: AtomicBool,
     pub gix: GixSession,
     cache: Lru<u64, CachedValue>,
     /// Commit OIDs are immutable; survives generation bumps.
@@ -64,6 +67,7 @@ impl RepoEntry {
             canonical_path,
             generation: AtomicU64::new(1),
             snapshot_seq: AtomicU64::new(0),
+            viewed: AtomicBool::new(false),
             gix,
             cache: Lru::new(CACHE_CAPACITY),
             history_cache: Arc::new(std::sync::Mutex::new(
@@ -76,6 +80,16 @@ impl RepoEntry {
 
     pub fn generation(&self) -> Generation {
         Generation(self.generation.load(Ordering::Acquire))
+    }
+
+    /// Marks the repository as viewed and reports whether this call made the
+    /// transition, so callers can run one-time work exactly once.
+    pub fn mark_viewed(&self) -> bool {
+        !self.viewed.swap(true, Ordering::Relaxed)
+    }
+
+    pub fn viewed(&self) -> bool {
+        self.viewed.load(Ordering::Relaxed)
     }
 
     pub fn bump_generation(&self) -> Generation {
@@ -146,14 +160,36 @@ impl Registry {
     ) -> Result<(RepoId, Arc<RepoEntry>, bool)> {
         let input = std::fs::canonicalize(discovered_path)
             .unwrap_or_else(|_| discovered_path.to_path_buf());
+        let session = GixSession::discover(&input)?;
+        self.register_session(input, session, watch_paths)
+    }
 
+    /// [`Self::register`] for callers that already discovered the repository,
+    /// so opening it does not walk the filesystem and reopen the object
+    /// database a second time.
+    pub fn register_discovered(
+        &self,
+        discovered_path: &Path,
+        session: GixSession,
+        watch_paths: Vec<PathBuf>,
+    ) -> Result<(RepoId, Arc<RepoEntry>, bool)> {
+        let input = std::fs::canonicalize(discovered_path)
+            .unwrap_or_else(|_| discovered_path.to_path_buf());
+        self.register_session(input, session, watch_paths)
+    }
+
+    fn register_session(
+        &self,
+        input: PathBuf,
+        session: GixSession,
+        watch_paths: Vec<PathBuf>,
+    ) -> Result<(RepoId, Arc<RepoEntry>, bool)> {
         if let Some(existing) = self.by_path.read().unwrap().get(&input).copied()
             && let Some(handle) = self.entries.read().unwrap().get(&existing)
         {
             return Ok((existing, handle.entry.clone(), false));
         }
 
-        let session = GixSession::discover(&input)?;
         let repo_root = session
             .workdir()
             .map(Path::to_path_buf)
@@ -333,6 +369,27 @@ mod tests {
         let (id_c, entry_c, _) = registry.register(&nested, vec![]).unwrap();
         assert_eq!(id_c, id_a);
         assert_eq!(entry_c.canonical_path, entry_a.canonical_path);
+    }
+
+    #[test]
+    fn register_discovered_accepts_an_open_session() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = init_repo(temp.path());
+        let registry = Registry::new(Arc::new(InvalidationHub::new()));
+
+        let session = GixSession::discover(&root).unwrap();
+        let (id, entry, created) = registry
+            .register_discovered(&root, session, vec![])
+            .unwrap();
+        assert!(created);
+        assert_eq!(entry.canonical_path, std::fs::canonicalize(&root).unwrap());
+
+        let session = GixSession::discover(&root).unwrap();
+        let (again, _, created) = registry
+            .register_discovered(&root, session, vec![])
+            .unwrap();
+        assert!(!created);
+        assert_eq!(again, id);
     }
 
     #[test]

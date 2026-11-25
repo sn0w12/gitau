@@ -73,6 +73,14 @@ use crate::streaming::store::{DiffOperation, DiffOperationRegistry, RangeResult}
 pub struct BackendConfig {
     /// Maximum concurrent blocking git jobs.
     pub max_blocking_operations: usize,
+    /// Concurrent speculative warmups. Kept separate from
+    /// `max_blocking_operations` so a background scan cannot take a permit an
+    /// interactive request is waiting for.
+    pub max_background_operations: usize,
+    /// Delay before a repository's warmups start. The first view's queries run
+    /// during this window and cache their own results instead of queueing
+    /// behind the warmups that would compute the same thing.
+    pub warmup_delay_ms: u64,
     /// Watch worktrees for external modifications.
     pub watch_worktree: bool,
     pub watcher_debounce_ms: u64,
@@ -84,6 +92,8 @@ impl Default for BackendConfig {
     fn default() -> Self {
         Self {
             max_blocking_operations: 16,
+            max_background_operations: 4,
+            warmup_delay_ms: 2_000,
             watch_worktree: true,
             watcher_debounce_ms: 150,
             keep_completed_operations: 8,
@@ -122,7 +132,11 @@ type LanguageStatsCache = Arc<Mutex<Vec<(PathBuf, Option<Vec<language::LanguageS
 
 pub struct Backend {
     scheduler: Scheduler,
+    background: Scheduler,
     registry: Registry,
+    /// Warmups already scheduled per repository, so a burst of cache misses or
+    /// stale reads does not queue the same scan many times.
+    warmups: Arc<Mutex<HashSet<(RepoId, Warmup)>>>,
     operations: DiffOperationRegistry,
     graph_operations: GraphOperationRegistry,
     clone_operations: CloneOperationRegistry,
@@ -134,6 +148,40 @@ pub struct Backend {
     /// Root for the history chart's per-commit stat files. Absent means the
     /// chart recomputes its tree diffs on every launch.
     history_stats_dir: Arc<Mutex<Option<PathBuf>>>,
+}
+
+/// One speculative scan per repository and kind at a time.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum Warmup {
+    Objects,
+    Status,
+    History,
+}
+
+struct WarmupSlot {
+    scheduled: Arc<Mutex<HashSet<(RepoId, Warmup)>>>,
+    key: (RepoId, Warmup),
+}
+
+impl WarmupSlot {
+    fn claim(
+        scheduled: &Arc<Mutex<HashSet<(RepoId, Warmup)>>>,
+        key: (RepoId, Warmup),
+    ) -> Option<Self> {
+        let inserted = scheduled.lock().unwrap().insert(key);
+        inserted.then(|| Self {
+            scheduled: Arc::clone(scheduled),
+            key,
+        })
+    }
+}
+
+impl Drop for WarmupSlot {
+    fn drop(&mut self) {
+        if let Ok(mut scheduled) = self.scheduled.lock() {
+            scheduled.remove(&self.key);
+        }
+    }
 }
 
 /// Language stats are recomputed only past this many distinct repos.
@@ -190,7 +238,9 @@ impl Backend {
         let hub = Arc::new(crate::runtime::invalidation::InvalidationHub::new());
         Self {
             scheduler: Scheduler::new(config.max_blocking_operations),
+            background: Scheduler::new(config.max_background_operations),
             registry: Registry::new(hub),
+            warmups: Arc::default(),
             operations: DiffOperationRegistry::default(),
             graph_operations: GraphOperationRegistry::default(),
             clone_operations: CloneOperationRegistry::default(),
@@ -314,17 +364,16 @@ impl Backend {
         }
         let probe = crate::engines::gix::GixSession::discover(path)?;
         let watch_paths = self.watch_paths(&probe);
-        let (id, entry, created) = self.registry.register(path, watch_paths)?;
+        let (id, entry, created) = self
+            .registry
+            .register_discovered(path, probe, watch_paths)?;
         let snapshot = build_snapshot(&entry)?;
 
         // Warm the gix object database in the background: the first diff /
         // history interaction otherwise pays one-time pack-index and tree
         // loading costs, which reads as a multi-second hang.
-        let warm_session = entry.gix.clone();
         // Called within an async context, so a runtime exists.
-        std::mem::drop(tokio::spawn(telemetry::scope(warm_object_database(
-            warm_session,
-        ))));
+        self.spawn_object_warmup(id);
 
         // First registration only: the walk/summary caches are immutable and
         // survive generation bumps, so re-opens never need re-warming.
@@ -332,45 +381,94 @@ impl Backend {
             self.spawn_history_warmup(id);
         }
 
-        // Status is generation-keyed, so every open warms it fresh. The
-        // scan runs off the interaction path; the first changes panel
-        // request then hits the cache instead of paying the worktree scan.
+        // Status is generation-keyed, so every open warms it fresh.
         self.spawn_status_warmup(id);
 
         Ok(OpenedRepository { id, snapshot })
     }
 
-    /// Computes the default status report off the interaction path so the
-    /// first changes panel paint finds a finished report. A generation bump
-    /// during the scan drops the result: the next request recomputes.
+    fn warmup_delay(&self) -> Duration {
+        Duration::from_millis(self.config.warmup_delay_ms)
+    }
+
+    /// Schedules the speculative scans for a repository the user just opened
+    /// on screen. Re-running them on first view covers repositories that were
+    /// restored at launch but only touched later in the session.
+    fn schedule_view_warmups(&self, id: RepoId) {
+        self.spawn_object_warmup(id);
+        self.spawn_history_warmup(id);
+        self.spawn_status_warmup(id);
+    }
+
+    fn spawn_object_warmup(&self, id: RepoId) {
+        let Ok(entry) = self.registry.get(id) else {
+            return;
+        };
+        let Some(slot) = WarmupSlot::claim(&self.warmups, (id, Warmup::Objects)) else {
+            return;
+        };
+        let scheduler = self.background.clone();
+        let delay = self.warmup_delay();
+        std::mem::drop(tokio::spawn(telemetry::scope(async move {
+            warmup_delay(delay).await;
+            if entry.viewed() {
+                warm_object_database(entry, scheduler, slot).await;
+            }
+        })));
+    }
+
+    /// Computes the default status report off the interaction path so a later
+    /// changes panel paint finds a finished report. A generation bump during
+    /// the scan drops the result: the next request recomputes.
     fn spawn_status_warmup(&self, id: RepoId) {
         let Ok(entry) = self.registry.get(id) else {
             return;
         };
-        let generation = entry.generation();
-        let cache_key = (generation, StatusOptions::default());
-        if entry.cached("status", &cache_key).is_some() {
+        if entry
+            .cached("status", &(entry.generation(), StatusOptions::default()))
+            .is_some()
+        {
             return;
         }
-        let scheduler = self.scheduler.clone();
-        let gix_session = entry.gix.clone();
-        tokio::spawn(telemetry::scope(warm_status(
-            entry,
-            scheduler,
-            gix_session,
-            generation,
-            cache_key,
-        )));
+        let Some(slot) = WarmupSlot::claim(&self.warmups, (id, Warmup::Status)) else {
+            return;
+        };
+        let scheduler = self.background.clone();
+        let delay = self.warmup_delay();
+        tokio::spawn(telemetry::scope(async move {
+            warmup_delay(delay).await;
+            if entry.viewed() {
+                warm_status(entry, scheduler, slot).await;
+            }
+        }));
     }
 
     /// Builds walk + default-page summaries off the interaction path so a
-    /// freshly opened repo never pays the cold revwalk inside a request.
+    /// later visit never pays the cold revwalk inside a request.
     fn spawn_history_warmup(&self, id: RepoId) {
         let Ok(entry) = self.registry.get(id) else {
             return;
         };
-        let scheduler = self.scheduler.clone();
-        tokio::spawn(telemetry::scope(warm_history(entry, scheduler)));
+        if entry
+            .cached(
+                "history",
+                &(entry.generation(), HistoryPageQuery::default()),
+            )
+            .is_some()
+        {
+            return;
+        }
+        let Some(slot) = WarmupSlot::claim(&self.warmups, (id, Warmup::History)) else {
+            return;
+        };
+        let scheduler = self.background.clone();
+        let delay = self.warmup_delay();
+        tokio::spawn(telemetry::scope(async move {
+            warmup_delay(delay).await;
+            if entry.viewed() {
+                warm_history(entry, scheduler, slot).await;
+            }
+        }));
     }
 
     fn watch_paths(&self, session: &crate::engines::gix::GixSession) -> Vec<PathBuf> {
@@ -428,6 +526,9 @@ impl Backend {
 
     pub async fn repository_snapshot(&self, id: RepoId) -> Result<RepoSnapshot> {
         let entry = self.registry.get(id)?;
+        if entry.mark_viewed() {
+            self.schedule_view_warmups(id);
+        }
         build_snapshot(&entry)
     }
 
@@ -533,6 +634,9 @@ impl Backend {
         token: CancellationToken,
     ) -> Result<Arc<StatusReport>> {
         let entry = self.registry.get(id)?;
+        if entry.mark_viewed() {
+            self.schedule_view_warmups(id);
+        }
         let cache_key = (entry.generation(), options);
         if let Some(CachedValue::Status(cached)) = entry.cached("status", &cache_key) {
             return Ok(cached);
@@ -597,6 +701,9 @@ impl Backend {
         token: CancellationToken,
     ) -> Result<(OperationId, mpsc::Receiver<DiffEvent>)> {
         let entry = self.registry.get(id)?;
+        if entry.mark_viewed() {
+            self.schedule_view_warmups(id);
+        }
         token.check()?;
         let operation_id = OperationId(self.next_operation_id.fetch_add(1, Ordering::AcqRel));
         let operation = Arc::new(DiffOperation::new(id, operation_id, entry.generation()));
@@ -783,6 +890,9 @@ impl Backend {
         token: CancellationToken,
     ) -> Result<Arc<HistoryPage>> {
         let entry = self.registry.get(id)?;
+        if entry.mark_viewed() {
+            self.schedule_view_warmups(id);
+        }
         let cache_key = (entry.generation(), query.clone());
         if let Some(CachedValue::History(cached)) = entry.cached("history", &cache_key) {
             return Ok(cached);
@@ -836,6 +946,9 @@ impl Backend {
         token: CancellationToken,
     ) -> Result<Arc<HistoryChart>> {
         let entry = self.registry.get(id)?;
+        if entry.mark_viewed() {
+            self.schedule_view_warmups(id);
+        }
         let cache_key = (entry.generation(), query.clone());
         if let Some(CachedValue::HistoryChart(cached)) = entry.cached("history-chart", &cache_key) {
             return Ok(cached);
@@ -879,6 +992,9 @@ impl Backend {
         token: CancellationToken,
     ) -> Result<Arc<CommitWithDetail>> {
         let entry = self.registry.get(id)?;
+        if entry.mark_viewed() {
+            self.schedule_view_warmups(id);
+        }
         let cache_key = (entry.generation(), query.clone());
         if let Some(CachedValue::CommitDetail(cached)) = entry.cached("commit-detail", &cache_key) {
             return Ok(cached);
@@ -974,6 +1090,9 @@ impl Backend {
         token: CancellationToken,
     ) -> Result<BlameResult> {
         let entry = self.registry.get(id)?;
+        if entry.mark_viewed() {
+            self.schedule_view_warmups(id);
+        }
         let path = entry.canonical_path.clone();
         self.scheduler
             .run(&token, move || {
@@ -991,6 +1110,9 @@ impl Backend {
         token: CancellationToken,
     ) -> Result<RepoListing> {
         let entry = self.registry.get(id)?;
+        if entry.mark_viewed() {
+            self.schedule_view_warmups(id);
+        }
         let path = entry.canonical_path.clone();
         self.scheduler
             .run(&token, move || {
@@ -2716,18 +2838,35 @@ fn build_snapshot(entry: &Arc<crate::runtime::registry::RepoEntry>) -> Result<Re
 }
 
 #[telemetry::trace(name = "app.warmup_objects", span_only)]
-async fn warm_object_database(session: crate::engines::gix::GixSession) {
-    let _ = session.handle().head_id();
+async fn warm_object_database(
+    entry: Arc<crate::runtime::registry::RepoEntry>,
+    scheduler: Scheduler,
+    _slot: WarmupSlot,
+) {
+    let session = entry.gix.clone();
+    let token = CancellationToken::new();
+    let _ = scheduler
+        .run(&token, move || {
+            let _ = session.handle().head_id();
+            Ok(())
+        })
+        .await;
 }
 
 #[telemetry::trace(name = "app.warmup_status", span_only)]
 async fn warm_status(
     entry: Arc<crate::runtime::registry::RepoEntry>,
     scheduler: Scheduler,
-    session: crate::engines::gix::GixSession,
-    generation: Generation,
-    cache_key: (Generation, StatusOptions),
+    _slot: WarmupSlot,
 ) {
+    let generation = entry.generation();
+    let cache_key = (generation, StatusOptions::default());
+    if entry.cached("status", &cache_key).is_some() {
+        telemetry::record_attribute("outcome", telemetry::AttrValue::from("cached"));
+        return;
+    }
+
+    let session = entry.gix.clone();
     let token = CancellationToken::new();
     let Ok(mut report) = scheduler
         .run(&token, move || {
@@ -2735,29 +2874,41 @@ async fn warm_status(
         })
         .await
     else {
-        telemetry::context! { "outcome" => "cancelled" };
+        telemetry::record_attribute("outcome", telemetry::AttrValue::from("cancelled"));
         return;
     };
     if entry.generation() != generation {
-        telemetry::context! { "outcome" => "stale" };
+        telemetry::record_attribute("outcome", telemetry::AttrValue::from("stale"));
         return;
     }
     report.snapshot_id = entry.next_snapshot_id();
     report.generation = generation;
     entry.store_cached("status", &cache_key, CachedValue::Status(Arc::new(report)));
-    telemetry::context! { "outcome" => "stored" };
+    telemetry::record_attribute("outcome", telemetry::AttrValue::from("stored"));
 }
 
 #[telemetry::trace(name = "app.warmup_history", span_only)]
-async fn warm_history(entry: Arc<crate::runtime::registry::RepoEntry>, scheduler: Scheduler) {
+async fn warm_history(
+    entry: Arc<crate::runtime::registry::RepoEntry>,
+    scheduler: Scheduler,
+    _slot: WarmupSlot,
+) {
+    let generation = entry.generation();
+    let query = HistoryPageQuery::default();
+    if entry
+        .cached("history", &(generation, query.clone()))
+        .is_some()
+    {
+        telemetry::record_attribute("outcome", telemetry::AttrValue::from("cached"));
+        return;
+    }
+
     let path = entry.canonical_path.clone();
     let history_cache = entry.history_cache();
-    let generation = entry.generation();
     let token = CancellationToken::new();
     let result = scheduler
         .run(&token, move || {
             let _computation = entry.history_lock().lock().unwrap();
-            let query = HistoryPageQuery::default();
             let mut guard = history_cache.lock().unwrap();
             let session = crate::engines::git2::Git2Session::new(path);
             crate::engines::git2::history::history_page(
@@ -2771,6 +2922,12 @@ async fn warm_history(entry: Arc<crate::runtime::registry::RepoEntry>, scheduler
         .await;
     let outcome = if result.is_ok() { "stored" } else { "failed" };
     telemetry::record_attribute("outcome", telemetry::AttrValue::from(outcome));
+}
+
+async fn warmup_delay(delay: Duration) {
+    if !delay.is_zero() {
+        tokio::time::sleep(delay).await;
+    }
 }
 
 #[telemetry::trace(skip = [
