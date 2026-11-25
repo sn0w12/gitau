@@ -66,10 +66,29 @@ pub fn open_index(repo: &gix::Repository) -> Result<gix::index::File> {
 /// outside that prefix while the worktree side keeps them; the engine must
 /// compute the same full-tree status either way.
 pub fn unrestricted_pathspec(repo: &gix::Repository) -> Result<gix::Pathspec<'_>> {
+    pathspec_for(repo, None)
+}
+
+/// A pathspec matching `scope` at the worktree root, or everything when the
+/// scope is empty. `:(top,literal)` keeps a path like `a[1].txt` matching
+/// itself instead of being read as a glob.
+pub fn pathspec_for<'repo>(
+    repo: &'repo gix::Repository,
+    scope: Option<&[String]>,
+) -> Result<gix::Pathspec<'repo>> {
+    let patterns: Vec<gix::bstr::BString> = scope
+        .into_iter()
+        .flatten()
+        .map(|path| {
+            let mut pattern = b":(top,literal)".to_vec();
+            pattern.extend_from_slice(path.as_bytes());
+            gix::bstr::BString::from(pattern)
+        })
+        .collect();
     let empty_index = gix::index::State::new(repo.object_hash());
     repo.pathspec(
         false,
-        None::<&str>,
+        patterns,
         false,
         &empty_index,
         gix::worktree::stack::state::attributes::Source::IdMapping,

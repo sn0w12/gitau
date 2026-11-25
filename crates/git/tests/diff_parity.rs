@@ -422,6 +422,26 @@ fn scoped_paths_include_added_and_deleted_match_reference() {
     );
 }
 
+/// A scoped staged request must walk only the selected path, matching the
+/// reference's tree-to-index pathspec.
+#[test]
+fn scoped_staged_path_matches_reference() {
+    let repo = TestRepo::init("dp-staged-scoped");
+    repo.initial_commit(&[("a.txt", "one\ntwo\n"), ("b.txt", "one\ntwo\n")]);
+    repo.write("a.txt", "one\nTWO\n");
+    repo.write("b.txt", "one\nTWO\n");
+    repo.stage("a.txt");
+    repo.stage("b.txt");
+    assert_parity(
+        &repo,
+        DiffRequest {
+            comparison: DiffComparison::Staged,
+            paths: vec!["a.txt".into()],
+            ..base_request()
+        },
+    );
+}
+
 #[test]
 fn missing_trailing_newline_on_both_sides_matches_reference() {
     let repo = TestRepo::init("dp-nonl");

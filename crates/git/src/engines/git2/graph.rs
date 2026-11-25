@@ -175,6 +175,7 @@ pub fn walk_oids(
     session: &crate::engines::git2::session::Git2Session,
     query: &crate::api::graph::GraphQuery,
     cache: &mut crate::runtime::history_cache::HistoryCache,
+    head_tip: Option<git2::Oid>,
 ) -> crate::error::Result<std::sync::Arc<Vec<Oid>>> {
     use crate::error::GitError;
 
@@ -182,7 +183,7 @@ pub fn walk_oids(
         // Unborn HEAD walks nothing; the pipeline completes the stream with
         // zero rows instead of failing it with `invalid revision HEAD`.
         let tip = if crate::engines::git2::history::is_default_revision(query.revision.as_ref()) {
-            match crate::engines::git2::history::default_tip(repo)? {
+            match head_tip {
                 Some(tip) => tip,
                 None => return Ok(std::sync::Arc::new(Vec::new())),
             }

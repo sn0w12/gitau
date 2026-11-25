@@ -35,6 +35,7 @@ pub fn history_page(
     snapshot_id: SnapshotId,
     generation: Generation,
     cache: &Mutex<crate::runtime::history_cache::HistoryCache>,
+    head_tip: Option<git2::Oid>,
 ) -> Result<HistoryPage> {
     if query.limit == 0 || query.limit > 10_000 {
         return Err(GitError::invalid_input("limit must be in 1..=10000"));
@@ -44,7 +45,7 @@ pub fn history_page(
         // history; report an empty page instead of `invalid revision HEAD`.
         // Explicit revisions still resolve strictly below.
         let tip = if is_default_revision(query.revision.as_ref()) {
-            match default_tip(repo)? {
+            match head_tip {
                 Some(tip) => tip,
                 None => {
                     return Ok(HistoryPage {
@@ -467,25 +468,6 @@ fn commit_matches_search(
 /// True when the query walks the default tip: no revision, or HEAD itself.
 pub(crate) fn is_default_revision(revision: Option<&crate::domain::RevisionSpec>) -> bool {
     revision.map(|spec| spec.as_str() == "HEAD").unwrap_or(true)
-}
-
-/// Resolves the default walk tip, or `None` when HEAD is unborn. Any other
-/// resolution failure stays an `InvalidRevision`.
-pub(crate) fn default_tip(repo: &git2::Repository) -> Result<Option<git2::Oid>> {
-    match repo.revparse_single("HEAD") {
-        Ok(object) => Ok(Some(object.peel_to_commit()?.id())),
-        Err(_) if is_unborn_head(repo) => Ok(None),
-        Err(_) => Err(GitError::InvalidRevision {
-            spec: "HEAD".to_owned(),
-        }),
-    }
-}
-
-fn is_unborn_head(repo: &git2::Repository) -> bool {
-    matches!(
-        repo.head(),
-        Err(error) if error.code() == git2::ErrorCode::UnbornBranch
-    )
 }
 
 pub(crate) fn resolve_tip(

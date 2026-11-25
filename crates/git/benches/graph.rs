@@ -144,6 +144,13 @@ fn run_full_graph(root: &Path, cache: Arc<Mutex<HistoryCache>>) -> (u64, u64) {
         Generation(1),
     ));
     let (tx, mut rx) = tokio::sync::mpsc::channel(1024);
+    let head = git2::Repository::discover(root).ok().and_then(|repo| {
+        repo.head()
+            .ok()?
+            .peel_to_commit()
+            .ok()
+            .map(|commit| commit.id())
+    });
     let job = GraphJob::new(
         root.to_path_buf(),
         GraphQuery::default(),
@@ -151,6 +158,7 @@ fn run_full_graph(root: &Path, cache: Arc<Mutex<HistoryCache>>) -> (u64, u64) {
         SnapshotId(0),
         Generation(1),
         cache,
+        head,
     );
     let op_for_job = op.clone();
     let total = runtime().block_on(async {
@@ -174,6 +182,13 @@ fn time_to_first_chunk(root: &Path, cache: Arc<Mutex<HistoryCache>>) -> usize {
         Generation(1),
     ));
     let (tx, mut rx) = tokio::sync::mpsc::channel(1024);
+    let head = git2::Repository::discover(root).ok().and_then(|repo| {
+        repo.head()
+            .ok()?
+            .peel_to_commit()
+            .ok()
+            .map(|commit| commit.id())
+    });
     let job = GraphJob::new(
         root.to_path_buf(),
         GraphQuery::default(),
@@ -181,6 +196,7 @@ fn time_to_first_chunk(root: &Path, cache: Arc<Mutex<HistoryCache>>) -> usize {
         SnapshotId(0),
         Generation(1),
         cache,
+        head,
     );
     let op_for_job = op.clone();
     runtime().block_on(async {

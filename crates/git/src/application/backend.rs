@@ -52,8 +52,8 @@ use crate::domain::history::{
 };
 use crate::domain::templates;
 use crate::domain::{
-    AheadBehind, BranchInfo, ChangeKind, CommitSummary, Generation, ObjectId, OperationId,
-    RelativePath, RepoId, RepoSnapshot, SnapshotId, StatusReport, TagInfo,
+    AheadBehind, BranchInfo, ChangeKind, CommitSummary, Generation, HeadState, ObjectId,
+    OperationId, RelativePath, RepoId, RepoSnapshot, SnapshotId, StatusReport, TagInfo,
 };
 use crate::engines::git2::{hooks as git2_hooks, mutations};
 use crate::engines::gix::objects as gix_objects;
@@ -540,7 +540,7 @@ impl Backend {
             return Ok(None);
         };
         self.scheduler
-            .run(&CancellationToken::new(), move || {
+            .run_read(&CancellationToken::new(), move || {
                 Ok(read_worktree_readme(&workdir))
             })
             .await
@@ -556,7 +556,7 @@ impl Backend {
         };
         let relative = RelativePath::parse(path)?;
         self.scheduler
-            .run(&CancellationToken::new(), move || {
+            .run_read(&CancellationToken::new(), move || {
                 let full = workdir.join(relative.to_path_buf());
                 let Ok(metadata) = std::fs::metadata(&full) else {
                     return Ok(None);
@@ -589,7 +589,7 @@ impl Backend {
         };
         let relative = RelativePath::parse(path)?;
         self.scheduler
-            .run(&CancellationToken::new(), move || {
+            .run_read(&CancellationToken::new(), move || {
                 let full = workdir.join(relative.to_path_buf());
                 let Ok(metadata) = std::fs::metadata(&full) else {
                     return Ok(None);
@@ -659,7 +659,7 @@ impl Backend {
         let gix_session = entry.gix.clone();
         let report = self
             .scheduler
-            .run(&token, move || {
+            .run_read(&token, move || {
                 crate::engines::gix::status::status(&gix_session, &options)
             })
             .await?;
@@ -723,7 +723,7 @@ impl Backend {
         let scheduler = self.scheduler.clone();
         tokio::spawn(telemetry::scope(async move {
             let _ = scheduler
-                .run(&token, move || {
+                .run_read(&token, move || {
                     pipeline::run(job, op_for_job, tx);
                     Ok(())
                 })
@@ -765,7 +765,7 @@ impl Backend {
         let mime = source.mime.clone();
         let bytes = self
             .scheduler
-            .run(&CancellationToken::new(), move || {
+            .run_read(&CancellationToken::new(), move || {
                 crate::engines::gix::diff::read_image_side(&session, &source, side)
             })
             .await?;
@@ -830,6 +830,7 @@ impl Backend {
         self.graph_operations.insert(operation.clone());
 
         let (tx, rx) = mpsc::channel::<GraphEvent>(256);
+        let head_tip = head_tip(&entry)?;
         let job = GraphJob::new(
             entry.canonical_path.clone(),
             request,
@@ -837,13 +838,14 @@ impl Backend {
             entry.next_snapshot_id(),
             entry.generation(),
             entry.history_cache(),
+            head_tip,
         );
 
         let op_for_job = operation.clone();
         let scheduler = self.scheduler.clone();
         tokio::spawn(telemetry::scope(async move {
             let _ = scheduler
-                .run(&token, move || {
+                .run_read(&token, move || {
                     graph_pipeline::run(job, op_for_job, tx);
                     Ok(())
                 })
@@ -906,7 +908,7 @@ impl Backend {
         let lock_entry = entry.clone();
         let page = self
             .scheduler
-            .run(&token, move || {
+            .run_read(&token, move || {
                 // git2 engine: libgit2's diff stats give per-commit
                 // files/additions/deletions cheaply for the whole page.
                 // Walk/summary/tag caches hold immutable data and survive
@@ -931,6 +933,7 @@ impl Backend {
                     snapshot_id,
                     generation,
                     history_cache.as_ref(),
+                    head_tip(&lock_entry)?,
                 )
             })
             .await?;
@@ -961,9 +964,10 @@ impl Backend {
         let history_cache = entry.history_cache();
         let base = self.history_stats_dir.lock().unwrap().clone();
         let repo_root = path.clone();
+        let lock_entry = entry.clone();
         let chart = self
             .scheduler
-            .run(&token, move || {
+            .run_read(&token, move || {
                 let session = crate::engines::git2::Git2Session::new(path);
                 crate::engines::git2::chart::history_chart_with_store(
                     &session,
@@ -973,6 +977,7 @@ impl Backend {
                     &history_cache,
                     base.as_deref(),
                     &repo_root,
+                    head_tip(&lock_entry)?,
                 )
             })
             .await?;
@@ -1003,7 +1008,7 @@ impl Backend {
         let path = entry.canonical_path.clone();
         let detail = self
             .scheduler
-            .run(&token, move || commit_detail_blocking(path, query))
+            .run_read(&token, move || commit_detail_blocking(path, query))
             .await?;
         let arc = Arc::new(CommitWithDetail { detail });
         entry.store_cached(
@@ -1022,10 +1027,9 @@ impl Backend {
     ) -> Result<FileContent> {
         let entry = self.registry.get(id)?;
         let path_str = RelativePath::parse(&query.path)?;
-        let path = entry.canonical_path.clone();
+        let session = entry.gix.clone();
         self.scheduler
-            .run(&token, move || {
-                let session = crate::engines::gix::GixSession::discover(&path)?;
+            .run_read(&token, move || {
                 let repo = session.handle();
                 let resolved = repo
                     .rev_parse_single(query.revision.as_str())
@@ -1047,7 +1051,7 @@ impl Backend {
         let key = format!("local:{}", path.display());
         let icon = self
             .scheduler
-            .run(&CancellationToken::new(), move || {
+            .run_read(&CancellationToken::new(), move || {
                 crate::engines::gix::worktree_icon::find_worktree_icon(&path)
             })
             .await?;
@@ -1071,7 +1075,7 @@ impl Backend {
         let key = format!("local:{}", root.display());
         let icon = self
             .scheduler
-            .run(&CancellationToken::new(), move || {
+            .run_read(&CancellationToken::new(), move || {
                 crate::engines::gix::worktree_icon::find_worktree_icon(&root)
             })
             .await?;
@@ -1096,10 +1100,10 @@ impl Backend {
         }
         let path = entry.canonical_path.clone();
         self.scheduler
-            .run(&token, move || {
-                let repo = git2::Repository::discover(&path)
-                    .map_err(|e| crate::streaming::pipeline::map_open_error(&path, e))?;
-                crate::engines::git2::blame::blame(&repo, &query)
+            .run_read(&token, move || {
+                crate::engines::git2::local::with_repository(&path, |repo| {
+                    crate::engines::git2::blame::blame(repo, &query)
+                })
             })
             .await
     }
@@ -1116,12 +1120,12 @@ impl Backend {
         }
         let path = entry.canonical_path.clone();
         self.scheduler
-            .run(&token, move || {
-                let repo = git2::Repository::discover(&path)
-                    .map_err(|e| crate::streaming::pipeline::map_open_error(&path, e))?;
-                Ok(RepoListing {
-                    branches: mutations::list_branches(&repo)?,
-                    tags: mutations::list_tags(&repo)?,
+            .run_read(&token, move || {
+                crate::engines::git2::local::with_repository(&path, |repo| {
+                    Ok(RepoListing {
+                        branches: mutations::list_branches(repo)?,
+                        tags: mutations::list_tags(repo)?,
+                    })
                 })
             })
             .await
@@ -1140,10 +1144,10 @@ impl Backend {
         let entry = self.registry.get(id)?;
         let path = entry.canonical_path.clone();
         self.scheduler
-            .run(&token, move || {
-                let repo = git2::Repository::discover(&path)
-                    .map_err(|e| crate::streaming::pipeline::map_open_error(&path, e))?;
-                mutations::branch_ahead_behind(&repo, &head, &base)
+            .run_read(&token, move || {
+                crate::engines::git2::local::with_repository(&path, |repo| {
+                    mutations::branch_ahead_behind(repo, &head, &base)
+                })
             })
             .await
     }
@@ -1152,10 +1156,10 @@ impl Backend {
         let entry = self.registry.get(id)?;
         let path = entry.canonical_path.clone();
         self.scheduler
-            .run(&CancellationToken::new(), move || {
-                let repo = git2::Repository::discover(&path)
-                    .map_err(|e| crate::streaming::pipeline::map_open_error(&path, e))?;
-                crate::engines::git2::worktrees::list_worktrees(&repo)
+            .run_read(&CancellationToken::new(), move || {
+                crate::engines::git2::local::with_repository(&path, |repo| {
+                    crate::engines::git2::worktrees::list_worktrees(repo)
+                })
             })
             .await
     }
@@ -1216,10 +1220,10 @@ impl Backend {
         let entry = self.registry.get(id)?;
         let path = entry.canonical_path.clone();
         self.scheduler
-            .run(&CancellationToken::new(), move || {
-                let repo = git2::Repository::discover(&path)
-                    .map_err(|e| crate::streaming::pipeline::map_open_error(&path, e))?;
-                crate::engines::git2::submodules::list_submodules(&repo)
+            .run_read(&CancellationToken::new(), move || {
+                crate::engines::git2::local::with_repository(&path, |repo| {
+                    crate::engines::git2::submodules::list_submodules(repo)
+                })
             })
             .await
     }
@@ -1252,10 +1256,10 @@ impl Backend {
         let entry = self.registry.get(id)?;
         let path = entry.canonical_path.clone();
         self.scheduler
-            .run(&CancellationToken::new(), move || {
-                let repo = git2::Repository::discover(&path)
-                    .map_err(|e| crate::streaming::pipeline::map_open_error(&path, e))?;
-                crate::engines::git2::lfs::lfs_status(&repo)
+            .run_read(&CancellationToken::new(), move || {
+                crate::engines::git2::local::with_repository(&path, |repo| {
+                    crate::engines::git2::lfs::lfs_status(repo)
+                })
             })
             .await
     }
@@ -1276,10 +1280,10 @@ impl Backend {
         let entry = self.registry.get(id)?;
         let path = entry.canonical_path.clone();
         self.scheduler
-            .run(&CancellationToken::new(), move || {
-                let repo = git2::Repository::discover(&path)
-                    .map_err(|e| crate::streaming::pipeline::map_open_error(&path, e))?;
-                git2_hooks::list_commit_hooks(&repo)
+            .run_read(&CancellationToken::new(), move || {
+                crate::engines::git2::local::with_repository(&path, |repo| {
+                    git2_hooks::list_commit_hooks(repo)
+                })
             })
             .await
     }
@@ -1296,7 +1300,8 @@ impl Backend {
     ) -> Result<HookRunResult> {
         let entry = self.registry.get(id)?;
         let path = entry.canonical_path.clone();
-        self.scheduler
+        let result = self
+            .scheduler
             .run(&CancellationToken::new(), move || {
                 let repo = git2::Repository::discover(&path)
                     .map_err(|e| crate::streaming::pipeline::map_open_error(&path, e))?;
@@ -1306,7 +1311,9 @@ impl Backend {
                     let _ = output.send(chunk);
                 })
             })
-            .await
+            .await;
+        crate::engines::git2::local::clear_all_repository_handles(&entry.canonical_path);
+        result
     }
 
     /// Reads a commit hook script's contents; missing scripts come back
@@ -1315,10 +1322,10 @@ impl Backend {
         let entry = self.registry.get(id)?;
         let path = entry.canonical_path.clone();
         self.scheduler
-            .run(&CancellationToken::new(), move || {
-                let repo = git2::Repository::discover(&path)
-                    .map_err(|e| crate::streaming::pipeline::map_open_error(&path, e))?;
-                git2_hooks::read_commit_hook(&repo, &hook)
+            .run_read(&CancellationToken::new(), move || {
+                crate::engines::git2::local::with_repository(&path, |repo| {
+                    git2_hooks::read_commit_hook(repo, &hook)
+                })
             })
             .await
     }
@@ -1603,10 +1610,10 @@ impl Backend {
         let entry = self.registry.get(id)?;
         let path = entry.canonical_path.clone();
         self.scheduler
-            .run(&CancellationToken::new(), move || {
-                let repo = git2::Repository::discover(&path)
-                    .map_err(|e| crate::streaming::pipeline::map_open_error(&path, e))?;
-                crate::engines::git2::workflows::operation_state(&repo)
+            .run_read(&CancellationToken::new(), move || {
+                crate::engines::git2::local::with_repository(&path, |repo| {
+                    crate::engines::git2::workflows::operation_state(repo)
+                })
             })
             .await
     }
@@ -1696,7 +1703,7 @@ impl Backend {
         let entry = self.registry.get(id)?;
         let path = entry.canonical_path.clone();
         self.scheduler
-            .run(&CancellationToken::new(), move || {
+            .run_read(&CancellationToken::new(), move || {
                 let mut repo = git2::Repository::discover(&path)
                     .map_err(|e| crate::streaming::pipeline::map_open_error(&path, e))?;
                 crate::engines::git2::workflows::stash_list(&mut repo)
@@ -1725,6 +1732,7 @@ impl Backend {
                 crate::engines::git2::remotes::fetch(&mut repo, &request, &token_for_job)
             })
             .await?;
+        crate::engines::git2::local::clear_all_repository_handles(&entry.canonical_path);
         let generation = entry.bump_generation();
         self.registry.hub().publish(id.0, generation.0, "fetch");
         Ok(())
@@ -1752,6 +1760,7 @@ impl Backend {
                 crate::engines::git2::remotes::push(&mut repo, &request, &token_for_job)
             })
             .await?;
+        crate::engines::git2::local::clear_all_repository_handles(&entry.canonical_path);
         let generation = entry.bump_generation();
         self.registry.hub().publish(id.0, generation.0, "push");
         Ok(outcomes)
@@ -1840,10 +1849,10 @@ impl Backend {
         let entry = self.registry.get(id)?;
         let path = entry.canonical_path.clone();
         self.scheduler
-            .run(&CancellationToken::new(), move || {
-                let repo = git2::Repository::discover(&path)
-                    .map_err(|e| crate::streaming::pipeline::map_open_error(&path, e))?;
-                crate::engines::git2::remotes::list(&repo)
+            .run_read(&CancellationToken::new(), move || {
+                crate::engines::git2::local::with_repository(&path, |repo| {
+                    crate::engines::git2::remotes::list(repo)
+                })
             })
             .await
     }
@@ -1857,10 +1866,10 @@ impl Backend {
     ) -> Result<Vec<crate::api::remotes::RemoteInfo>> {
         let path = path.to_path_buf();
         self.scheduler
-            .run(&CancellationToken::new(), move || {
-                let repo = git2::Repository::discover(&path)
-                    .map_err(|e| crate::streaming::pipeline::map_open_error(&path, e))?;
-                crate::engines::git2::remotes::list(&repo)
+            .run_read(&CancellationToken::new(), move || {
+                crate::engines::git2::local::with_repository(&path, |repo| {
+                    crate::engines::git2::remotes::list(repo)
+                })
             })
             .await
     }
@@ -1933,7 +1942,7 @@ impl Backend {
         let compute_path = path.to_path_buf();
         let stats = self
             .scheduler
-            .run(&CancellationToken::new(), move || {
+            .run_read(&CancellationToken::new(), move || {
                 let session = crate::engines::gix::GixSession::discover(&compute_path)?;
                 language::language_stats(&session.handle())
                     .map_err(|error| crate::error::GitError::internal(error.to_string()))
@@ -2813,6 +2822,7 @@ impl Backend {
             })
             .await;
         drop(guard);
+        crate::engines::git2::local::clear_all_repository_handles(&entry.canonical_path);
         let value = match result {
             Ok(value) => value,
             Err(err) => return Err(err),
@@ -2832,9 +2842,32 @@ fn build_snapshot(entry: &Arc<crate::runtime::registry::RepoEntry>) -> Result<Re
         generation: entry.generation(),
         workdir: entry.gix.workdir().map(Path::to_path_buf),
         git_dir: entry.gix.git_dir().to_path_buf(),
-        head: entry.gix.head_state()?,
+        head: resolve_head(entry)?,
         sha_kind: entry.gix.sha_kind(),
     })
+}
+
+fn resolve_head(entry: &Arc<crate::runtime::registry::RepoEntry>) -> Result<HeadState> {
+    let generation = entry.generation();
+    if let Some(head) = entry.cached_head(generation) {
+        return Ok(head);
+    }
+    let head = entry.gix.head_state()?;
+    if entry.generation() == generation {
+        entry.cache_head(generation, head.clone());
+    }
+    Ok(head)
+}
+
+fn head_tip(entry: &Arc<crate::runtime::registry::RepoEntry>) -> Result<Option<git2::Oid>> {
+    let Some(target) = resolve_head(entry)?.target() else {
+        return Ok(None);
+    };
+    git2::Oid::from_bytes(target.as_bytes())
+        .map(Some)
+        .map_err(|error| GitError::Internal {
+            message: error.to_string(),
+        })
 }
 
 #[telemetry::trace(name = "app.warmup_objects", span_only)]
@@ -2908,6 +2941,7 @@ async fn warm_history(
     let token = CancellationToken::new();
     let result = scheduler
         .run(&token, move || {
+            let head = head_tip(&entry)?;
             let _computation = entry.history_lock().lock().unwrap();
             let session = crate::engines::git2::Git2Session::new(path);
             crate::engines::git2::history::history_page(
@@ -2916,6 +2950,7 @@ async fn warm_history(
                 SnapshotId(0),
                 generation,
                 history_cache.as_ref(),
+                head,
             )
         })
         .await;
@@ -2945,84 +2980,85 @@ fn commit_detail_blocking(
     path: PathBuf,
     query: CommitDetailQuery,
 ) -> Result<crate::domain::CommitDetail> {
-    let repo = git2::Repository::discover(&path)
-        .map_err(|e| crate::streaming::pipeline::map_open_error(&path, e))?;
-    let commit = crate::streaming::pipeline::resolve_commit(&repo, &query.revision)?;
+    crate::engines::git2::local::with_repository(&path, |repo| {
+        let commit = crate::streaming::pipeline::resolve_commit(repo, &query.revision)?;
 
-    let mut opts = crate::streaming::pipeline::build_options(&DiffRequest {
-        comparison: crate::streaming::model::DiffComparison::WorkingTree,
-        detect_renames: query.detect_renames,
-        ..Default::default()
-    })?;
-    opts.include_untracked(false);
-    opts.recurse_untracked_dirs(false);
+        let mut opts = crate::streaming::pipeline::build_options(&DiffRequest {
+            comparison: crate::streaming::model::DiffComparison::WorkingTree,
+            detect_renames: query.detect_renames,
+            ..Default::default()
+        })?;
+        opts.include_untracked(false);
+        opts.recurse_untracked_dirs(false);
 
-    let parent_tree = commit.parent(0).ok().map(|p| p.tree()).transpose()?;
-    let tree = commit.tree()?;
-    let mut diff = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), Some(&mut opts))?;
-    if query.detect_renames {
-        let mut find = git2::DiffFindOptions::new();
-        diff.find_similar(Some(&mut find))?;
-    }
+        let parent_tree = commit.parent(0).ok().map(|p| p.tree()).transpose()?;
+        let tree = commit.tree()?;
+        let mut diff =
+            repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), Some(&mut opts))?;
+        if query.detect_renames {
+            let mut find = git2::DiffFindOptions::new();
+            diff.find_similar(Some(&mut find))?;
+        }
 
-    use crate::domain::FileChangeStat;
-    use crate::streaming::model::SectionKind;
-    let sections = crate::streaming::pipeline::enumerate_sections(&diff)?;
+        use crate::domain::FileChangeStat;
+        use crate::streaming::model::SectionKind;
+        let sections = crate::streaming::pipeline::enumerate_sections(&diff)?;
 
-    // Per-file line counts come from blob contents rather than a built patch,
-    // so the deltas of a wide commit run on every core instead of one.
-    let pairs: Vec<(git2::Oid, git2::Oid)> = diff
-        .deltas()
-        .map(|delta| (delta.old_file().id(), delta.new_file().id()))
-        .collect();
-    let counts = crate::engines::git2::history::per_delta_numstat(&repo, &pairs)?;
+        // Per-file line counts come from blob contents rather than a built patch,
+        // so the deltas of a wide commit run on every core instead of one.
+        let pairs: Vec<(git2::Oid, git2::Oid)> = diff
+            .deltas()
+            .map(|delta| (delta.old_file().id(), delta.new_file().id()))
+            .collect();
+        let counts = crate::engines::git2::history::per_delta_numstat(repo, &pairs)?;
 
-    let mut files = Vec::with_capacity(sections.len());
-    let mut total_additions = 0u64;
-    let mut total_deletions = 0u64;
+        let mut files = Vec::with_capacity(sections.len());
+        let mut total_additions = 0u64;
+        let mut total_deletions = 0u64;
 
-    for section in &sections {
-        let (additions, deletions, binary) = counts
-            .get(section.section_id as usize)
-            .copied()
-            .unwrap_or((0, 0, section.binary));
-        total_additions += additions;
-        total_deletions += deletions;
-        files.push(FileChangeStat {
-            path: section.path.clone(),
-            old_path: section.old_path.clone(),
-            kind: match section.kind {
-                SectionKind::Added => ChangeKind::Added,
-                SectionKind::Deleted => ChangeKind::Deleted,
-                SectionKind::Modified => ChangeKind::Modified,
-                SectionKind::Renamed => ChangeKind::Renamed,
-                SectionKind::Copied => ChangeKind::Copied,
-                SectionKind::TypeChanged => ChangeKind::TypeChanged,
-                SectionKind::Conflicted => ChangeKind::Conflicted,
-            },
-            additions: additions as u32,
-            deletions: deletions as u32,
-            binary: section.binary || binary,
-            old_mode: None,
-            new_mode: None,
-            old_id: None,
-            new_id: None,
-        });
-    }
+        for section in &sections {
+            let (additions, deletions, binary) = counts
+                .get(section.section_id as usize)
+                .copied()
+                .unwrap_or((0, 0, section.binary));
+            total_additions += additions;
+            total_deletions += deletions;
+            files.push(FileChangeStat {
+                path: section.path.clone(),
+                old_path: section.old_path.clone(),
+                kind: match section.kind {
+                    SectionKind::Added => ChangeKind::Added,
+                    SectionKind::Deleted => ChangeKind::Deleted,
+                    SectionKind::Modified => ChangeKind::Modified,
+                    SectionKind::Renamed => ChangeKind::Renamed,
+                    SectionKind::Copied => ChangeKind::Copied,
+                    SectionKind::TypeChanged => ChangeKind::TypeChanged,
+                    SectionKind::Conflicted => ChangeKind::Conflicted,
+                },
+                additions: additions as u32,
+                deletions: deletions as u32,
+                binary: section.binary || binary,
+                old_mode: None,
+                new_mode: None,
+                old_id: None,
+                new_id: None,
+            });
+        }
 
-    let summary = mutations::summarize_with_stats(
-        &commit,
-        crate::engines::git2::history::commit_tags(&repo, commit.id())?,
-        pairs.len() as u32,
-        total_additions,
-        total_deletions,
-    )?;
+        let summary = mutations::summarize_with_stats(
+            &commit,
+            crate::engines::git2::history::commit_tags(repo, commit.id())?,
+            pairs.len() as u32,
+            total_additions,
+            total_deletions,
+        )?;
 
-    Ok(crate::domain::CommitDetail {
-        summary,
-        files,
-        total_additions,
-        total_deletions,
+        Ok(crate::domain::CommitDetail {
+            summary,
+            files,
+            total_additions,
+            total_deletions,
+        })
     })
 }
 

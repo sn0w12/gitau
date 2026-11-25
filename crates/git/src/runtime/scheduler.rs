@@ -29,9 +29,35 @@ impl Scheduler {
         T: Send + 'static,
         F: FnOnce() -> Result<T> + Send + 'static,
     {
+        self.run_inner(token, job, true).await
+    }
+
+    /// [`Self::run`] for read-only jobs. Keeps the blocking thread's cached
+    /// libgit2 handle, so the next read does not rediscover the repository and
+    /// reuses its object and config caches. Writers must use [`Self::run`],
+    /// which drops the handle so nothing read afterwards sees pre-write state.
+    pub async fn run_read<T, F>(&self, token: &CancellationToken, job: F) -> Result<T>
+    where
+        T: Send + 'static,
+        F: FnOnce() -> Result<T> + Send + 'static,
+    {
+        self.run_inner(token, job, false).await
+    }
+
+    async fn run_inner<T, F>(
+        &self,
+        token: &CancellationToken,
+        job: F,
+        clears_handles: bool,
+    ) -> Result<T>
+    where
+        T: Send + 'static,
+        F: FnOnce() -> Result<T> + Send + 'static,
+    {
         token.check()?;
-        // The call-site span around `run` covers queue wait and job alike; this
-        // span isolates the wait, where the job body has not started yet.
+        // The call-site span around the scheduler call covers queue wait and
+        // job alike; this span isolates the wait, where the job body has not
+        // started yet.
         let permit = {
             let _queued = telemetry::SpanGuard::enter("scheduler.wait");
             telemetry::record_attribute("pool", telemetry::AttrValue::from(self.max_concurrent));
@@ -43,7 +69,9 @@ impl Scheduler {
             let _permit = permit;
             telemetry::attach_scope(scope, || {
                 let result = job();
-                crate::engines::git2::local::clear_all_cached_handles();
+                if clears_handles {
+                    crate::engines::git2::local::clear_all_cached_handles();
+                }
                 result
             })
         });

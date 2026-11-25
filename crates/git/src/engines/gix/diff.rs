@@ -55,7 +55,7 @@ pub fn enumerate(
     let mut raw: Vec<Renamed> = match &request.comparison {
         DiffComparison::WorkingTree => head_vs_workdir(session, blobs, scope.as_deref())?,
         DiffComparison::Unstaged => unstaged_changes(&repo, scope.as_deref())?,
-        DiffComparison::Staged => head_vs_index_changes(&repo)?,
+        DiffComparison::Staged => head_vs_index_changes(&repo, scope.as_deref())?,
         DiffComparison::TreeToTree { old, new } => {
             tree_vs_tree_changes(&repo, tree_at(&repo, old)?, tree_at(&repo, new)?)?
         }
@@ -1227,11 +1227,11 @@ fn rewrites() -> gix::diff::Rewrites {
 }
 
 /// Staged side only: HEAD -> index, including tracked renames/copies.
-fn head_vs_index_changes(repo: &gix::Repository) -> Result<Vec<Renamed>> {
+fn head_vs_index_changes(repo: &gix::Repository, scope: Option<&[String]>) -> Result<Vec<Renamed>> {
     let index = crate::engines::gix::session::open_index(repo)?;
     let mut deltas = Vec::new();
     if let Some(tree_id) = head_tree_id(repo)? {
-        let mut pathspec = crate::engines::gix::session::unrestricted_pathspec(repo)?;
+        let mut pathspec = crate::engines::gix::session::pathspec_for(repo, scope)?;
         repo.tree_index_status(
             &tree_id,
             &index,

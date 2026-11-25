@@ -40,6 +40,7 @@ const SECONDS_PER_YEAR: i64 = 365 * SECONDS_PER_DAY + SECONDS_PER_QUARTER_DAY;
 /// by oid, which is what keeps a moved tip cheap: only commits that are
 /// genuinely new pay for a tree diff.
 #[telemetry::trace]
+#[allow(clippy::too_many_arguments)]
 pub fn history_chart_with_store(
     session: &Git2Session,
     query: &HistoryChartQuery,
@@ -48,15 +49,16 @@ pub fn history_chart_with_store(
     cache: &Arc<Mutex<HistoryCache>>,
     base: Option<&std::path::Path>,
     repo_root: &std::path::Path,
+    head_tip: Option<git2::Oid>,
 ) -> Result<HistoryChart> {
     let Some(base) = base else {
-        return history_chart(session, query, snapshot_id, generation, cache);
+        return history_chart(session, query, snapshot_id, generation, cache, head_tip);
     };
     let _ = std::fs::create_dir_all(base);
 
-    let resolved = resolve_shape(session, query);
+    let resolved = resolve_shape(session, query, head_tip);
     let Some(shape) = resolved else {
-        return history_chart(session, query, snapshot_id, generation, cache);
+        return history_chart(session, query, snapshot_id, generation, cache, head_tip);
     };
     let Shape {
         tip: tip_bytes,
@@ -96,7 +98,7 @@ pub fn history_chart_with_store(
         }
     }
 
-    let chart = history_chart(session, query, snapshot_id, generation, cache)?;
+    let chart = history_chart(session, query, snapshot_id, generation, cache, head_tip)?;
 
     let mut guard = cache.lock().unwrap();
     let walk_key = crate::runtime::history_cache::WalkKey {
@@ -139,10 +141,14 @@ struct Shape {
 /// Resolves the tip and hidden commits that identify an aggregate, or `None`
 /// when the revision does not resolve and the caller should fall back to the
 /// normal path and surface the error there.
-fn resolve_shape(session: &Git2Session, query: &HistoryChartQuery) -> Option<Shape> {
+fn resolve_shape(
+    session: &Git2Session,
+    query: &HistoryChartQuery,
+    head_tip: Option<git2::Oid>,
+) -> Option<Shape> {
     let resolved = session.with_repository(|repo| -> Result<Option<Shape>> {
         let tip = if crate::engines::git2::history::is_default_revision(query.revision.as_ref()) {
-            crate::engines::git2::history::default_tip(repo)?
+            head_tip
         } else {
             resolve_tip(repo, query.revision.as_ref()).ok()
         };
@@ -167,12 +173,13 @@ pub fn history_chart(
     snapshot_id: SnapshotId,
     generation: Generation,
     cache: &Arc<Mutex<HistoryCache>>,
+    head_tip: Option<git2::Oid>,
 ) -> Result<HistoryChart> {
     session.with_repository(|repo| {
         // Unborn HEAD charts nothing; mirrors the empty shape below instead
         // of failing with `invalid revision HEAD`.
         let tip = if crate::engines::git2::history::is_default_revision(query.revision.as_ref()) {
-            match crate::engines::git2::history::default_tip(repo)? {
+            match head_tip {
                 Some(tip) => tip,
                 None => {
                     return Ok(HistoryChart {
@@ -786,12 +793,14 @@ mod tests {
 
         let session = Git2Session::new(temp.path().to_path_buf());
         let cache = cache();
+        let head = repo.head().unwrap().peel_to_commit().unwrap().id();
         let chart = history_chart(
             &session,
             &HistoryChartQuery::default(),
             SnapshotId(0),
             Generation(1),
             &cache,
+            Some(head),
         )
         .unwrap();
 
@@ -827,6 +836,7 @@ mod tests {
             SnapshotId(1),
             Generation(1),
             &cache,
+            Some(head),
         )
         .unwrap();
         assert_eq!(again.buckets, chart.buckets);
@@ -842,6 +852,7 @@ mod tests {
             SnapshotId(2),
             Generation(1),
             &cache,
+            Some(head),
         )
         .unwrap();
         assert_eq!(weekly.bucket_size, ChartBucketSize::Week);
@@ -904,6 +915,7 @@ mod tests {
 
         let session = Git2Session::new(temp.path().to_path_buf());
         let cache = cache();
+        let head = repo.head().unwrap().peel_to_commit().unwrap().id();
 
         let without = history_chart(
             &session,
@@ -911,6 +923,7 @@ mod tests {
             SnapshotId(0),
             Generation(1),
             &cache,
+            Some(head),
         )
         .unwrap();
         assert_eq!(without.total_commits, 3); // root + both branch tips; the merge is excluded
@@ -919,8 +932,15 @@ mod tests {
             include_merges: true,
             ..Default::default()
         };
-        let with =
-            history_chart(&session, &with_query, SnapshotId(1), Generation(1), &cache).unwrap();
+        let with = history_chart(
+            &session,
+            &with_query,
+            SnapshotId(1),
+            Generation(1),
+            &cache,
+            Some(head),
+        )
+        .unwrap();
         assert_eq!(with.total_commits, 4);
         // Line totals unchanged: merge commits never contribute deltas.
         assert_eq!(

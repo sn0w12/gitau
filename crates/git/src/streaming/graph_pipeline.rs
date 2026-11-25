@@ -25,6 +25,7 @@ pub struct GraphJob {
     snapshot_id: SnapshotId,
     generation: Generation,
     history_cache: Arc<Mutex<HistoryCache>>,
+    head_tip: Option<git2::Oid>,
 }
 
 impl GraphJob {
@@ -35,6 +36,7 @@ impl GraphJob {
         snapshot_id: SnapshotId,
         generation: Generation,
         history_cache: Arc<Mutex<HistoryCache>>,
+        head_tip: Option<git2::Oid>,
     ) -> Self {
         Self {
             repo_path,
@@ -43,6 +45,7 @@ impl GraphJob {
             snapshot_id,
             generation,
             history_cache,
+            head_tip,
         }
     }
 }
@@ -93,7 +96,7 @@ fn compute(job: &GraphJob, op: &Arc<GraphOperation>, tx: &Sender<GraphEvent>) ->
     let tags = tag_map(&session)?;
     let oids = {
         let mut guard = job.history_cache.lock().unwrap();
-        walk_oids(&session, &job.request, &mut guard)?
+        walk_oids(&session, &job.request, &mut guard, job.head_tip)?
     };
 
     let mut emitter = Emitter {

@@ -6,7 +6,7 @@ use std::sync::{Arc, RwLock};
 use serde::Serialize;
 
 use crate::domain::history::{CommitWithDetail, HistoryChart};
-use crate::domain::{Generation, HistoryPage, RepoId, SnapshotId, StatusReport};
+use crate::domain::{Generation, HeadState, HistoryPage, RepoId, SnapshotId, StatusReport};
 use crate::engines::gix::GixSession;
 use crate::error::{GitError, Result};
 use crate::runtime::cache::{Lru, params_hash};
@@ -49,6 +49,9 @@ pub struct RepoEntry {
     /// Set by the first interactive read. Speculative warmups for a repository
     /// nobody looked at only burn disk.
     viewed: AtomicBool,
+    /// Head state resolved for the generation it was read in. Refs change the
+    /// generation, so a newer value replaces the cached one.
+    head_state: std::sync::Mutex<Option<(Generation, HeadState)>>,
     pub gix: GixSession,
     cache: Lru<u64, CachedValue>,
     /// Commit OIDs are immutable; survives generation bumps.
@@ -68,6 +71,7 @@ impl RepoEntry {
             generation: AtomicU64::new(1),
             snapshot_seq: AtomicU64::new(0),
             viewed: AtomicBool::new(false),
+            head_state: std::sync::Mutex::new(None),
             gix,
             cache: Lru::new(CACHE_CAPACITY),
             history_cache: Arc::new(std::sync::Mutex::new(
@@ -92,6 +96,18 @@ impl RepoEntry {
         self.viewed.load(Ordering::Relaxed)
     }
 
+    pub fn cached_head(&self, generation: Generation) -> Option<HeadState> {
+        let cached = self.head_state.lock().unwrap();
+        cached
+            .as_ref()
+            .filter(|(cached_generation, _)| *cached_generation == generation)
+            .map(|(_, head)| head.clone())
+    }
+
+    pub fn cache_head(&self, generation: Generation, head: HeadState) {
+        *self.head_state.lock().unwrap() = Some((generation, head));
+    }
+
     pub fn bump_generation(&self) -> Generation {
         let next = self.generation.fetch_add(1, Ordering::AcqRel) + 1;
         self.clear_cache();
@@ -113,6 +129,7 @@ impl RepoEntry {
     }
     pub fn clear_cache(&self) {
         self.cache.clear();
+        *self.head_state.lock().unwrap() = None;
     }
 
     pub fn cached(&self, kind: &'static str, params: &impl Serialize) -> Option<CachedValue>
@@ -250,6 +267,9 @@ impl Registry {
                         let generation = entry.bump_generation();
                         if refs_changed {
                             entry.history_cache().lock().unwrap().clear_ref_dependent();
+                            crate::engines::git2::local::clear_all_repository_handles(
+                                &entry.canonical_path,
+                            );
                         }
                         let reason = if refs_changed { "refs" } else { "worktree" };
                         hub.publish(id.0, generation.0, reason);
