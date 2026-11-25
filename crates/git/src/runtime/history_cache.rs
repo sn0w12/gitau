@@ -51,6 +51,20 @@ pub struct PendingChart {
     pub buckets: Vec<crate::domain::history::ChartBucket>,
 }
 
+/// Tip plus the per-commit points in walk order, ready to serialize.
+pub type PointsSnapshot = ([u8; 20], Vec<([u8; 20], CommitStatPoint)>);
+
+/// One pending aggregate keyed by the request that produced it.
+pub type PendingChartEntry = ((Option<ChartBucketSize>, bool), PendingChart);
+
+/// Owned copy of what the stats files need. Taken under the cache lock, written
+/// after it is released, because a large points file takes milliseconds to
+/// serialize and write.
+pub struct FlushData {
+    pub walk: Option<PointsSnapshot>,
+    pub charts: Vec<PendingChartEntry>,
+}
+
 pub type Oid = git2::Oid;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -151,17 +165,18 @@ impl HistoryCache {
         self.pending_charts.push(pending);
     }
 
-    pub fn chart_walk(&self) -> Option<([u8; 20], &[[u8; 20]])> {
-        self.chart_walk
+    /// Moves the pending aggregates and the points snapshot out of the cache so
+    /// the caller can write them without holding the lock.
+    pub fn take_flush_data(&mut self) -> FlushData {
+        let walk = self
+            .chart_walk
             .as_ref()
-            .map(|(order, tip)| (*tip, order.as_slice()))
-    }
-
-    pub fn pending_charts(&self) -> Vec<((Option<ChartBucketSize>, bool), &PendingChart)> {
-        self.pending_charts
-            .iter()
+            .map(|(order, tip)| (*tip, self.stats_in_walk_order(order)));
+        let charts = std::mem::take(&mut self.pending_charts)
+            .into_iter()
             .map(|chart| ((chart.requested_bucket, chart.include_merges), chart))
-            .collect()
+            .collect();
+        FlushData { walk, charts }
     }
 
     pub fn tags(&self) -> Option<Arc<HashMap<[u8; 20], Vec<String>>>> {

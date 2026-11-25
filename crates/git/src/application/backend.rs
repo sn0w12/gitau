@@ -914,13 +914,14 @@ impl Backend {
                 // concurrent callers share the caches instead of each
                 // redoing the diff stats.
                 let _computation = lock_entry.history_lock().lock().unwrap();
-                let mut guard = history_cache.lock().unwrap();
-                if let Some(base) = base.as_deref()
-                    && guard.claim_points_load()
-                {
-                    let points_path = crate::runtime::stats_store::points_path(base, &path);
-                    if let Some(stored) = crate::runtime::stats_store::load_points(&points_path) {
-                        guard.extend_stats(stored.records);
+                if let Some(base) = base.as_deref() {
+                    let should_load = { history_cache.lock().unwrap().claim_points_load() };
+                    if should_load {
+                        let points_path = crate::runtime::stats_store::points_path(base, &path);
+                        if let Some(stored) = crate::runtime::stats_store::load_points(&points_path)
+                        {
+                            history_cache.lock().unwrap().extend_stats(stored.records);
+                        }
                     }
                 }
                 let session = crate::engines::git2::Git2Session::new(path);
@@ -929,7 +930,7 @@ impl Backend {
                     &query,
                     snapshot_id,
                     generation,
-                    &mut guard,
+                    history_cache.as_ref(),
                 )
             })
             .await?;
@@ -2908,14 +2909,13 @@ async fn warm_history(
     let result = scheduler
         .run(&token, move || {
             let _computation = entry.history_lock().lock().unwrap();
-            let mut guard = history_cache.lock().unwrap();
             let session = crate::engines::git2::Git2Session::new(path);
             crate::engines::git2::history::history_page(
                 &session,
                 &query,
                 SnapshotId(0),
                 generation,
-                &mut guard,
+                history_cache.as_ref(),
             )
         })
         .await;

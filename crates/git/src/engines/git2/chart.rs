@@ -85,15 +85,14 @@ pub fn history_chart_with_store(
         });
     }
 
-    // Merge the persisted per-commit points once per process. Entries are
-    // keyed by oid, so nothing here can be wrong for a commit it names.
-    {
-        let mut guard = cache.lock().unwrap();
-        if guard.claim_points_load() {
-            let points_path = crate::runtime::stats_store::points_path(base, repo_root);
-            if let Some(stored) = crate::runtime::stats_store::load_points(&points_path) {
-                guard.extend_stats(stored.records);
-            }
+    // Merge the persisted per-commit points once per process. Reading the file
+    // happens outside the lock: a large points file takes milliseconds, and
+    // every history reader for this repository would wait behind the read.
+    let should_load = cache.lock().unwrap().claim_points_load();
+    if should_load {
+        let points_path = crate::runtime::stats_store::points_path(base, repo_root);
+        if let Some(stored) = crate::runtime::stats_store::load_points(&points_path) {
+            cache.lock().unwrap().extend_stats(stored.records);
         }
     }
 
@@ -122,12 +121,13 @@ pub fn history_chart_with_store(
             buckets: chart.buckets.clone(),
         },
     );
+    let flush = guard.take_flush_data();
     drop(guard);
 
     // Persisting here rather than on a timer is deliberate: this branch only
     // runs after a full aggregation, where a write is small next to the tree
     // diffs that just happened. A chart served from the cache never writes.
-    crate::runtime::stats_store::flush(base, repo_root, &cache.lock().unwrap());
+    crate::runtime::stats_store::flush(base, repo_root, &flush);
     Ok(chart)
 }
 
@@ -199,12 +199,15 @@ pub fn history_chart(
             exclusions,
         };
         let oids: Arc<Vec<git2::Oid>> = {
-            let mut guard = cache.lock().unwrap();
-            match guard.walk(&walk_key) {
+            let cached = { cache.lock().unwrap().walk(&walk_key) };
+            match cached {
                 Some(list) => list,
                 None => {
                     let list = Arc::new(collect_walk(repo, tip, &query.exclude_reachable_from)?);
-                    guard.store_walk(walk_key.clone(), list.clone());
+                    cache
+                        .lock()
+                        .unwrap()
+                        .store_walk(walk_key.clone(), list.clone());
                     list
                 }
             }

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use git2::{DiffOptions, Sort};
 use rayon::prelude::*;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::api::history::HistoryPageQuery;
 use crate::domain::history::HistoryPage;
@@ -34,7 +34,7 @@ pub fn history_page(
     query: &HistoryPageQuery,
     snapshot_id: SnapshotId,
     generation: Generation,
-    cache: &mut crate::runtime::history_cache::HistoryCache,
+    cache: &Mutex<crate::runtime::history_cache::HistoryCache>,
 ) -> Result<HistoryPage> {
     if query.limit == 0 || query.limit > 10_000 {
         return Err(GitError::invalid_input("limit must be in 1..=10000"));
@@ -71,7 +71,8 @@ pub fn history_page(
             tip: Some(oid_bytes(tip)),
             exclusions,
         };
-        let list = match cache.walk(&walk_key) {
+        let cached_walk = { cache.lock().unwrap().walk(&walk_key) };
+        let list = match cached_walk {
             Some(list) => list,
             None => {
                 let mut walk = repo.revwalk()?;
@@ -93,12 +94,16 @@ pub fn history_page(
                     })?);
                 }
                 let list = Arc::new(oids);
-                cache.store_walk(walk_key.clone(), list.clone());
+                cache
+                    .lock()
+                    .unwrap()
+                    .store_walk(walk_key.clone(), list.clone());
                 list
             }
         };
 
-        let tags = match cache.tags() {
+        let cached_tags = { cache.lock().unwrap().tags() };
+        let tags = match cached_tags {
             Some(tags) => tags,
             None => {
                 let raw = tag_map(repo)?;
@@ -108,7 +113,7 @@ pub fn history_page(
                     converted.insert(oid_bytes(oid), names);
                 }
                 let tags = Arc::new(converted);
-                cache.store_tags(tags.clone());
+                cache.lock().unwrap().store_tags(tags.clone());
                 tags
             }
         };
@@ -158,34 +163,40 @@ pub fn history_page(
         let mut slots: Vec<Option<Arc<CommitSummary>>> =
             (0..page_oids.len()).map(|_| None).collect();
         let mut missing: Vec<(usize, git2::Oid, Option<CommitStatPoint>)> = Vec::new();
-        for (idx, oid) in page_oids.iter().enumerate() {
-            match cache.summary(&oid_bytes(*oid)) {
-                Some(summary) => slots[idx] = Some(summary),
-                None => {
-                    // Merge points carry zeroed line deltas for the chart, so
-                    // only non-merge points can stand in for a page summary.
-                    let point = cache.stat(&oid_bytes(*oid)).filter(|point| !point.is_merge);
-                    missing.push((idx, *oid, point));
+        {
+            let guard = cache.lock().unwrap();
+            for (idx, oid) in page_oids.iter().enumerate() {
+                match guard.summary(&oid_bytes(*oid)) {
+                    Some(summary) => slots[idx] = Some(summary),
+                    None => {
+                        // Merge points carry zeroed line deltas for the chart, so
+                        // only non-merge points can stand in for a page summary.
+                        let point = guard.stat(&oid_bytes(*oid)).filter(|point| !point.is_merge);
+                        missing.push((idx, *oid, point));
+                    }
                 }
             }
         }
 
         let computed = summarize_page(repo, &missing)?;
-        for (idx, arc) in computed {
-            cache.store_summary(oid_bytes(page_oids[idx]), arc.clone());
-            if !arc.is_merge() {
-                cache.store_stat(
-                    oid_bytes(page_oids[idx]),
-                    CommitStatPoint {
-                        time_seconds: arc.committer.time_seconds,
-                        additions: arc.additions,
-                        deletions: arc.deletions,
-                        files_changed: arc.files_changed,
-                        is_merge: false,
-                    },
-                );
+        {
+            let mut guard = cache.lock().unwrap();
+            for (idx, arc) in computed {
+                guard.store_summary(oid_bytes(page_oids[idx]), arc.clone());
+                if !arc.is_merge() {
+                    guard.store_stat(
+                        oid_bytes(page_oids[idx]),
+                        CommitStatPoint {
+                            time_seconds: arc.committer.time_seconds,
+                            additions: arc.additions,
+                            deletions: arc.deletions,
+                            files_changed: arc.files_changed,
+                            is_merge: false,
+                        },
+                    );
+                }
+                slots[idx] = Some(arc);
             }
-            slots[idx] = Some(arc);
         }
 
         let mut commits = Vec::with_capacity(slots.len());

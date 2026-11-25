@@ -357,30 +357,30 @@ pub fn save_chart(
     write_atomic(path, &out)
 }
 
-/// Rewrites both files from the cache's current contents. Best effort: a
-/// failure here costs recomputation on the next launch, never correctness.
+/// Writes the stats files from an owned snapshot, so the caller can release the
+/// history cache lock before the disk work. Best effort: a failure here costs
+/// recomputation on the next launch, never correctness.
 ///
 /// Pruning keys off mtime, so a repository that is never recomputed eventually
 /// ages out and is recomputed once. Bumping the mtime on every read was tried
 /// and cost more than it saved: two file opens on Windows are milliseconds,
 /// which is most of a cache hit.
-pub fn flush(base: &Path, repo_root: &Path, cache: &crate::runtime::history_cache::HistoryCache) {
+pub fn flush(base: &Path, repo_root: &Path, data: &crate::runtime::history_cache::FlushData) {
     let _ = std::fs::create_dir_all(base);
-    if let Some((tip, order)) = cache.chart_walk() {
-        let records = cache.stats_in_walk_order(order);
+    if let Some((tip, records)) = &data.walk {
         let path = points_path(base, repo_root);
-        if let Err(error) = save_points(&path, tip, &records) {
+        if let Err(error) = save_points(&path, *tip, records) {
             log::warn!("history stat cache write failed at {path:?}: {error}");
         }
     }
-    for ((requested, merges), chart) in cache.pending_charts() {
-        let path = chart_path(base, repo_root, requested, merges);
+    for ((requested, merges), chart) in &data.charts {
+        let path = chart_path(base, repo_root, *requested, *merges);
         if let Err(error) = save_chart(
             &path,
             chart.tip,
             chart.exclusions,
             chart.resolved_bucket,
-            merges,
+            *merges,
             chart.total_commits,
             &chart.buckets,
         ) {
