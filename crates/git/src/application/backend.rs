@@ -1373,7 +1373,6 @@ impl Backend {
         .await
     }
 
-    #[telemetry::trace]
     pub async fn commit(
         &self,
         id: RepoId,

@@ -144,7 +144,6 @@ fn remove_empty_parents(workdir: &Path, rel: &RelativePath) {
     }
 }
 
-#[telemetry::trace]
 pub fn commit(
     repo: &git2::Repository,
     request: &CommitRequest,

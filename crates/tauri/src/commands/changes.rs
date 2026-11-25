@@ -115,7 +115,7 @@ pub async fn git_commit(
     expected_generation: Option<u64>,
     on_event: Channel<git::api::hooks::CommitHookEvent>,
 ) -> CommandResult<git::api::mutations::CommitExecution> {
-    telemetry::scope(commit(
+    commit(
         state,
         repo_id,
         message,
@@ -125,11 +125,10 @@ pub async fn git_commit(
         author_email,
         expected_generation,
         on_event,
-    ))
+    )
     .await
 }
 
-#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.commit")]
 #[allow(clippy::too_many_arguments)]
 async fn commit(
     state: SharedState<'_>,
@@ -174,18 +173,6 @@ async fn commit(
     // Draining the forwarder first means the last hook line has landed before
     // the frontend sees the result, so nothing arrives out of order.
     let _ = forward.await;
-    telemetry::context! {
-        "stage_all" => stage_all,
-        "allow_empty" => allow_empty,
-    };
-    if let Ok(execution) = &result {
-        telemetry::context! {
-            "files_changed" => u64::from(execution.summary.files_changed),
-            "additions" => execution.summary.additions,
-            "deletions" => execution.summary.deletions,
-            "hook_runs" => execution.hook_runs.len() as u64,
-        };
-    }
     result.map_err(to_serialized)
 }
 
