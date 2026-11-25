@@ -251,7 +251,8 @@ impl Registry {
                         if refs_changed {
                             entry.history_cache().lock().unwrap().clear_ref_dependent();
                         }
-                        hub.publish(id.0, generation.0, "watcher");
+                        let reason = if refs_changed { "refs" } else { "worktree" };
+                        hub.publish(id.0, generation.0, reason);
                     }
                 },
             );

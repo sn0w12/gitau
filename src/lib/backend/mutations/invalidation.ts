@@ -22,7 +22,7 @@ const SCOPES_TO_PREFIXES: Record<InvalidationScope, readonly string[]> = {
     status: ["status"],
     refs: ["listing", "aheadBehind"],
     history: ["history", "commit"],
-    files: ["file"],
+    files: ["file", "readme", "image"],
     remotes: ["remotes"],
     stash: ["stash"],
     worktrees: ["worktrees"],
@@ -57,6 +57,23 @@ export async function invalidateAllRepositoryData(
         queryKey: repositoryKeys.all(repoId),
         refetchType: "active",
     });
+}
+
+/**
+ * Chooses the refresh set for a backend invalidation. A worktree-only change
+ * edits files on disk without moving a ref, so branches, history, and charts
+ * cannot have changed and refetching them would only repeat work.
+ */
+export async function invalidateForRepositoryEvent(
+    queryClient: QueryClient,
+    repoId: number,
+    reason: string
+): Promise<void> {
+    if (reason === "worktree") {
+        await invalidateRepository(queryClient, repoId, ["status", "files"]);
+        return;
+    }
+    await invalidateAllRepositoryData(queryClient, repoId);
 }
 
 export function generationOf(

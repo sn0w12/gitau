@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 import { BackgroundFetch } from "@/components/background-fetch";
 import { AppServicesContext } from "@/contexts/services-context";
-import { invalidateAllRepositoryData } from "@/lib/backend/mutations/invalidation";
+import { invalidateForRepositoryEvent } from "@/lib/backend/mutations/invalidation";
 import { markStreamsStale } from "@/lib/backend/streams/unified-streams";
 import { listenRepositoryInvalidations } from "@/lib/backend/transport/client";
 import { getAppRuntime } from "@/lib/bootstrap/app-runtime";
@@ -25,9 +25,10 @@ export function AppServicesProvider({ children }: { children: ReactNode }) {
         void listenRepositoryInvalidations((invalidation) => {
             if (disposed) return;
             markStreamsStale(invalidation.repoId);
-            void invalidateAllRepositoryData(
+            void invalidateForRepositoryEvent(
                 services.queryClient,
-                invalidation.repoId
+                invalidation.repoId,
+                invalidation.reason
             );
         })
             .then((listener) => {
