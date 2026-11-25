@@ -14,6 +14,7 @@ import type {
     HistoryChartQuery,
     HistoryPageQuery,
     HookOutputChunk,
+    LaunchMarks,
     MergePullRequestBody,
     RepositoryInvalidation,
     ResetKind,
@@ -35,6 +36,11 @@ import type { Result } from "./result";
  */
 function createRawBackendClient() {
     return {
+        app: {
+            launchReady: (marks: LaunchMarks) =>
+                commands.app_launch_ready({ marks }),
+        },
+
         repositories: {
             open: (path: string) =>
                 commands.git_open_repository({ request: { path } }),
@@ -1062,6 +1068,7 @@ function resultifyGroup<TGroup extends Record<string, unknown>>(
 export function createBackendClient(): BackendClient {
     const raw = createRawBackendClient();
     return {
+        app: resultifyGroup(raw.app),
         repositories: resultifyGroup(raw.repositories),
         changes: resultifyGroup(raw.changes),
         hooks: resultifyGroup(raw.hooks),

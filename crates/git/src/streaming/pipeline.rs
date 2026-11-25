@@ -64,6 +64,7 @@ impl DiffJob {
 /// - `SectionLayout` for a section is emitted before any of its chunks.
 /// - Once emitted, a section's `start_row` and `row_count` never change.
 /// - Absolute row positions are therefore stable for the lifetime of the operation.
+#[telemetry::trace(name = "git.diff_stream")]
 pub fn run(job: DiffJob, op: Arc<DiffOperation>, tx: Sender<DiffEvent>) {
     match compute(&job, &op, &tx) {
         Ok(()) => {}
@@ -121,6 +122,7 @@ fn section_pool() -> &'static rayon::ThreadPool {
     })
 }
 
+#[telemetry::trace(skip = ["is_cancelled", "send", "set_started", "sum"])]
 fn compute(job: &DiffJob, op: &Arc<DiffOperation>, tx: &Sender<DiffEvent>) -> Result<()> {
     if op.is_cancelled() {
         return Err(GitError::Cancelled);
@@ -131,6 +133,9 @@ fn compute(job: &DiffJob, op: &Arc<DiffOperation>, tx: &Sender<DiffEvent>) -> Re
     if op.is_cancelled() {
         return Err(GitError::Cancelled);
     }
+    telemetry::context! {
+        "sections" => plans.len() as u64,
+    };
     let metas: Vec<SectionMeta> = plans.iter().map(|p| p.meta.clone()).collect();
     let estimate: u64 = metas.iter().map(|m| if m.binary { 2 } else { 10 }).sum();
     op.set_started(metas.clone(), estimate);
@@ -282,6 +287,9 @@ fn compute(job: &DiffJob, op: &Arc<DiffOperation>, tx: &Sender<DiffEvent>) -> Re
         return Err(GitError::Cancelled);
     }
 
+    telemetry::context! {
+        "rows" => total_rows,
+    };
     finish(op, &mut emitter, total_rows, started_at)
 }
 

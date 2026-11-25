@@ -305,6 +305,7 @@ impl Backend {
         self.registry.len()
     }
 
+    #[telemetry::trace]
     pub async fn open_repository(&self, path: &Path) -> Result<OpenedRepository> {
         if !path.exists() {
             return Err(GitError::RepositoryNotFound {
@@ -321,9 +322,9 @@ impl Backend {
         // loading costs, which reads as a multi-second hang.
         let warm_session = entry.gix.clone();
         // Called within an async context, so a runtime exists.
-        std::mem::drop(tokio::spawn(async move {
-            let _ = warm_session.handle().head_id();
-        }));
+        std::mem::drop(tokio::spawn(telemetry::scope(warm_object_database(
+            warm_session,
+        ))));
 
         // First registration only: the walk/summary caches are immutable and
         // survive generation bumps, so re-opens never need re-warming.
@@ -353,23 +354,13 @@ impl Backend {
         }
         let scheduler = self.scheduler.clone();
         let gix_session = entry.gix.clone();
-        tokio::spawn(async move {
-            let token = CancellationToken::new();
-            let Ok(mut report) = scheduler
-                .run(&token, move || {
-                    crate::engines::gix::status::status(&gix_session, &StatusOptions::default())
-                })
-                .await
-            else {
-                return;
-            };
-            if entry.generation() != generation {
-                return;
-            }
-            report.snapshot_id = entry.next_snapshot_id();
-            report.generation = generation;
-            entry.store_cached("status", &cache_key, CachedValue::Status(Arc::new(report)));
-        });
+        tokio::spawn(telemetry::scope(warm_status(
+            entry,
+            scheduler,
+            gix_session,
+            generation,
+            cache_key,
+        )));
     }
 
     /// Builds walk + default-page summaries off the interaction path so a
@@ -379,28 +370,7 @@ impl Backend {
             return;
         };
         let scheduler = self.scheduler.clone();
-        let path = entry.canonical_path.clone();
-        let history_cache = entry.history_cache();
-        let lock_entry = entry.clone();
-        let generation = entry.generation();
-        tokio::spawn(async move {
-            let token = CancellationToken::new();
-            let _ = scheduler
-                .run(&token, move || {
-                    let _computation = lock_entry.history_lock().lock().unwrap();
-                    let query = HistoryPageQuery::default();
-                    let mut guard = history_cache.lock().unwrap();
-                    let session = crate::engines::git2::Git2Session::new(path);
-                    crate::engines::git2::history::history_page(
-                        &session,
-                        &query,
-                        SnapshotId(0),
-                        generation,
-                        &mut guard,
-                    )
-                })
-                .await;
-        });
+        tokio::spawn(telemetry::scope(warm_history(entry, scheduler)));
     }
 
     fn watch_paths(&self, session: &crate::engines::gix::GixSession) -> Vec<PathBuf> {
@@ -555,6 +525,7 @@ impl Backend {
         Ok(())
     }
 
+    #[telemetry::trace(skip = ["generation", "next_snapshot_id", "Status"])]
     pub async fn status(
         &self,
         id: RepoId,
@@ -618,6 +589,7 @@ impl Backend {
         best.map(|(_, report)| report)
     }
 
+    #[telemetry::trace(span_only)]
     pub async fn open_diff(
         &self,
         id: RepoId,
@@ -642,14 +614,14 @@ impl Backend {
 
         let op_for_job = operation.clone();
         let scheduler = self.scheduler.clone();
-        tokio::spawn(async move {
+        tokio::spawn(telemetry::scope(async move {
             let _ = scheduler
                 .run(&token, move || {
                     pipeline::run(job, op_for_job, tx);
                     Ok(())
                 })
                 .await;
-        });
+        }));
 
         self.operations
             .prune_completed(self.config.keep_completed_operations);
@@ -737,6 +709,7 @@ impl Backend {
         })
     }
 
+    #[telemetry::trace(span_only)]
     pub async fn open_graph(
         &self,
         id: RepoId,
@@ -761,14 +734,14 @@ impl Backend {
 
         let op_for_job = operation.clone();
         let scheduler = self.scheduler.clone();
-        tokio::spawn(async move {
+        tokio::spawn(telemetry::scope(async move {
             let _ = scheduler
                 .run(&token, move || {
                     graph_pipeline::run(job, op_for_job, tx);
                     Ok(())
                 })
                 .await;
-        });
+        }));
 
         self.graph_operations
             .prune_completed(self.config.keep_completed_operations);
@@ -802,6 +775,7 @@ impl Backend {
         Ok(self.operations.get(operation_id)?.snapshot_meta())
     }
 
+    #[telemetry::trace(skip = ["generation", "history_cache", "next_snapshot_id", "History"])]
     pub async fn history_page(
         &self,
         id: RepoId,
@@ -854,6 +828,7 @@ impl Backend {
         Ok(arc)
     }
 
+    #[telemetry::trace(skip = ["generation", "history_cache", "next_snapshot_id", "HistoryChart"])]
     pub async fn history_chart(
         &self,
         id: RepoId,
@@ -896,6 +871,7 @@ impl Backend {
         Ok(arc)
     }
 
+    #[telemetry::trace(skip = ["generation", "next_snapshot_id"])]
     pub async fn commit_detail(
         &self,
         id: RepoId,
@@ -990,6 +966,7 @@ impl Backend {
         }))
     }
 
+    #[telemetry::trace]
     pub async fn blame(
         &self,
         id: RepoId,
@@ -1007,6 +984,7 @@ impl Backend {
             .await
     }
 
+    #[telemetry::trace]
     pub async fn list_branches_and_tags(
         &self,
         id: RepoId,
@@ -1026,6 +1004,7 @@ impl Backend {
             .await
     }
 
+    #[telemetry::trace(skip = ["parse"])]
     pub async fn branch_ahead_behind(
         &self,
         id: RepoId,
@@ -1272,6 +1251,7 @@ impl Backend {
         .await
     }
 
+    #[telemetry::trace]
     pub async fn commit(
         &self,
         id: RepoId,
@@ -1298,6 +1278,7 @@ impl Backend {
         .await
     }
 
+    #[telemetry::trace]
     pub async fn checkout(
         &self,
         id: RepoId,
@@ -1601,6 +1582,7 @@ impl Backend {
             .await
     }
 
+    #[telemetry::trace]
     pub async fn fetch(
         &self,
         id: RepoId,
@@ -1626,6 +1608,7 @@ impl Backend {
         Ok(())
     }
 
+    #[telemetry::trace]
     pub async fn push(
         &self,
         id: RepoId,
@@ -1652,6 +1635,7 @@ impl Backend {
         Ok(outcomes)
     }
 
+    #[telemetry::trace]
     pub async fn pull(
         &self,
         id: RepoId,
@@ -1909,6 +1893,7 @@ impl Backend {
     /// terminal event. Resolves with the operation id immediately; the
     /// download itself runs detached on the blocking scheduler so cancel
     /// works while the caller holds the receiver.
+    #[telemetry::trace]
     pub async fn open_clone(
         &self,
         mut request: CloneRequest,
@@ -2730,6 +2715,76 @@ fn build_snapshot(entry: &Arc<crate::runtime::registry::RepoEntry>) -> Result<Re
     })
 }
 
+#[telemetry::trace(name = "app.warmup_objects", span_only)]
+async fn warm_object_database(session: crate::engines::gix::GixSession) {
+    let _ = session.handle().head_id();
+}
+
+#[telemetry::trace(name = "app.warmup_status", span_only)]
+async fn warm_status(
+    entry: Arc<crate::runtime::registry::RepoEntry>,
+    scheduler: Scheduler,
+    session: crate::engines::gix::GixSession,
+    generation: Generation,
+    cache_key: (Generation, StatusOptions),
+) {
+    let token = CancellationToken::new();
+    let Ok(mut report) = scheduler
+        .run(&token, move || {
+            crate::engines::gix::status::status(&session, &StatusOptions::default())
+        })
+        .await
+    else {
+        telemetry::context! { "outcome" => "cancelled" };
+        return;
+    };
+    if entry.generation() != generation {
+        telemetry::context! { "outcome" => "stale" };
+        return;
+    }
+    report.snapshot_id = entry.next_snapshot_id();
+    report.generation = generation;
+    entry.store_cached("status", &cache_key, CachedValue::Status(Arc::new(report)));
+    telemetry::context! { "outcome" => "stored" };
+}
+
+#[telemetry::trace(name = "app.warmup_history", span_only)]
+async fn warm_history(entry: Arc<crate::runtime::registry::RepoEntry>, scheduler: Scheduler) {
+    let path = entry.canonical_path.clone();
+    let history_cache = entry.history_cache();
+    let generation = entry.generation();
+    let token = CancellationToken::new();
+    let result = scheduler
+        .run(&token, move || {
+            let _computation = entry.history_lock().lock().unwrap();
+            let query = HistoryPageQuery::default();
+            let mut guard = history_cache.lock().unwrap();
+            let session = crate::engines::git2::Git2Session::new(path);
+            crate::engines::git2::history::history_page(
+                &session,
+                &query,
+                SnapshotId(0),
+                generation,
+                &mut guard,
+            )
+        })
+        .await;
+    let outcome = if result.is_ok() { "stored" } else { "failed" };
+    telemetry::record_attribute("outcome", telemetry::AttrValue::from(outcome));
+}
+
+#[telemetry::trace(skip = [
+    "build_options",
+    "copied",
+    "deltas",
+    "id",
+    "include_untracked",
+    "new_file",
+    "old_file",
+    "recurse_untracked_dirs",
+    "transpose",
+    "with_capacity",
+])]
 fn commit_detail_blocking(
     path: PathBuf,
     query: CommitDetailQuery,

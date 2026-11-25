@@ -35,6 +35,8 @@ highlight.workspace = true
 icons.workspace = true
 log.workspace = true
 pico-args.workspace = true
+reqwest.workspace = true
+telemetry = { workspace = true, features = ["enabled"] }
 tauri-plugin-dialog.workspace = true
 tauri-plugin-log.workspace = true
 tauri-plugin-prevent-default.workspace = true

@@ -47,6 +47,7 @@ impl GraphJob {
     }
 }
 
+#[telemetry::trace(name = "git.graph_stream")]
 pub fn run(job: GraphJob, op: Arc<GraphOperation>, tx: Sender<GraphEvent>) {
     match compute(&job, &op, &tx) {
         Ok(()) => {}
@@ -85,6 +86,7 @@ impl<'a> Emitter<'a> {
     }
 }
 
+#[telemetry::trace(skip = ["is_cancelled", "send"])]
 fn compute(job: &GraphJob, op: &Arc<GraphOperation>, tx: &Sender<GraphEvent>) -> Result<()> {
     let session = Git2Session::new(job.repo_path.clone());
     let decorations = branch_decorations(&session)?;
@@ -120,6 +122,9 @@ fn compute(job: &GraphJob, op: &Arc<GraphOperation>, tx: &Sender<GraphEvent>) ->
         });
     }
 
+    telemetry::context! {
+        "rows" => emitted,
+    };
     op.mark_complete();
     emitter.send(GraphEvent::Completed {
         operation_id: job.operation_id,

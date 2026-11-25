@@ -1,8 +1,6 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-import { bootMark } from "@/lib/bootstrap/boot-timing";
-
 /**
  * Reveals the app window. Keeping it hidden until the first frame is ready is
  * the point: revealing it when the webview finishes loading paints the
@@ -13,9 +11,7 @@ import { bootMark } from "@/lib/bootstrap/boot-timing";
  */
 export function revealWindow(): void {
     if (!isTauri()) return;
-    bootMark("window.reveal");
-    getCurrentWindow()
+    void getCurrentWindow()
         .show()
-        .then(() => bootMark("window.shown"))
         .catch(() => undefined);
 }

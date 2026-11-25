@@ -139,15 +139,46 @@ pub async fn git_checkout(
     paths: Option<Vec<String>>,
     expected_generation: Option<u64>,
 ) -> CommandResult<()> {
+    telemetry::scope(checkout(
+        state,
+        repo_id,
+        target,
+        force,
+        mode,
+        paths,
+        expected_generation,
+    ))
+    .await
+}
+
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.checkout")]
+#[allow(clippy::too_many_arguments)]
+async fn checkout(
+    state: SharedState<'_>,
+    repo_id: u64,
+    target: String,
+    force: Option<bool>,
+    mode: Option<CheckoutMode>,
+    paths: Option<Vec<String>>,
+    expected_generation: Option<u64>,
+) -> CommandResult<()> {
+    let force = force.unwrap_or(false);
+    let mode = mode.unwrap_or(CheckoutMode::Safe);
+    let paths = paths.unwrap_or_default();
+    telemetry::context! {
+        "force" => force,
+        "mode" => format!("{mode:?}"),
+        "paths" => paths.len() as u64,
+    };
     state
         .backend
         .checkout(
             to_repo_id(repo_id),
             CheckoutRequest {
                 target: spec(target)?,
-                force: force.unwrap_or(false),
-                mode: mode.unwrap_or(CheckoutMode::Safe),
-                paths: paths.unwrap_or_default(),
+                force,
+                mode,
+                paths,
             },
             gen(expected_generation),
         )

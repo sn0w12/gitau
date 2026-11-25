@@ -1,8 +1,8 @@
-mod boot_trace;
 mod commands;
 pub mod session;
 pub mod settings;
 mod state;
+mod telemetry_service;
 
 use std::sync::Arc;
 
@@ -55,10 +55,6 @@ fn runtime_attrs() -> tauri_runtime_wry::Wry {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // The webview stays hidden until it finishes loading, so the elapsed
-    // logged there is the perceived launch time.
-    let started_at = std::time::Instant::now();
-    let started_wall = std::time::SystemTime::now();
     tauri::Builder::default()
         .runtime(runtime_attrs())
         .plugin(
@@ -94,8 +90,8 @@ pub fn run() {
         .manage(AppState::default())
         .setup(move |app| {
             let handle = app.handle().clone();
-            let _launch = boot_trace::span_from("rust.launch", started_at, started_wall);
-            let _hook = boot_trace::span("rust.setup.hook");
+            crate::telemetry_service::initialize(&app.package_info().version.to_string());
+            let setup_started = std::time::Instant::now();
 
             // Wayland gives a client no way to place a toplevel, and CEF's child
             // X11 host window consumes the pointer press, so a frameless window
@@ -111,7 +107,6 @@ pub fn run() {
             // Settings live in the platform config dir; if it is unavailable
             // the store keeps operating on in-memory defaults.
             let state = handle.state::<AppState>();
-            let settings_span = boot_trace::span("rust.settings.init");
             match handle.path().app_config_dir() {
                 Ok(config_dir) => {
                     state.settings.initialize(config_dir.join("settings.json"));
@@ -121,11 +116,23 @@ pub fn run() {
                     log::warn!("app config dir unavailable; settings stay in memory: {error}");
                 }
             }
-            settings_span.end();
+
+            crate::telemetry_service::set_enabled(
+                state
+                    .settings
+                    .get(crate::telemetry_service::ENABLED_SETTING_KEY)
+                    .and_then(|value| value.as_bool())
+                    .unwrap_or(false),
+            );
+            let launch =
+                telemetry::sync_scope_unconditional(|| telemetry::SpanGuard::enter("app.launch"));
+            launch.set_attribute(
+                "settings_us",
+                (setup_started.elapsed().as_micros() as u64).into(),
+            );
 
             // Remote icons and remote repo info caches under the platform
             // cache dir; without it both stay in-memory only.
-            let cache_span = boot_trace::span("rust.cache.init");
             match handle.path().app_cache_dir() {
                 Ok(cache_dir) => {
                     state.icons.initialize(cache_dir.join("remote-icons"));
@@ -140,12 +147,14 @@ pub fn run() {
                     log::warn!("app cache dir unavailable; icons stay in memory: {error}");
                 }
             }
-            cache_span.end();
+            launch.set_attribute(
+                "caches_us",
+                (setup_started.elapsed().as_micros() as u64).into(),
+            );
 
             // The whole UI session (tabs + open repos) lives beside settings.
             // `--session <path>` overrides it so the dev workspace can run
             // against a fixture file.
-            let session_span = boot_trace::span("rust.session.init");
             if let Some(path) = crate::session::session_path_override() {
                 // A missing override would silently start empty (the store
                 // treats it as first run), which looks like the flag was
@@ -170,9 +179,9 @@ pub fn run() {
                     }
                 }
             }
-            session_span.end();
 
             let session_paths = crate::session::repo_paths(&state.session.load());
+            let session_repo_count = session_paths.len() as u64;
             if !session_paths.is_empty() {
                 let cell = Arc::clone(&state.startup_repos);
                 let backend = Arc::clone(&state.backend);
@@ -184,10 +193,14 @@ pub fn run() {
                         .await;
                 });
             }
+            launch.set_attribute(
+                "session_us",
+                (setup_started.elapsed().as_micros() as u64).into(),
+            );
+            launch.set_attribute("repos", session_repo_count.into());
 
             // Forge connection profile cache beside settings; access tokens
             // themselves live in the OS keychain, never on this path.
-            let forge_span = boot_trace::span("rust.forge.init");
             match handle.path().app_config_dir() {
                 Ok(config_dir) => {
                     state
@@ -199,7 +212,6 @@ pub fn run() {
                     log::warn!("app config dir unavailable; forge accounts stay in memory: {error}");
                 }
             }
-            forge_span.end();
 
             // Periodically revalidate stale owner/org avatars in the
             // background for as long as the process lives. Setup runs on the
@@ -216,7 +228,6 @@ pub fn run() {
             let cleanup_icons = Arc::clone(&state.icons);
             let cleanup_backend = Arc::clone(&state.backend);
             tauri::async_runtime::spawn_blocking(move || {
-                let _span = boot_trace::span("rust.cache_cleanup");
                 let icons_removed =
                     cleanup_icons.prune_old_entries(icons::IconConfig::default().prune_after);
                 let info_removed = cleanup_backend
@@ -232,16 +243,22 @@ pub fn run() {
 
             // Persisted syntax themes must be active before the warm-up
             // snapshot is taken, otherwise the first diffs use defaults.
-            let theme_span = boot_trace::span("rust.apply_syntax_theme");
             commands::settings::apply_syntax_theme(&handle.state::<AppState>());
-            theme_span.end();
 
             // Warm the syntax highlighter (grammar dumps + embedded themes)
             // off the main thread so the first diff paints fully styled.
             tauri::async_runtime::spawn_blocking(|| {
-                let _span = boot_trace::span("rust.warmup.highlight");
                 highlight::warm_up();
             });
+
+            launch.set_attribute(
+                "setup_us",
+                (setup_started.elapsed().as_micros() as u64).into(),
+            );
+            *state
+                .launch
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(launch);
 
             let mut rx = handle.state::<AppState>().backend.subscribe_invalidations();
             tauri::async_runtime::spawn(async move {
@@ -272,9 +289,16 @@ pub fn run() {
                 if let Err(error) = state.session.persist_current() {
                     log::error!("could not flush session on close: {error}");
                 }
+                let _ = state
+                    .launch
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .take();
+                crate::telemetry_service::flush();
             }
         })
         .invoke_handler(tauri::generate_handler![
+            commands::startup::app_launch_ready,
             commands::repository::git_open_repository,
             commands::repository::git_close_repository,
             commands::repository::git_remove_repository,
@@ -405,50 +429,28 @@ pub fn run() {
             commands::session::session_save,
             commands::session::session_repositories,
         ])
-        .on_page_load({
-            let navigation = std::sync::Arc::new(std::sync::Mutex::new(None));
-            move |webview, payload| {
-                if webview.label() != "main" {
-                    return;
-                }
-                let lock = || {
-                    navigation
-                        .lock()
-                        .unwrap_or_else(|poisoned| poisoned.into_inner())
-                };
-                match payload.event() {
-                    tauri::webview::PageLoadEvent::Started => {
-                        let started = (std::time::Instant::now(), std::time::SystemTime::now());
-                        *lock() = Some(started);
-                        boot_trace::record(
-                            "rust.webview.contentStart",
-                            started_at,
-                            started_wall,
-                        );
-                    }
-                    tauri::webview::PageLoadEvent::Finished => {
-                        boot_trace::record("rust.webview.load", started_at, started_wall);
-                        let content_started = lock().take();
-                        if let Some((instant, wall)) = content_started {
-                            boot_trace::record("rust.webview.content", instant, wall);
-                        }
-                        // The frontend reveals the window once the theme is
-                        // applied and the first frame has committed, so the
-                        // pre-render page never becomes visible. This is the
-                        // fallback for a frontend that never gets that far
-                        // (bundle failure, crash before render): without it the
-                        // window would stay hidden with nothing on screen to
-                        // explain why.
-                        let window = webview.window();
-                        tauri::async_runtime::spawn(async move {
-                            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                            if !matches!(window.is_visible(), Ok(true)) {
-                                let _ = window.show();
-                            }
-                        });
-                    }
-                }
+        .on_page_load(|webview, payload| {
+            if webview.label() != "main"
+                || !matches!(
+                    payload.event(),
+                    tauri::webview::PageLoadEvent::Finished
+                )
+            {
+                return;
             }
+            // The frontend reveals the window once the theme is applied and
+            // the first frame has committed, so the pre-render page never
+            // becomes visible. This is the fallback for a frontend that never
+            // gets that far (bundle failure, crash before render): without it
+            // the window would stay hidden with nothing on screen to explain
+            // why.
+            let window = webview.window();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                if !matches!(window.is_visible(), Ok(true)) {
+                    let _ = window.show();
+                }
+            });
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

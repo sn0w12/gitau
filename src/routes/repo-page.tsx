@@ -21,16 +21,11 @@ import { useRepoShortcuts } from "@/hooks/repositories/use-repo-shortcuts";
 import { useRepository } from "@/hooks/repositories/use-repository-queries";
 import { useSettingValue } from "@/hooks/settings/use-setting";
 import { useMediaQuery } from "@/hooks/use-media-query";
-import { bootMark } from "@/lib/bootstrap/boot-timing";
 import { BORDER_GRADIENT } from "@/lib/constants";
 import { headBranch, cn } from "@/lib/utils";
 import { appStore } from "@/stores/app-store";
 import { repositoryStore } from "@/stores/repository-store";
 import { setSetting } from "@/stores/settings-store";
-
-// Every tab's repo page reports the same boot metric; only the first
-// window-to-content measurement counts.
-let reportedRepoReady = false;
 
 export function RepoPage() {
     const tabId = useTabId();
@@ -45,7 +40,7 @@ export function RepoPage() {
         }
         return undefined;
     });
-    const { snapshot, status } = useRepository(valid ? repoId : undefined);
+    const { snapshot } = useRepository(valid ? repoId : undefined);
     const lg = useMediaQuery("lg");
 
     // View, panel, selection, and the issues and pulls list slices live in the
@@ -65,14 +60,6 @@ export function RepoPage() {
         },
         dispatch,
     ] = useRepoPageState(repoId);
-
-    useEffect(() => {
-        if (reportedRepoReady) return;
-        if (snapshot.isSuccess && status.isSuccess) {
-            reportedRepoReady = true;
-            bootMark("repo.ready");
-        }
-    }, [snapshot.isSuccess, status.isSuccess]);
 
     const tab = useSelector(appStore, (state) =>
         state.tabs.find((candidate) => candidate.tabId === tabId)

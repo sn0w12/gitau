@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 
+import { reportLaunchReady } from "@/lib/bootstrap/launch-report";
 import { revealWindow } from "@/lib/bootstrap/window-reveal";
 
 /**
@@ -11,6 +12,7 @@ import { revealWindow } from "@/lib/bootstrap/window-reveal";
 export function WindowReveal() {
     useEffect(() => {
         revealWindow();
+        reportLaunchReady();
     }, []);
 
     return null;

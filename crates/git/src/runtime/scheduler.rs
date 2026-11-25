@@ -9,12 +9,15 @@ use crate::runtime::cancellation::CancellationToken;
 #[derive(Clone)]
 pub struct Scheduler {
     permits: Arc<Semaphore>,
+    max_concurrent: usize,
 }
 
 impl Scheduler {
     pub fn new(max_concurrent: usize) -> Self {
+        let max_concurrent = max_concurrent.max(1);
         Self {
-            permits: Arc::new(Semaphore::new(max_concurrent.max(1))),
+            permits: Arc::new(Semaphore::new(max_concurrent)),
+            max_concurrent,
         }
     }
 
@@ -27,13 +30,22 @@ impl Scheduler {
         F: FnOnce() -> Result<T> + Send + 'static,
     {
         token.check()?;
-        let permit = self.permits.clone().acquire_owned().await?;
+        // The call-site span around `run` covers queue wait and job alike; this
+        // span isolates the wait, where the job body has not started yet.
+        let permit = {
+            let _queued = telemetry::SpanGuard::enter("scheduler.wait");
+            telemetry::record_attribute("pool", telemetry::AttrValue::from(self.max_concurrent));
+            self.permits.clone().acquire_owned().await?
+        };
         let token_for_job = token.clone();
+        let scope = telemetry::ScopeHandle::capture();
         let join = tokio::task::spawn_blocking(move || {
             let _permit = permit;
-            let result = job();
-            crate::engines::git2::local::clear_all_cached_handles();
-            result
+            telemetry::attach_scope(scope, || {
+                let result = job();
+                crate::engines::git2::local::clear_all_cached_handles();
+                result
+            })
         });
         match join.await? {
             Ok(value) => Ok(value),

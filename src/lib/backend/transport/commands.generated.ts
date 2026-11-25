@@ -11,6 +11,11 @@ import { invokeCommand } from "./invoke";
 
 export const commands = {
     /**
+     * Closes the `app.launch` span once the webview has committed its first frame.
+     */
+    app_launch_ready: (args: CommandArgs["app_launch_ready"]) =>
+        invokeCommand<CommandResults["app_launch_ready"]>("app_launch_ready", { args }),
+    /**
      * Families installed on this machine, used as the choices for the font
      * settings. Enumeration touches every font file, so it is cached for the
      * life of the process, including concurrent startup and Settings requests.

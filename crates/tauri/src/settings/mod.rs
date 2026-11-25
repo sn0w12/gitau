@@ -151,6 +151,10 @@ mod tests {
             snapshot.values.get("pinnedRepos"),
             Some(&SettingValue::StringList(Vec::new()))
         );
+        assert_eq!(
+            snapshot.values.get("telemetryEnabled"),
+            Some(&SettingValue::Bool(false))
+        );
         assert!(snapshot.saved_keys.is_empty());
     }
 

@@ -5,10 +5,12 @@ pub type CommandResult<T> = Result<T, SerializedError>;
 pub use launch::spawn_detached;
 
 pub fn to_serialized(err: GitError) -> SerializedError {
+    telemetry::record_error(err.code(), &err);
     SerializedError::from(&err)
 }
 
 pub fn to_session_serialized(err: crate::session::SessionError) -> SerializedError {
+    telemetry::record_error(err.code(), &err);
     SerializedError {
         code: err.code(),
         message: error_message(&err),
@@ -40,6 +42,7 @@ pub mod remotes;
 pub mod repository;
 pub mod session;
 pub mod settings;
+pub mod startup;
 pub mod submodules;
 pub mod terminal;
 pub mod workflows;

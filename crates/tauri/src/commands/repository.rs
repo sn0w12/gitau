@@ -17,14 +17,29 @@ pub async fn git_open_repository(
     state: SharedState<'_>,
     request: OpenRepositoryRequest,
 ) -> CommandResult<git::application::OpenedRepository> {
+    telemetry::scope(open_repository(state, request)).await
+}
+
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.open_repository")]
+async fn open_repository(
+    state: SharedState<'_>,
+    request: OpenRepositoryRequest,
+) -> CommandResult<git::application::OpenedRepository> {
     let path = std::path::PathBuf::from(&request.path);
-    let span = crate::boot_trace::span_detailed("git.open_repository", request.path.as_str());
     let opened = state
         .backend
         .open_repository(&path)
         .await
         .map_err(to_serialized)?;
-    span.end();
+    let head = match &opened.snapshot.head {
+        git::domain::HeadState::Attached { .. } => "attached",
+        git::domain::HeadState::Detached { .. } => "detached",
+        git::domain::HeadState::Unborn { .. } => "unborn",
+    };
+    telemetry::context! {
+        "has_worktree" => opened.snapshot.workdir.is_some(),
+        "head" => head,
+    };
     Ok(opened)
 }
 
@@ -142,11 +157,31 @@ pub async fn git_open_diff(
     request: Option<git::api::queries::DiffRequest>,
     on_event: Channel<git::streaming::model::DiffEvent>,
 ) -> CommandResult<u64> {
+    telemetry::scope(open_diff(app, state, repo_id, request, on_event)).await
+}
+
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.open_diff")]
+async fn open_diff(
+    app: AppHandle,
+    state: SharedState<'_>,
+    repo_id: u64,
+    request: Option<git::api::queries::DiffRequest>,
+    on_event: Channel<git::streaming::model::DiffEvent>,
+) -> CommandResult<u64> {
+    let request = request.unwrap_or_default();
+    telemetry::context! {
+        "paths" => request.paths.len() as u64,
+        "context_lines" => u64::from(request.context_lines),
+        "detect_renames" => request.detect_renames,
+        "detect_copies" => request.detect_copies,
+        "ignore_whitespace" => request.ignore_whitespace,
+        "comparison" => format!("{:?}", request.comparison),
+    };
     let (operation_id, rx) = state
         .backend
         .open_diff(
             to_repo_id(repo_id),
-            request.unwrap_or_default(),
+            request,
             git::runtime::cancellation::CancellationToken::new(),
         )
         .await

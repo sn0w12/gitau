@@ -1,0 +1,18 @@
+[package]
+name = "telemetry-macros"
+version.workspace = true
+edition = "2021"
+rust-version.workspace = true
+description = "Call-site instrumentation macro for the telemetry crate"
+
+[lib]
+proc-macro = true
+
+[features]
+default = []
+enabled = ["dep:proc-macro2", "dep:quote", "dep:syn"]
+
+[dependencies]
+proc-macro2 = { workspace = true, optional = true }
+quote = { workspace = true, optional = true }
+syn = { workspace = true, optional = true }

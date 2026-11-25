@@ -11,6 +11,15 @@ pub async fn git_status(
     repo_id: u64,
     options: Option<StatusOptions>,
 ) -> CommandResult<StatusReport> {
+    telemetry::scope(status(state, repo_id, options)).await
+}
+
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.status")]
+async fn status(
+    state: SharedState<'_>,
+    repo_id: u64,
+    options: Option<StatusOptions>,
+) -> CommandResult<StatusReport> {
     let started_at = std::time::Instant::now();
     let report = state
         .backend
@@ -21,6 +30,12 @@ pub async fn git_status(
         )
         .await
         .map_err(to_serialized)?;
+    telemetry::context! {
+        "staged" => report.staged_count() as u64,
+        "unstaged" => report.unstaged_count() as u64,
+        "conflicts" => report.conflicts.len() as u64,
+        "clean" => report.is_clean(),
+    };
     log::info!("git_status repo {repo_id} in {:?}", started_at.elapsed());
     Ok((*report).clone())
 }
@@ -100,6 +115,33 @@ pub async fn git_commit(
     expected_generation: Option<u64>,
     on_event: Channel<git::api::hooks::CommitHookEvent>,
 ) -> CommandResult<git::api::mutations::CommitExecution> {
+    telemetry::scope(commit(
+        state,
+        repo_id,
+        message,
+        stage_all,
+        allow_empty,
+        author_name,
+        author_email,
+        expected_generation,
+        on_event,
+    ))
+    .await
+}
+
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.commit")]
+#[allow(clippy::too_many_arguments)]
+async fn commit(
+    state: SharedState<'_>,
+    repo_id: u64,
+    message: String,
+    stage_all: Option<bool>,
+    allow_empty: Option<bool>,
+    author_name: Option<String>,
+    author_email: Option<String>,
+    expected_generation: Option<u64>,
+    on_event: Channel<git::api::hooks::CommitHookEvent>,
+) -> CommandResult<git::api::mutations::CommitExecution> {
     let author = match (author_name, author_email) {
         (Some(name), Some(email)) => Some(git::domain::Signature {
             name,
@@ -109,6 +151,8 @@ pub async fn git_commit(
         }),
         _ => None,
     };
+    let stage_all = stage_all.unwrap_or(false);
+    let allow_empty = allow_empty.unwrap_or(false);
     let (events, forward) = forward_channel(on_event);
     let result = state
         .backend
@@ -117,11 +161,11 @@ pub async fn git_commit(
             git::api::mutations::CommitRequest {
                 message,
                 author,
-                stage_all: stage_all.unwrap_or(false),
+                stage_all,
                 // Real commits run the hook pipeline; results ride back so
                 // the hook checker can display them.
                 run_hooks: true,
-                allow_empty: allow_empty.unwrap_or(false),
+                allow_empty,
             },
             expected_generation.map(Generation),
             Some(events),
@@ -130,6 +174,18 @@ pub async fn git_commit(
     // Draining the forwarder first means the last hook line has landed before
     // the frontend sees the result, so nothing arrives out of order.
     let _ = forward.await;
+    telemetry::context! {
+        "stage_all" => stage_all,
+        "allow_empty" => allow_empty,
+    };
+    if let Ok(execution) = &result {
+        telemetry::context! {
+            "files_changed" => u64::from(execution.summary.files_changed),
+            "additions" => execution.summary.additions,
+            "deletions" => execution.summary.deletions,
+            "hook_runs" => execution.hook_runs.len() as u64,
+        };
+    }
     result.map_err(to_serialized)
 }
 

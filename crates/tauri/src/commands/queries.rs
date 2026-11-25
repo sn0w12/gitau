@@ -15,16 +15,38 @@ pub async fn git_history_page(
     repo_id: u64,
     query: Option<HistoryPageQuery>,
 ) -> CommandResult<HistoryPage> {
+    telemetry::scope(history_page(state, repo_id, query)).await
+}
+
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.history_page")]
+async fn history_page(
+    state: SharedState<'_>,
+    repo_id: u64,
+    query: Option<HistoryPageQuery>,
+) -> CommandResult<HistoryPage> {
     let started_at = std::time::Instant::now();
+    let query = query.unwrap_or_default();
+    let limit = query.limit;
+    let skip = query.skip;
+    let filtered =
+        query.search.is_some() || query.path.is_some() || !query.exclude_reachable_from.is_empty();
     let page = state
         .backend
         .history_page(
             to_repo_id(repo_id),
-            query.unwrap_or_default(),
+            query,
             git::runtime::cancellation::CancellationToken::new(),
         )
         .await
         .map_err(to_serialized)?;
+    telemetry::context! {
+        "limit" => u64::from(limit),
+        "skip" => skip,
+        "filtered" => filtered,
+        "commits" => page.commits.len() as u64,
+        "total" => u64::from(page.total),
+        "has_more" => page.has_more,
+    };
     log::info!(
         "git_history_page repo {repo_id} in {:?}",
         started_at.elapsed()
@@ -38,15 +60,32 @@ pub async fn git_history_chart(
     repo_id: u64,
     query: Option<HistoryChartQuery>,
 ) -> CommandResult<HistoryChart> {
+    telemetry::scope(history_chart(state, repo_id, query)).await
+}
+
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.history_chart")]
+async fn history_chart(
+    state: SharedState<'_>,
+    repo_id: u64,
+    query: Option<HistoryChartQuery>,
+) -> CommandResult<HistoryChart> {
+    let query = query.unwrap_or_default();
+    let include_merges = query.include_merges;
     let chart = state
         .backend
         .history_chart(
             to_repo_id(repo_id),
-            query.unwrap_or_default(),
+            query,
             git::runtime::cancellation::CancellationToken::new(),
         )
         .await
         .map_err(to_serialized)?;
+    telemetry::context! {
+        "buckets" => chart.buckets.len() as u64,
+        "commits" => u64::from(chart.total_commits),
+        "include_merges" => include_merges,
+        "bucket_size" => format!("{:?}", chart.bucket_size),
+    };
     Ok((*chart).clone())
 }
 
@@ -57,15 +96,35 @@ pub async fn git_commit_detail(
     revision: String,
     detect_renames: Option<bool>,
 ) -> CommandResult<git::domain::CommitDetail> {
+    telemetry::scope(commit_detail(state, repo_id, revision, detect_renames)).await
+}
+
+#[telemetry::trace(
+    skip = ["parse", "to_repo_id", "to_serialized"],
+    name = "git.commit_detail"
+)]
+async fn commit_detail(
+    state: SharedState<'_>,
+    repo_id: u64,
+    revision: String,
+    detect_renames: Option<bool>,
+) -> CommandResult<git::domain::CommitDetail> {
+    let detect_renames = detect_renames.unwrap_or(true);
     let query = CommitDetailQuery {
         revision: git::domain::RevisionSpec::parse(&revision).map_err(to_serialized)?,
-        detect_renames: detect_renames.unwrap_or(true),
+        detect_renames,
     };
     let detail = state
         .backend
         .commit_detail(to_repo_id(repo_id), query, Default::default())
         .await
         .map_err(to_serialized)?;
+    telemetry::context! {
+        "detect_renames" => detect_renames,
+        "files" => detail.detail.files.len() as u64,
+        "additions" => detail.detail.total_additions,
+        "deletions" => detail.detail.total_deletions,
+    };
     Ok(detail.detail.clone())
 }
 
@@ -94,6 +153,17 @@ pub async fn git_blame(
     path: String,
     revision: Option<String>,
 ) -> CommandResult<BlameResult> {
+    telemetry::scope(blame(state, repo_id, path, revision)).await
+}
+
+#[telemetry::trace(skip = ["parse", "to_repo_id", "to_serialized"], name = "git.blame")]
+async fn blame(
+    state: SharedState<'_>,
+    repo_id: u64,
+    path: String,
+    revision: Option<String>,
+) -> CommandResult<BlameResult> {
+    let has_revision = revision.is_some();
     let revision = match revision {
         Some(spec) => Some(git::domain::RevisionSpec::parse(&spec).map_err(to_serialized)?),
         None => None,
@@ -103,11 +173,16 @@ pub async fn git_blame(
         revision,
         ..Default::default()
     };
-    state
+    let result = state
         .backend
         .blame(to_repo_id(repo_id), query, Default::default())
         .await
-        .map_err(to_serialized)
+        .map_err(to_serialized)?;
+    telemetry::context! {
+        "has_revision" => has_revision,
+        "lines" => result.lines.len() as u64,
+    };
+    Ok(result)
 }
 
 #[tauri::command]
@@ -115,11 +190,24 @@ pub async fn git_list_branches_and_tags(
     state: SharedState<'_>,
     repo_id: u64,
 ) -> CommandResult<RepoListing> {
-    state
+    telemetry::scope(repo_listing(state, repo_id)).await
+}
+
+#[telemetry::trace(
+    skip = ["to_repo_id", "to_serialized"],
+    name = "git.list_branches_and_tags"
+)]
+async fn repo_listing(state: SharedState<'_>, repo_id: u64) -> CommandResult<RepoListing> {
+    let listing = state
         .backend
         .list_branches_and_tags(to_repo_id(repo_id), Default::default())
         .await
-        .map_err(to_serialized)
+        .map_err(to_serialized)?;
+    telemetry::context! {
+        "branches" => listing.branches.len() as u64,
+        "tags" => listing.tags.len() as u64,
+    };
+    Ok(listing)
 }
 
 #[tauri::command]
@@ -129,7 +217,17 @@ pub async fn git_branch_ahead_behind(
     head: String,
     base: String,
 ) -> CommandResult<git::domain::AheadBehind> {
-    state
+    telemetry::scope(ahead_behind(state, repo_id, head, base)).await
+}
+
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.ahead_behind")]
+async fn ahead_behind(
+    state: SharedState<'_>,
+    repo_id: u64,
+    head: String,
+    base: String,
+) -> CommandResult<git::domain::AheadBehind> {
+    let result = state
         .backend
         .branch_ahead_behind(
             to_repo_id(repo_id),
@@ -138,7 +236,12 @@ pub async fn git_branch_ahead_behind(
             git::runtime::cancellation::CancellationToken::new(),
         )
         .await
-        .map_err(to_serialized)
+        .map_err(to_serialized)?;
+    telemetry::context! {
+        "ahead" => u64::from(result.ahead),
+        "behind" => u64::from(result.behind),
+    };
+    Ok(result)
 }
 
 /// Returns `gitau-image` protocol URLs for an image section. The webview
@@ -214,11 +317,26 @@ pub async fn git_open_graph(
     query: Option<git::api::graph::GraphQuery>,
     on_event: Channel<git::streaming::model::GraphEvent>,
 ) -> CommandResult<u64> {
+    telemetry::scope(open_graph(state, repo_id, query, on_event)).await
+}
+
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.open_graph")]
+async fn open_graph(
+    state: SharedState<'_>,
+    repo_id: u64,
+    query: Option<git::api::graph::GraphQuery>,
+    on_event: Channel<git::streaming::model::GraphEvent>,
+) -> CommandResult<u64> {
+    let query = query.unwrap_or_default();
+    telemetry::context! {
+        "has_revision" => query.revision.is_some(),
+        "exclusions" => query.exclude_reachable_from.len() as u64,
+    };
     let (operation_id, rx) = state
         .backend
         .open_graph(
             to_repo_id(repo_id),
-            query.unwrap_or_default(),
+            query,
             git::runtime::cancellation::CancellationToken::new(),
         )
         .await

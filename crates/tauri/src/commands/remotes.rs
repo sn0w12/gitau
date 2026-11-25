@@ -104,13 +104,29 @@ pub async fn git_fetch(
     prune: Option<bool>,
     credential: Option<CredentialRequest>,
 ) -> CommandResult<()> {
+    telemetry::scope(fetch(state, repo_id, remote, prune, credential)).await
+}
+
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.fetch")]
+async fn fetch(
+    state: SharedState<'_>,
+    repo_id: u64,
+    remote: Option<String>,
+    prune: Option<bool>,
+    credential: Option<CredentialRequest>,
+) -> CommandResult<()> {
+    let prune = prune.unwrap_or(false);
+    telemetry::context! {
+        "prune" => prune,
+        "has_credential" => credential.is_some(),
+    };
     state
         .backend
         .fetch(
             to_repo_id(repo_id),
             FetchRequest {
                 remote: remote.unwrap_or_else(|| "origin".into()),
-                prune: prune.unwrap_or(false),
+                prune,
                 credential,
                 ..Default::default()
             },
@@ -130,15 +146,47 @@ pub async fn git_push(
     set_upstream: Option<bool>,
     credential: Option<CredentialRequest>,
 ) -> CommandResult<Vec<PushOutcome>> {
+    telemetry::scope(push(
+        state,
+        repo_id,
+        remote,
+        refspecs,
+        force,
+        set_upstream,
+        credential,
+    ))
+    .await
+}
+
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.push")]
+#[allow(clippy::too_many_arguments)]
+async fn push(
+    state: SharedState<'_>,
+    repo_id: u64,
+    remote: Option<String>,
+    refspecs: Option<Vec<String>>,
+    force: Option<bool>,
+    set_upstream: Option<bool>,
+    credential: Option<CredentialRequest>,
+) -> CommandResult<Vec<PushOutcome>> {
+    let refspecs = refspecs.unwrap_or_default();
+    let force = force.unwrap_or(false);
+    let set_upstream = set_upstream.unwrap_or(false);
+    telemetry::context! {
+        "refspecs" => refspecs.len() as u64,
+        "force" => force,
+        "set_upstream" => set_upstream,
+        "has_credential" => credential.is_some(),
+    };
     state
         .backend
         .push(
             to_repo_id(repo_id),
             PushRequest {
                 remote: remote.unwrap_or_else(|| "origin".into()),
-                refspecs: refspecs.unwrap_or_default(),
-                force: force.unwrap_or(false),
-                set_upstream: set_upstream.unwrap_or(false),
+                refspecs,
+                force,
+                set_upstream,
                 credential,
             },
             git::runtime::cancellation::CancellationToken::new(),
@@ -159,6 +207,39 @@ pub async fn git_pull(
     credential: Option<CredentialRequest>,
     expected_generation: Option<u64>,
 ) -> CommandResult<WorkflowOutcome> {
+    telemetry::scope(pull(
+        state,
+        repo_id,
+        remote,
+        branch,
+        fast_forward_only,
+        rebase,
+        credential,
+        expected_generation,
+    ))
+    .await
+}
+
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.pull")]
+#[allow(clippy::too_many_arguments)]
+async fn pull(
+    state: SharedState<'_>,
+    repo_id: u64,
+    remote: Option<String>,
+    branch: Option<String>,
+    fast_forward_only: Option<bool>,
+    rebase: Option<bool>,
+    credential: Option<CredentialRequest>,
+    expected_generation: Option<u64>,
+) -> CommandResult<WorkflowOutcome> {
+    let fast_forward_only = fast_forward_only.unwrap_or(false);
+    let rebase = rebase.unwrap_or(false);
+    telemetry::context! {
+        "has_branch" => branch.is_some(),
+        "fast_forward_only" => fast_forward_only,
+        "rebase" => rebase,
+        "has_credential" => credential.is_some(),
+    };
     state
         .backend
         .pull(
@@ -166,8 +247,8 @@ pub async fn git_pull(
             GitPullRequest {
                 remote: remote.unwrap_or_else(|| "origin".into()),
                 branch,
-                fast_forward_only: fast_forward_only.unwrap_or(false),
-                rebase: rebase.unwrap_or(false),
+                fast_forward_only,
+                rebase,
                 credential,
             },
             expected_generation.map(git::domain::Generation),
@@ -185,6 +266,20 @@ pub async fn git_clone(
     request: CloneRequest,
     on_event: Channel<CloneEvent>,
 ) -> CommandResult<u64> {
+    telemetry::scope(clone(state, request, on_event)).await
+}
+
+#[telemetry::trace(skip = ["to_repo_id", "to_serialized"], name = "git.clone")]
+async fn clone(
+    state: SharedState<'_>,
+    request: CloneRequest,
+    on_event: Channel<CloneEvent>,
+) -> CommandResult<u64> {
+    telemetry::context! {
+        "bare" => request.bare,
+        "depth" => u64::from(request.depth.unwrap_or(0)),
+        "has_credential" => request.credential.is_some(),
+    };
     let (operation_id, mut rx) = state
         .backend
         .open_clone(

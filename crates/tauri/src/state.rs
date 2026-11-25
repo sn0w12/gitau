@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use git::{Backend, BackendConfig, ForgeIconSource};
 use icons::{HttpFetcher, IconConfig, IconService};
@@ -13,6 +13,7 @@ pub struct AppState {
     pub session: Arc<SessionStore>,
     pub icons: Arc<IconService>,
     pub startup_repos: Arc<tokio::sync::OnceCell<Vec<SessionRepository>>>,
+    pub launch: Mutex<Option<telemetry::SpanGuard>>,
 }
 
 #[derive(Clone, Serialize)]
@@ -41,6 +42,7 @@ impl Default for AppState {
                 icon_source,
             )),
             startup_repos: Arc::new(tokio::sync::OnceCell::new()),
+            launch: Mutex::new(None),
         }
     }
 }
