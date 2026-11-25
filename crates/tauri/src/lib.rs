@@ -91,6 +91,7 @@ pub fn run() {
         .setup(move |app| {
             let handle = app.handle().clone();
             crate::telemetry_service::initialize(&app.package_info().version.to_string());
+            let setup_started = std::time::Instant::now();
 
             // Wayland gives a client no way to place a toplevel, and CEF's child
             // X11 host window consumes the pointer press, so a frameless window
@@ -123,6 +124,12 @@ pub fn run() {
                     .and_then(|value| value.as_bool())
                     .unwrap_or(false),
             );
+            let launch =
+                telemetry::sync_scope_unconditional(|| telemetry::SpanGuard::enter("app.launch"));
+            launch.set_attribute(
+                "settings_us",
+                (setup_started.elapsed().as_micros() as u64).into(),
+            );
 
             // Remote icons and remote repo info caches under the platform
             // cache dir; without it both stay in-memory only.
@@ -140,6 +147,10 @@ pub fn run() {
                     log::warn!("app cache dir unavailable; icons stay in memory: {error}");
                 }
             }
+            launch.set_attribute(
+                "caches_us",
+                (setup_started.elapsed().as_micros() as u64).into(),
+            );
 
             // The whole UI session (tabs + open repos) lives beside settings.
             // `--session <path>` overrides it so the dev workspace can run
@@ -170,6 +181,7 @@ pub fn run() {
             }
 
             let session_paths = crate::session::repo_paths(&state.session.load());
+            let session_repo_count = session_paths.len() as u64;
             if !session_paths.is_empty() {
                 let cell = Arc::clone(&state.startup_repos);
                 let backend = Arc::clone(&state.backend);
@@ -181,6 +193,11 @@ pub fn run() {
                         .await;
                 });
             }
+            launch.set_attribute(
+                "session_us",
+                (setup_started.elapsed().as_micros() as u64).into(),
+            );
+            launch.set_attribute("repos", session_repo_count.into());
 
             // Forge connection profile cache beside settings; access tokens
             // themselves live in the OS keychain, never on this path.
@@ -234,6 +251,15 @@ pub fn run() {
                 highlight::warm_up();
             });
 
+            launch.set_attribute(
+                "setup_us",
+                (setup_started.elapsed().as_micros() as u64).into(),
+            );
+            *state
+                .launch
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(launch);
+
             let mut rx = handle.state::<AppState>().backend.subscribe_invalidations();
             tauri::async_runtime::spawn(async move {
                 use tauri::Emitter;
@@ -263,10 +289,16 @@ pub fn run() {
                 if let Err(error) = state.session.persist_current() {
                     log::error!("could not flush session on close: {error}");
                 }
+                let _ = state
+                    .launch
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .take();
                 crate::telemetry_service::flush();
             }
         })
         .invoke_handler(tauri::generate_handler![
+            commands::startup::app_launch_ready,
             commands::repository::git_open_repository,
             commands::repository::git_close_repository,
             commands::repository::git_remove_repository,

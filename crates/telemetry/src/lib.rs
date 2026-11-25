@@ -176,6 +176,22 @@ pub fn sync_scope<R>(f: impl FnOnce() -> R) -> R {
     }
 }
 
+/// Establishes a span scope for blocking work that sampling cannot skip.
+///
+/// Collection must still be enabled. Use for rare, cheap events such as startup
+/// where the configured sample rate would leave most occurrences missing. Not
+/// valid across `.await`.
+pub fn sync_scope_unconditional<R>(f: impl FnOnce() -> R) -> R {
+    #[cfg(feature = "enabled")]
+    {
+        imp::sync_scope_unconditional(f)
+    }
+    #[cfg(not(feature = "enabled"))]
+    {
+        f()
+    }
+}
+
 /// Attaches a value to the innermost active span. See the [`context!`] macro.
 pub fn record_attribute(key: &'static str, value: AttrValue) {
     #[cfg(feature = "enabled")]

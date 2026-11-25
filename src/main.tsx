@@ -10,6 +10,7 @@ import { WindowReveal } from "@/components/window-reveal";
 import { AppCommandProvider } from "@/contexts/app-command-context";
 import { expectOk } from "@/lib/backend/transport/result";
 import { getAppRuntime } from "@/lib/bootstrap/app-runtime";
+import { markBootstrapComplete } from "@/lib/bootstrap/launch-report";
 import {
     hydrateSession,
     initSessionPersistence,
@@ -91,6 +92,7 @@ async function bootstrap(): Promise<void> {
         loadInitialSnapshot(),
         restoreSession(),
     ]);
+    markBootstrapComplete();
 
     // Settings must be ready before any component reads them.
     configureSettingsSaver((key, value) =>

@@ -1086,6 +1086,11 @@ export interface LanguageShare {
     percent: number;
 }
 
+export interface LaunchMarks {
+    bootstrapMs: number;
+    renderMs: number;
+}
+
 /**
  * One tracked path resolved to LFS: the pointer commit stores its sha256
  * oid and byte size; `materialized` is whether the worktree holds the real
@@ -1914,6 +1919,7 @@ export interface WorktreeInfo {
 }
 
 export type CommandName =
+    | "app_launch_ready"
     | "fonts_list"
     | "forge_account"
     | "forge_begin_sign_in"
@@ -2045,6 +2051,7 @@ export type CommandName =
     | "settings_set";
 
 export interface CommandArgs {
+    app_launch_ready: { marks: LaunchMarks };
     fonts_list: {};
     forge_account: { provider: string };
     forge_begin_sign_in: { provider: string; host: string };
@@ -2177,6 +2184,7 @@ export interface CommandArgs {
 }
 
 export interface CommandResults {
+    app_launch_ready: void;
     fonts_list: string[];
     forge_account: AccountProfile | null;
     forge_begin_sign_in: AuthChallenge;

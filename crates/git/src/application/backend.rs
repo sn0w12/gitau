@@ -322,9 +322,9 @@ impl Backend {
         // loading costs, which reads as a multi-second hang.
         let warm_session = entry.gix.clone();
         // Called within an async context, so a runtime exists.
-        std::mem::drop(tokio::spawn(async move {
-            let _ = warm_session.handle().head_id();
-        }));
+        std::mem::drop(tokio::spawn(telemetry::scope(warm_object_database(
+            warm_session,
+        ))));
 
         // First registration only: the walk/summary caches are immutable and
         // survive generation bumps, so re-opens never need re-warming.
@@ -354,23 +354,13 @@ impl Backend {
         }
         let scheduler = self.scheduler.clone();
         let gix_session = entry.gix.clone();
-        tokio::spawn(async move {
-            let token = CancellationToken::new();
-            let Ok(mut report) = scheduler
-                .run(&token, move || {
-                    crate::engines::gix::status::status(&gix_session, &StatusOptions::default())
-                })
-                .await
-            else {
-                return;
-            };
-            if entry.generation() != generation {
-                return;
-            }
-            report.snapshot_id = entry.next_snapshot_id();
-            report.generation = generation;
-            entry.store_cached("status", &cache_key, CachedValue::Status(Arc::new(report)));
-        });
+        tokio::spawn(telemetry::scope(warm_status(
+            entry,
+            scheduler,
+            gix_session,
+            generation,
+            cache_key,
+        )));
     }
 
     /// Builds walk + default-page summaries off the interaction path so a
@@ -380,28 +370,7 @@ impl Backend {
             return;
         };
         let scheduler = self.scheduler.clone();
-        let path = entry.canonical_path.clone();
-        let history_cache = entry.history_cache();
-        let lock_entry = entry.clone();
-        let generation = entry.generation();
-        tokio::spawn(async move {
-            let token = CancellationToken::new();
-            let _ = scheduler
-                .run(&token, move || {
-                    let _computation = lock_entry.history_lock().lock().unwrap();
-                    let query = HistoryPageQuery::default();
-                    let mut guard = history_cache.lock().unwrap();
-                    let session = crate::engines::git2::Git2Session::new(path);
-                    crate::engines::git2::history::history_page(
-                        &session,
-                        &query,
-                        SnapshotId(0),
-                        generation,
-                        &mut guard,
-                    )
-                })
-                .await;
-        });
+        tokio::spawn(telemetry::scope(warm_history(entry, scheduler)));
     }
 
     fn watch_paths(&self, session: &crate::engines::gix::GixSession) -> Vec<PathBuf> {
@@ -2744,6 +2713,64 @@ fn build_snapshot(entry: &Arc<crate::runtime::registry::RepoEntry>) -> Result<Re
         head: entry.gix.head_state()?,
         sha_kind: entry.gix.sha_kind(),
     })
+}
+
+#[telemetry::trace(name = "app.warmup_objects", span_only)]
+async fn warm_object_database(session: crate::engines::gix::GixSession) {
+    let _ = session.handle().head_id();
+}
+
+#[telemetry::trace(name = "app.warmup_status", span_only)]
+async fn warm_status(
+    entry: Arc<crate::runtime::registry::RepoEntry>,
+    scheduler: Scheduler,
+    session: crate::engines::gix::GixSession,
+    generation: Generation,
+    cache_key: (Generation, StatusOptions),
+) {
+    let token = CancellationToken::new();
+    let Ok(mut report) = scheduler
+        .run(&token, move || {
+            crate::engines::gix::status::status(&session, &StatusOptions::default())
+        })
+        .await
+    else {
+        telemetry::context! { "outcome" => "cancelled" };
+        return;
+    };
+    if entry.generation() != generation {
+        telemetry::context! { "outcome" => "stale" };
+        return;
+    }
+    report.snapshot_id = entry.next_snapshot_id();
+    report.generation = generation;
+    entry.store_cached("status", &cache_key, CachedValue::Status(Arc::new(report)));
+    telemetry::context! { "outcome" => "stored" };
+}
+
+#[telemetry::trace(name = "app.warmup_history", span_only)]
+async fn warm_history(entry: Arc<crate::runtime::registry::RepoEntry>, scheduler: Scheduler) {
+    let path = entry.canonical_path.clone();
+    let history_cache = entry.history_cache();
+    let generation = entry.generation();
+    let token = CancellationToken::new();
+    let result = scheduler
+        .run(&token, move || {
+            let _computation = entry.history_lock().lock().unwrap();
+            let query = HistoryPageQuery::default();
+            let mut guard = history_cache.lock().unwrap();
+            let session = crate::engines::git2::Git2Session::new(path);
+            crate::engines::git2::history::history_page(
+                &session,
+                &query,
+                SnapshotId(0),
+                generation,
+                &mut guard,
+            )
+        })
+        .await;
+    let outcome = if result.is_ok() { "stored" } else { "failed" };
+    telemetry::record_attribute("outcome", telemetry::AttrValue::from(outcome));
 }
 
 #[telemetry::trace(skip = [

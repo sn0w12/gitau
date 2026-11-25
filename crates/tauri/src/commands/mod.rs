@@ -42,6 +42,7 @@ pub mod remotes;
 pub mod repository;
 pub mod session;
 pub mod settings;
+pub mod startup;
 pub mod submodules;
 pub mod terminal;
 pub mod workflows;

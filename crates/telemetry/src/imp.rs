@@ -325,7 +325,15 @@ pub(crate) async fn scope<F: Future>(future: F) -> F::Output {
 }
 
 pub(crate) fn sync_scope<R>(f: impl FnOnce() -> R) -> R {
-    if !is_enabled() || current_state().is_some() || !sample() {
+    sync_scope_inner(f, true)
+}
+
+pub(crate) fn sync_scope_unconditional<R>(f: impl FnOnce() -> R) -> R {
+    sync_scope_inner(f, false)
+}
+
+fn sync_scope_inner<R>(f: impl FnOnce() -> R, sampled: bool) -> R {
+    if !is_enabled() || current_state().is_some() || (sampled && !sample()) {
         return f();
     }
     let Some(runtime) = RUNTIME.get() else {
