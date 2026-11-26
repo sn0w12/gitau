@@ -13,9 +13,10 @@
 //!
 //! Even with the feature on, nothing is collected until [`init`] is called with
 //! [`Config::enabled`] set to `true`. [`set_enabled`] changes the state at any
-//! time, including before [`init`]. The `TELEMETRY_ENABLED` environment
-//! variable set to `0`, `false`, `no`, `off`, or `disabled` hard-disables
-//! collection regardless of configuration.
+//! time, including before [`init`]. Two environment variables hard-disable
+//! collection regardless of configuration: `TELEMETRY_ENABLED` set to `0`,
+//! `false`, `no`, `off`, or `disabled`, and `DO_NOT_TRACK` set to `1`, `true`,
+//! `yes`, or `on`.
 //!
 //! # Settings
 //!

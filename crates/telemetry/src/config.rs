@@ -191,8 +191,8 @@ impl Config {
         self
     }
 
-    /// Whether `TELEMETRY_ENABLED=false` (and equivalents) can override the
-    /// configuration. Defaults to on.
+    /// Whether `TELEMETRY_ENABLED=false` (and equivalents), or `DO_NOT_TRACK=1`
+    /// (and equivalents), can override the configuration. Defaults to on.
     pub fn env_kill_switch(mut self, enabled: bool) -> Self {
         self.env_kill_switch = enabled;
         self

@@ -726,18 +726,56 @@ fn sample() -> bool {
 }
 
 fn env_kill_switch_engaged() -> bool {
-    std::env::var("TELEMETRY_ENABLED")
-        .map(|value| {
-            matches!(
-                value.trim().to_ascii_lowercase().as_str(),
-                "0" | "false" | "no" | "off" | "disabled"
-            )
-        })
-        .unwrap_or(false)
+    let telemetry_disabled = std::env::var("TELEMETRY_ENABLED")
+        .map(|value| is_falsy_flag(&value))
+        .unwrap_or(false);
+    let do_not_track = std::env::var("DO_NOT_TRACK")
+        .map(|value| is_truthy_flag(&value))
+        .unwrap_or(false);
+    telemetry_disabled || do_not_track
+}
+
+fn is_falsy_flag(value: &str) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "0" | "false" | "no" | "off" | "disabled"
+    )
+}
+
+fn is_truthy_flag(value: &str) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "on"
+    )
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recognizes_do_not_track_flags() {
+        assert!(is_truthy_flag("1"));
+        assert!(is_truthy_flag(" true "));
+        assert!(is_truthy_flag("YES"));
+        assert!(!is_truthy_flag("0"));
+        assert!(!is_truthy_flag("false"));
+        assert!(!is_truthy_flag(""));
+    }
+
+    #[test]
+    fn recognizes_telemetry_disabled_flags() {
+        assert!(is_falsy_flag("0"));
+        assert!(is_falsy_flag(" false "));
+        assert!(is_falsy_flag("OFF"));
+        assert!(!is_falsy_flag("1"));
+        assert!(!is_falsy_flag("true"));
+        assert!(!is_falsy_flag(""));
+    }
 }

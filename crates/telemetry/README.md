@@ -195,7 +195,8 @@ every batch.
 | `telemetry::set_enabled(bool)`                  | Works at any time; before `init` it stores the preference, after `init` it applies immediately and clears buffers when disabling |
 | `telemetry::enable()` / `disable()`             | Shorthand for `set_enabled`                                                                                                      |
 | `TELEMETRY_ENABLED=0\|false\|no\|off\|disabled` | Hard-disables collection for the process                                                                                         |
-| `Config::env_kill_switch(false)`                | Ignores the environment variable                                                                                                 |
+| `DO_NOT_TRACK=1\|true\|yes\|on`                 | Hard-disables collection for the process                                                                                         |
+| `Config::env_kill_switch(false)`                | Ignores the environment variables                                                                                                |
 
 For the settings UI:
 
