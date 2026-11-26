@@ -83,7 +83,7 @@ export function StashedChanges({
                     <ChevronUp className="mr-0.5 size-4 shrink-0 text-muted-foreground" />
                     <span className="font-semibold">Stashed Changes</span>
                     <Badge
-                        className="h-6.5 rounded-md font-mono sm:h-5.5"
+                        className="h-5.5 rounded-md font-mono"
                         variant="outline"
                     >
                         {entries.length}

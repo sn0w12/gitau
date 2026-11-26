@@ -26,9 +26,9 @@ type SidebarMenuButtonVariant = ButtonProps["variant"];
 type SidebarMenuButtonSize = "default" | "lg" | "sm";
 
 const sidebarMenuButtonSizes: Record<SidebarMenuButtonSize, string> = {
-    default: "h-8 sm:h-8",
-    lg: "h-12 sm:h-12 group-data-[collapsible=icon]:p-0!",
-    sm: "h-7 sm:h-7",
+    default: "h-8",
+    lg: "h-12 group-data-[collapsible=icon]:p-0!",
+    sm: "h-7",
 };
 
 function sidebarMenuButtonVariants({
@@ -40,7 +40,7 @@ function sidebarMenuButtonVariants({
 }): string {
     return cn(
         buttonVariants({ variant }),
-        "peer/menu-button static flex w-full justify-start overflow-hidden rounded-lg p-2 text-left text-sm outline-hidden transition-[width,height,padding,box-shadow] group-has-data-[sidebar=menu-action]/menu-item:pe-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:justify-center! group-data-[collapsible=icon]:p-2! aria-disabled:pointer-events-none aria-disabled:opacity-50 [&_svg]:mx-0 [&_svg:not([class*='size-'])]:size-4 sm:[&_svg:not([class*='size-'])]:size-4 [&>span:last-child]:truncate group-data-[collapsible=icon]:[&>span:last-child]:hidden",
+        "peer/menu-button static flex w-full justify-start overflow-hidden rounded-lg p-2 text-left text-sm outline-hidden transition-[width,height,padding,box-shadow] group-has-data-[sidebar=menu-action]/menu-item:pe-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:justify-center! group-data-[collapsible=icon]:p-2! aria-disabled:pointer-events-none aria-disabled:opacity-50 [&_svg]:mx-0 [&_svg:not([class*='size-'])]:size-4 [&>span:last-child]:truncate group-data-[collapsible=icon]:[&>span:last-child]:hidden",
         sidebarMenuButtonSizes[size]
     );
 }
@@ -686,7 +686,7 @@ export function SidebarMenuSubButton({
 }): React.ReactElement {
     const defaultProps = {
         className: cn(
-            "flex h-8 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-lg px-2 text-sidebar-foreground ring-sidebar-ring outline-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 sm:h-7 [&>span:last-child]:truncate [&>svg]:shrink-0 [&>svg]:text-sidebar-accent-foreground [&>svg:not([class*='size-'])]:size-4",
+            "flex h-7 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-lg px-2 text-sidebar-foreground ring-sidebar-ring outline-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&>span:last-child]:truncate [&>svg]:shrink-0 [&>svg]:text-sidebar-accent-foreground [&>svg:not([class*='size-'])]:size-4",
             "data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground",
             size === "sm" && "text-xs",
             size === "md" && "text-sm",

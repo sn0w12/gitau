@@ -249,7 +249,7 @@ export function OnboardingDialog() {
                                         key={item.id}
                                         value={item.id}
                                         aria-label={item.title}
-                                        className="size-2 rounded-full bg-muted-foreground/72 p-0 sm:size-2"
+                                        className="size-2 rounded-full bg-muted-foreground/72 p-0"
                                     />
                                 ))}
                             </TabsList>

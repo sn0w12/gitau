@@ -82,7 +82,7 @@ export function SettingsPage() {
                         ))}
                     </TabsList>
                     <InputGroup
-                        className="rounded-lg bg-muted p-0.5 text-base font-medium ring-ring/24 transition-shadow placeholder:text-muted-foreground/72 has-focus-visible:ring-[3px] sm:text-sm"
+                        className="rounded-lg bg-muted p-0.5 text-sm font-medium ring-ring/24 transition-shadow placeholder:text-muted-foreground/72 has-focus-visible:ring-[3px]"
                         unstyled
                     >
                         <InputGroupInput

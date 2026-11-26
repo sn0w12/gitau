@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 export const Select: typeof SelectPrimitive.Root = SelectPrimitive.Root;
 
 export const selectTriggerVariants = cva(
-    "relative inline-flex min-h-9 w-full min-w-36 items-center justify-between gap-2 rounded-lg border border-input bg-background px-[calc(--spacing(3)-1px)] text-left text-base text-foreground shadow-xs/5 ring-ring/24 transition-shadow outline-none select-none not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] not-data-disabled:not-focus-visible:not-aria-invalid:not-data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] focus-visible:border-ring focus-visible:ring-[3px] aria-invalid:border-destructive/36 focus-visible:aria-invalid:border-destructive/64 focus-visible:aria-invalid:ring-destructive/16 sm:min-h-8 sm:text-sm dark:bg-input/32 dark:not-data-disabled:not-focus-visible:not-aria-invalid:not-data-pressed:before:shadow-[0_-1px_--theme(--color-white/6%)] dark:aria-invalid:ring-destructive/24 pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 data-disabled:pointer-events-none data-disabled:opacity-64 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4 [[data-disabled],:focus-visible,[aria-invalid],[data-pressed]]:shadow-none",
+    "relative inline-flex min-h-8 w-full min-w-36 items-center justify-between gap-2 rounded-lg border border-input bg-background px-[calc(--spacing(3)-1px)] text-left text-sm text-foreground shadow-xs/5 ring-ring/24 transition-shadow outline-none select-none not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] not-data-disabled:not-focus-visible:not-aria-invalid:not-data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] focus-visible:border-ring focus-visible:ring-[3px] aria-invalid:border-destructive/36 focus-visible:aria-invalid:border-destructive/64 focus-visible:aria-invalid:ring-destructive/16 dark:bg-input/32 dark:not-data-disabled:not-focus-visible:not-aria-invalid:not-data-pressed:before:shadow-[0_-1px_--theme(--color-white/6%)] dark:aria-invalid:ring-destructive/24 pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 data-disabled:pointer-events-none data-disabled:opacity-64 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-4 [[data-disabled],:focus-visible,[aria-invalid],[data-pressed]]:shadow-none",
     {
         defaultVariants: {
             size: "default",
@@ -25,14 +25,14 @@ export const selectTriggerVariants = cva(
         variants: {
             size: {
                 default: "",
-                lg: "min-h-10 sm:min-h-9",
-                sm: "min-h-8 gap-1.5 px-[calc(--spacing(2.5)-1px)] sm:min-h-7",
+                lg: "min-h-9",
+                sm: "min-h-7 gap-1.5 px-[calc(--spacing(2.5)-1px)]",
             },
         },
     }
 );
 
-export const selectTriggerIconClassName = "-me-1 size-4.5 opacity-80 sm:size-4";
+export const selectTriggerIconClassName = "-me-1 size-4 opacity-80";
 
 export interface SelectButtonProps extends useRender.ComponentProps<"button"> {
     size?: VariantProps<typeof selectTriggerVariants>["size"];
@@ -147,7 +147,7 @@ export function SelectPopup({
                         className="top-0 z-50 flex h-6 w-full cursor-default items-center justify-center before:pointer-events-none before:absolute before:inset-x-px before:top-px before:h-[200%] before:rounded-t-[calc(var(--radius-lg)-1px)] before:bg-linear-to-b before:from-popover before:from-50%"
                         data-slot="select-scroll-up-arrow"
                     >
-                        <ChevronUpIcon className="relative size-4.5 sm:size-4" />
+                        <ChevronUpIcon className="relative size-4" />
                     </SelectPrimitive.ScrollUpArrow>
                     <div className="relative h-full min-w-(--anchor-width) rounded-lg border bg-popover shadow-lg/5 not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]">
                         <SelectPrimitive.List
@@ -164,7 +164,7 @@ export function SelectPopup({
                         className="bottom-0 z-50 flex h-6 w-full cursor-default items-center justify-center before:pointer-events-none before:absolute before:inset-x-px before:bottom-px before:h-[200%] before:rounded-b-[calc(var(--radius-lg)-1px)] before:bg-linear-to-t before:from-popover before:from-50%"
                         data-slot="select-scroll-down-arrow"
                     >
-                        <ChevronDownIcon className="relative size-4.5 sm:size-4" />
+                        <ChevronDownIcon className="relative size-4" />
                     </SelectPrimitive.ScrollDownArrow>
                 </SelectPrimitive.Popup>
             </SelectPrimitive.Positioner>
@@ -180,7 +180,7 @@ export function SelectItem({
     return (
         <SelectPrimitive.Item
             className={cn(
-                "grid min-h-8 cursor-default grid-cols-[1rem_1fr] items-center gap-2 rounded-sm py-1 ps-2 pe-4 text-base outline-none in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] data-highlighted:bg-accent data-highlighted:text-accent-foreground sm:min-h-7 sm:text-sm data-disabled:pointer-events-none data-disabled:opacity-64 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
+                "grid min-h-7 cursor-default grid-cols-[1rem_1fr] items-center gap-2 rounded-sm py-1 ps-2 pe-4 text-sm outline-none in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-64 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
                 className
             )}
             data-slot="select-item"
@@ -235,7 +235,7 @@ export function SelectLabel({
     return (
         <SelectPrimitive.Label
             className={cn(
-                "inline-flex cursor-default items-center gap-2 text-base/4.5 font-medium text-foreground not-in-data-[slot=field]:mb-2 sm:text-sm/4",
+                "inline-flex cursor-default items-center gap-2 text-sm/4 font-medium text-foreground not-in-data-[slot=field]:mb-2",
                 className
             )}
             data-slot="select-label"

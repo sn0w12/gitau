@@ -451,7 +451,7 @@ function TitlebarNewTab({
                     size="icon-xs"
                     variant="ghost"
                     aria-label="New tab"
-                    className="rounded-lg not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-3 sm:not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-3"
+                    className="rounded-lg not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-3"
                     onClick={() => {
                         openTab(createTabRecord({ title: DEFAULT_TAB_NAME }));
                     }}

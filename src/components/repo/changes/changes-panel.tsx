@@ -589,10 +589,7 @@ function SectionHeader({
                     className="[&_svg]:rotate-0!"
                 />
                 <span className="font-semibold">{title}</span>
-                <Badge
-                    className="h-5 rounded-md font-mono sm:h-5"
-                    variant="outline"
-                >
+                <Badge className="h-5 rounded-md font-mono" variant="outline">
                     {count}
                 </Badge>
             </CollapsibleTrigger>
