@@ -221,7 +221,7 @@ function CommitFileList({
             open={open}
             onOpenChange={setOpen}
         >
-            <CollapsibleTrigger className="group-data-closed:justify-left flex size-8 w-full shrink-0 touch-manipulation items-center justify-start gap-1 border-b px-2 text-sm group-data-closed:pr-0">
+            <CollapsibleTrigger className="group-data-closed:justify-left flex size-7.5 w-full shrink-0 touch-manipulation items-center justify-start gap-1 border-b px-1.5 text-sm group-data-closed:pr-0">
                 <ChevronDown className="size-4.5 transition-[rotate] duration-200 ease-snappy group-data-closed:-rotate-90" />
                 <span className="grid grid-cols-[1fr] transition-[grid-template-columns,opacity,filter] duration-100 group-data-closed:grid-cols-[0fr] group-data-closed:opacity-0 group-data-closed:blur-[1px]">
                     <span className="overflow-hidden text-xs whitespace-nowrap">
@@ -233,7 +233,7 @@ function CommitFileList({
             <CollapsiblePanel
                 hidden={false}
                 keepMounted
-                className="min-h-0 w-[calc(var(--spacing)*64-1px)] flex-1 data-closed:w-8.5"
+                className="min-h-0 w-[calc(var(--spacing)*64-1px)] flex-1 data-closed:w-7.5"
             >
                 <ScrollArea
                     scrollFade
@@ -305,7 +305,7 @@ const CommitFileRow = React.memo(function CommitFileRow({
                                     aria-selected={selected}
                                     data-selected={selected || undefined}
                                     onClick={() => onSelect(section.sectionId)}
-                                    className="flex h-full w-full items-center gap-1.5 px-2 py-1.5 text-left hover:bg-accent data-selected:bg-accent/64"
+                                    className="flex h-full w-full items-center gap-1.5 p-1.5 text-left hover:bg-accent data-selected:bg-accent/64"
                                 >
                                     <ChangeIcon
                                         change={section.kind}

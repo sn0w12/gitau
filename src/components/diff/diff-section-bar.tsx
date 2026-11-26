@@ -61,7 +61,7 @@ export function DiffSectionBar({
         <div
             className={cn(
                 "relative flex shrink-0 items-start gap-1 border-b pt-1 pl-1 transition-[height] duration-200 ease-snappy",
-                showDescription ? "h-16 pb-1" : "h-8"
+                showDescription ? "h-16 pb-1" : "h-7.5"
             )}
         >
             <Swap
@@ -120,7 +120,7 @@ export function DiffSectionBar({
                 }
             />
 
-            <div className="absolute right-1 flex gap-0.5">
+            <div className="absolute right-0.5 bottom-0.5 flex gap-0.5">
                 <ChangeIcon change={kind} className="mt-0.5" />
                 <Menu>
                     <MenuTrigger
