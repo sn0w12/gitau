@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 
 import { Scritto } from "@/components/ui/scritto";
 import { useTabId } from "@/contexts/tab-context";
+import { useTimeOfDay } from "@/hooks/use-time-of-day";
 import type {
     ListTab,
     RepoStateAction,
@@ -26,17 +27,10 @@ function stripChangeSide(changeId: string): string {
     return separator === -1 ? changeId : changeId.slice(separator + 1);
 }
 
-function getTimeOfDay() {
-    const hour = new Date().getHours();
-    if (hour >= 5 && hour < 12) return "morning";
-    if (hour >= 12 && hour < 22) return "day";
-    return "night";
-}
-
 const STROKE_WIDTH = 0.3;
 
 function EmptyState({ label }: { label: string }) {
-    const period = getTimeOfDay();
+    const period = useTimeOfDay();
 
     return (
         <div className="flex size-full flex-col items-center justify-center">
