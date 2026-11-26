@@ -2,7 +2,6 @@ import { open as openDirectoryDialog } from "@tauri-apps/plugin-dialog";
 import { ChevronsUpDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { FieldDescription } from "@/components/ui/field";
 import {
     InsetInput,
     InsetInputAddition,
@@ -19,25 +18,19 @@ export function displayDist(dist: string) {
  * name input sits inside the inset so the composed path reads as one unit.
  */
 export function DestinationInput({
-    actionLabel,
     parentDirectory,
     folderName,
     parentTitle = "Choose a location",
     folderPlaceholder,
     autoFocus = false,
-    nameOptional = false,
     onChangeParentDirectory,
     onChangeFolderName,
 }: {
-    /** Wording for the path preview, e.g. "Will clone into". */
-    actionLabel: string;
     parentDirectory: string;
     folderName: string;
     parentTitle?: string;
     folderPlaceholder: string;
     autoFocus?: boolean;
-    /** An empty name means the parent folder is the target itself. */
-    nameOptional?: boolean;
     onChangeParentDirectory: (directory: string) => void;
     onChangeFolderName: (name: string) => void;
 }) {
@@ -51,9 +44,6 @@ export function DestinationInput({
             onChangeParentDirectory(selection);
         }
     };
-
-    const trimmedName = folderName.trim();
-    const usesParent = nameOptional && !trimmedName;
 
     return (
         <>
@@ -80,24 +70,6 @@ export function DestinationInput({
                     onChange={(event) => onChangeFolderName(event.target.value)}
                 />
             </InsetInput>
-            {parentDirectory ? (
-                <FieldDescription>
-                    {actionLabel}{" "}
-                    <span className="text-foreground">
-                        {displayDist(parentDirectory)}
-                        {usesParent ? "" : "/"}
-                    </span>
-                    {!usesParent && (
-                        <span className="text-info">
-                            {trimmedName || "(folder)"}
-                        </span>
-                    )}
-                </FieldDescription>
-            ) : (
-                <FieldDescription className="sr-only">
-                    Pick a parent folder; the folder is created for you.
-                </FieldDescription>
-            )}
         </>
     );
 }

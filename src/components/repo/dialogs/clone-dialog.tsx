@@ -181,7 +181,6 @@ export function CloneRepoDialog({
                                         <Field>
                                             <FieldLabel>Destination</FieldLabel>
                                             <DestinationInput
-                                                actionLabel="Will clone into"
                                                 folderPlaceholder="repo"
                                                 parentDirectory={
                                                     parentDirectory

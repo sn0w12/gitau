@@ -156,9 +156,7 @@ export function NewRepoDialog({
                         <Field>
                             <FieldLabel>Location</FieldLabel>
                             <DestinationInput
-                                actionLabel="Will create in"
                                 folderPlaceholder="my-project (optional)"
-                                nameOptional
                                 parentDirectory={parentDirectory}
                                 folderName={folderName}
                                 autoFocus
