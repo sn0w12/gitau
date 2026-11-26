@@ -129,11 +129,11 @@ pub fn builtin() -> SettingsSchema {
                                 )
                                 .default_value(SettingValue::Str(String::new()))
                                 .hidden(),
-                            number("repoSidebarSize", "Repository sidebar size", 20.0, 35.0, 1.0)
+                            number("repoSidebarWidth", "Repository sidebar width", 240.0, 560.0, 1.0)
                                 .description(
-                                    "Sidebar width in percent shared by all repository tabs.",
+                                    "Sidebar width in pixels, shared by all repository tabs.",
                                 )
-                                .default_value(SettingValue::Number(25.0))
+                                .default_value(SettingValue::Number(350.0))
                                 .hidden(),
                             boolean("onboardingComplete", "Onboarding complete")
                                 .description("Indicates if the onboarding process is complete.")

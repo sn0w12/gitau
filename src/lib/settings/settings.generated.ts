@@ -11,7 +11,7 @@ export interface SettingsValues {
     pinnedRepos: string[];
     commitFileListOpen: boolean;
     lastRepositoryDirectory: string;
-    repoSidebarSize: number;
+    repoSidebarWidth: number;
     onboardingComplete: boolean;
     theme: "system" | "light" | "dark";
     fontSans: string;

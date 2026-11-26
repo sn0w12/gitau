@@ -17,26 +17,21 @@ import type { ComponentProps, CSSProperties, ReactNode, Ref } from "react";
 import { cn } from "@/lib/utils";
 
 export interface GroupImperativeHandle {
-    /** Percent size per panel id; matches the old imperative layout API. */
-    setLayout(layout: Record<string, number>): void;
+    /** Size per panel id, in the unit that panel was given (px or percent). */
+    setLayout(layout: Record<string, Size>): void;
 }
 
 interface PanelGroupContextValue {
     register: (
         id: string,
-        setPercent: (percent: number) => void,
-        initial: number
+        setSize: (size: Size) => void,
+        initial: Size
     ) => void;
     unregister: (id: string) => void;
-    report: (id: string, percent: number) => void;
+    report: (id: string, size: Size) => void;
 }
 
 const PanelGroupContext = createContext<PanelGroupContextValue | null>(null);
-
-function toPercent(size: number | string): number {
-    const parsed = parseFloat(String(size));
-    return Number.isFinite(parsed) ? parsed : 0;
-}
 
 function ResizablePanelGroup({
     orientation = "horizontal",
@@ -48,12 +43,12 @@ function ResizablePanelGroup({
 }: ComponentProps<typeof Group> & {
     groupRef?: Ref<GroupImperativeHandle>;
     onLayoutChanged?: (
-        layout: Record<string, number>,
+        layout: Record<string, Size>,
         meta: { isUserInteraction: boolean }
     ) => void;
 }) {
-    const setters = useRef(new Map<string, (percent: number) => void>());
-    const layoutRef = useRef<Record<string, number>>({});
+    const setters = useRef(new Map<string, (size: Size) => void>());
+    const layoutRef = useRef<Record<string, Size>>({});
     const onLayoutChangedRef = useRef(onLayoutChanged);
 
     useEffect(() => {
@@ -61,12 +56,8 @@ function ResizablePanelGroup({
     }, [onLayoutChanged]);
 
     const register = useCallback(
-        (
-            id: string,
-            setPercent: (percent: number) => void,
-            initial: number
-        ) => {
-            setters.current.set(id, setPercent);
+        (id: string, setSize: (size: Size) => void, initial: Size) => {
+            setters.current.set(id, setSize);
             layoutRef.current[id] = initial;
         },
         []
@@ -77,8 +68,8 @@ function ResizablePanelGroup({
         delete layoutRef.current[id];
     }, []);
 
-    const report = useCallback((id: string, percent: number) => {
-        layoutRef.current[id] = percent;
+    const report = useCallback((id: string, size: Size) => {
+        layoutRef.current[id] = size;
         onLayoutChangedRef.current?.(
             { ...layoutRef.current },
             { isUserInteraction: true }
@@ -89,9 +80,9 @@ function ResizablePanelGroup({
         groupRef,
         () => ({
             setLayout(layout) {
-                for (const [id, percent] of Object.entries(layout)) {
-                    layoutRef.current[id] = percent;
-                    setters.current.get(id)?.(percent);
+                for (const [id, size] of Object.entries(layout)) {
+                    layoutRef.current[id] = size;
+                    setters.current.get(id)?.(size);
                 }
             },
         }),
@@ -130,7 +121,7 @@ function ResizablePanel({
     children,
 }: {
     id?: string;
-    defaultSize?: number | string;
+    defaultSize?: Size;
     minSize?: Size;
     maxSize?: Size;
     className?: string;
@@ -145,13 +136,11 @@ function ResizablePanel({
     }
 
     const sized = defaultSize !== undefined;
-    const [percent, setPercent] = useState(() =>
-        sized ? toPercent(defaultSize ?? 0) : 0
-    );
+    const [size, setSize] = useState<Size>(defaultSize ?? 0);
 
     useEffect(() => {
         if (!sized || id === undefined) return;
-        context.register(id, setPercent, toPercent(defaultSize ?? 0));
+        context.register(id, setSize, defaultSize ?? 0);
         return () => context.unregister(id);
     }, [context, id, sized, defaultSize]);
 
@@ -170,12 +159,11 @@ function ResizablePanel({
     return (
         <Panel
             data-slot="resizable-panel"
-            size={`${percent}%`}
+            size={size}
             minSize={minSize}
             maxSize={maxSize}
-            onSizeChange={(size) => {
-                const next = toPercent(size);
-                setPercent(next);
+            onSizeChange={(next) => {
+                setSize(next);
                 if (id !== undefined) context.report(id, next);
             }}
             className={className}

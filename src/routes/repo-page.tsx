@@ -20,12 +20,17 @@ import { useRepoPageState } from "@/hooks/repositories/use-repo-page-state";
 import { useRepoShortcuts } from "@/hooks/repositories/use-repo-shortcuts";
 import { useRepository } from "@/hooks/repositories/use-repository-queries";
 import { useSettingValue } from "@/hooks/settings/use-setting";
-import { useMediaQuery } from "@/hooks/use-media-query";
 import { BORDER_GRADIENT } from "@/lib/constants";
 import { headBranch, cn } from "@/lib/utils";
 import { appStore } from "@/stores/app-store";
 import { repositoryStore } from "@/stores/repository-store";
 import { setSetting } from "@/stores/settings-store";
+
+// Keep these equal to the repoSidebarWidth range in
+// crates/tauri/src/settings/schema.rs: the backend clamps saved widths, so a
+// mismatch snaps the panel back when the save lands.
+const SIDEBAR_MIN_WIDTH_PX = 240;
+const SIDEBAR_MAX_WIDTH_PX = 560;
 
 export function RepoPage() {
     const tabId = useTabId();
@@ -41,7 +46,6 @@ export function RepoPage() {
         return undefined;
     });
     const { snapshot } = useRepository(valid ? repoId : undefined);
-    const lg = useMediaQuery("lg");
 
     // View, panel, selection, and the issues and pulls list slices live in the
     // query string, so the href a tab was restored with, and the one a back
@@ -79,16 +83,15 @@ export function RepoPage() {
         enabled: valid && entry !== undefined,
     });
 
-    const sidebarSize = useSettingValue("repoSidebarSize");
+    const sidebarWidth = useSettingValue("repoSidebarWidth");
     const sidebarGroupRef = useRef<GroupImperativeHandle | null>(null);
     // Keeps every open repo tab at the shared sidebar width. Drags in this
     // group write the setting themselves, so this only reacts to other tabs.
     useEffect(() => {
         sidebarGroupRef.current?.setLayout({
-            "repo-sidebar": sidebarSize,
-            "repo-main": 100 - sidebarSize,
+            "repo-sidebar": sidebarWidth,
         });
-    }, [sidebarSize]);
+    }, [sidebarWidth]);
 
     if (!valid || !entry) {
         return (
@@ -106,10 +109,11 @@ export function RepoPage() {
                 groupRef={sidebarGroupRef}
                 onLayoutChanged={(layout, meta) => {
                     if (!meta.isUserInteraction) return;
-                    const rounded =
-                        Math.round(layout["repo-sidebar"] * 10) / 10;
-                    if (rounded !== sidebarSize) {
-                        setSetting("repoSidebarSize", rounded);
+                    const width = layout["repo-sidebar"];
+                    if (typeof width !== "number") return;
+                    const rounded = Math.round(width);
+                    if (rounded !== sidebarWidth) {
+                        setSetting("repoSidebarWidth", rounded);
                     }
                 }}
             >
@@ -117,9 +121,9 @@ export function RepoPage() {
                     id="repo-sidebar"
                     className="flex h-full min-w-0 flex-col"
                     style={{ overflow: "hidden" }}
-                    defaultSize={sidebarSize}
-                    minSize={lg ? "20%" : "35%"}
-                    maxSize={lg ? "35%" : "50%"}
+                    defaultSize={sidebarWidth}
+                    minSize={SIDEBAR_MIN_WIDTH_PX}
+                    maxSize={SIDEBAR_MAX_WIDTH_PX}
                 >
                     <div
                         className={cn(
