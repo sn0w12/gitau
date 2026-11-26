@@ -291,7 +291,7 @@ const HistoryRow = memo(function HistoryRow({
                             onSelect(selected ? null : commit.id);
                         }
                     }}
-                    className="absolute right-0 left-0 cursor-pointer overflow-hidden px-3 py-1.5 hover:bg-accent data-selected:bg-accent/64"
+                    className="@container absolute right-0 left-0 cursor-pointer overflow-hidden px-3 py-1.5 hover:bg-accent data-selected:bg-accent/64"
                     style={{
                         top,
                         height: HISTORY_ROW_HEIGHT_PX,
@@ -310,8 +310,8 @@ const HistoryRow = memo(function HistoryRow({
                         </span>
                     </div>
                     <div className="mt-0.5 flex items-center justify-between gap-x-1 gap-y-0.5 text-xs text-muted-foreground">
-                        <div className="flex items-center gap-0.5">
-                            <span>
+                        <div className="flex min-w-0 items-center gap-0.5">
+                            <span className="truncate">
                                 <HighlightedText
                                     text={commit.author.name}
                                     ranges={commit.matchRanges}
@@ -320,15 +320,15 @@ const HistoryRow = memo(function HistoryRow({
                             </span>
                             <span
                                 aria-hidden="true"
-                                className="hidden size-1 shrink-0 rounded-full bg-muted-foreground lg:inline-block"
+                                className="hidden size-1 shrink-0 rounded-full bg-muted-foreground @min-[18rem]:inline-block"
                             />
-                            <span className="hidden lg:inline">
+                            <span className="hidden shrink-0 whitespace-nowrap @min-[18rem]:inline">
                                 <RelativeTime
                                     value={commit.committer.timeSeconds * 1000}
                                 />
                             </span>
                         </div>
-                        <div className="flex items-center gap-0.5 font-mono">
+                        <div className="flex shrink-0 items-center gap-0.5 font-mono">
                             {unpushed && (
                                 <>
                                     <span
@@ -339,24 +339,33 @@ const HistoryRow = memo(function HistoryRow({
                                 </>
                             )}
                             {commit.tags.length > 0 && (
-                                <Tooltip>
-                                    <TooltipTrigger delay={100}>
-                                        <span className="flex items-center gap-0.5">
-                                            <Tag className="size-3" />
-                                            {commit.tags.length}
-                                        </span>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        {commit.tags.join(", ")}
-                                    </TooltipContent>
-                                    <span>/</span>
-                                </Tooltip>
+                                <>
+                                    <Tooltip>
+                                        <TooltipTrigger
+                                            delay={100}
+                                            className="hidden @min-[14rem]:inline-block"
+                                        >
+                                            <span className="flex items-center gap-0.5">
+                                                <Tag className="size-3" />
+                                                {commit.tags.length}
+                                            </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            {commit.tags.join(", ")}
+                                        </TooltipContent>
+                                    </Tooltip>
+                                    <span className="hidden @min-[14rem]:inline">
+                                        /
+                                    </span>
+                                </>
                             )}
-                            <span className="flex items-center gap-0.5">
+                            <span className="hidden items-center gap-0.5 @min-[12rem]:flex">
                                 <File className="size-3" />
                                 {commit.filesChanged}
                             </span>
-                            <span>/</span>
+                            <span className="hidden @min-[12rem]:inline">
+                                /
+                            </span>
                             <span className="text-success">
                                 +{commit.additions}
                             </span>
